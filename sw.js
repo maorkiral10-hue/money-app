@@ -1,6 +1,6 @@
 // חייב להתאים ל-APP_VERSION שבקובץ index.html. כל שינוי במספר הזה = עדכון לאפליקציה.
 // הקובץ הזה שומר רק את קבצי האפליקציה. ההערות של המשתמש נשמרות בנפרד ולא נמחקות בעדכון.
-const VERSION = 1;
+const VERSION = 2;
 const CACHE = 'money-app-v' + VERSION;
 const FILES = [
   './',
