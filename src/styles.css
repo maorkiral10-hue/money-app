@@ -1,0 +1,44 @@
+:root {
+  --bg: #f6f7f5; --card: #ffffff; --text: #1c2321; --muted: #5f6b67;
+  --accent: #0f766e; --on-accent: #ffffff; --soft: #e6f2f0; --line: #e3e7e4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111615; --card: #1b2220; --text: #e8eeec; --muted: #9aa8a3;
+    --accent: #2dd4bf; --on-accent: #06201d; --soft: #16302c; --line: #2a3431;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);
+  -webkit-tap-highlight-color: transparent;
+}
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 8px; }
+p { margin: 0 0 10px; }
+.top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+.card.banner { background: var(--accent); color: var(--on-accent); border: 0; }
+.card.banner button { background: var(--on-accent); color: var(--accent); }
+.card.note { background: var(--soft); }
+.muted { color: var(--muted); font-size: 14px; }
+.small { font-size: 13px; }
+.center { text-align: center; }
+textarea {
+  width: 100%; min-height: 70px; font: inherit; font-size: 16px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; resize: vertical;
+}
+button, .button {
+  display: block; text-align: center; font: inherit; font-weight: 600; border: 0; border-radius: 10px;
+  padding: 12px 16px; background: var(--accent); color: var(--on-accent); width: 100%; margin-top: 10px; cursor: pointer;
+}
+button.secondary, .button.secondary { background: var(--soft); color: var(--text); }
+button.link { background: none; color: var(--accent); width: auto; padding: 6px 0; margin: 0; }
+button.quiet { background: none; color: var(--muted); font-weight: 400; font-size: 13px; width: auto; padding: 0; margin: 0 0 14px; }
+button.small-btn { width: auto; padding: 6px 14px; margin: 0; font-size: 14px; }
+ul { list-style: none; margin: 0; padding: 0; }
+li { padding: 8px 0; border-top: 1px solid var(--line); }
+li:first-child { border-top: 0; }
+li.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dev-dist/
+.claude/
+archive/
+# Plans and notes stay on this computer; the repo is public
+PROGRESS.md
