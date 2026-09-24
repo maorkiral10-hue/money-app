@@ -42,3 +42,68 @@ ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 8px 0; border-top: 1px solid var(--line); }
 li:first-child { border-top: 0; }
 li.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+:root { --pos: #15803d; --neg: #b42318; }
+@media (prefers-color-scheme: dark) { :root { --pos: #4ade80; --neg: #f87171; } }
+button:disabled { opacity: .45; }
+button.danger { background: none; color: var(--neg); }
+input[type=text], input[type=date], select {
+  font: inherit; font-size: 16px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; width: 100%;
+}
+section { margin: 16px 0; }
+
+/* home */
+.hero { text-align: center; padding: 20px 14px; }
+.big-number { font-size: 40px; font-weight: 700; letter-spacing: -0.5px; margin: 2px 0 6px; direction: ltr; unicode-bidi: plaintext; }
+.breakdown { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; color: var(--muted); font-size: 13px; }
+.upcoming { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; text-align: start; }
+.line { display: flex; justify-content: space-between; font-size: 14px; padding: 2px 0; }
+.line.strong { font-weight: 700; border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 6px; }
+.day-label { font-size: 13px; color: var(--muted); margin: 14px 4px 6px; display: flex; gap: 8px; align-items: center; }
+.tag { background: var(--soft); color: var(--text); border-radius: 6px; padding: 0 6px; font-size: 12px; }
+.card.list { padding: 0 14px; }
+.tx {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; margin: 0;
+  background: none; color: var(--text); font-weight: 400; text-align: start; padding: 11px 0; border-radius: 0;
+  border-top: 1px solid var(--line);
+}
+.tx:first-child { border-top: 0; }
+.amount { font-weight: 600; white-space: nowrap; }
+.amount.income { color: var(--pos); }
+.amount.transfer { color: var(--muted); }
+.fab {
+  position: fixed; left: 20px; bottom: calc(env(safe-area-inset-bottom) + 20px); width: 60px; height: 60px;
+  border-radius: 30px; font-size: 32px; line-height: 1; padding: 0; margin: 0; box-shadow: 0 4px 14px rgba(0,0,0,.2);
+}
+body { padding-bottom: calc(env(safe-area-inset-bottom) + 100px); }
+
+/* entry form */
+.segmented { display: flex; background: var(--soft); border-radius: 10px; padding: 3px; margin: 12px 0; }
+.segmented button { margin: 0; background: none; color: var(--text); font-weight: 500; padding: 8px; }
+.segmented button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 700; }
+.money-input { display: flex; align-items: center; gap: 6px; }
+.money-input input { flex: 1; font: inherit; font-size: 16px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; min-width: 0; }
+.money-input.big input { font-size: 38px; font-weight: 700; text-align: center; border: 0; background: none; padding: 6px 0; }
+.money-input.big .currency { font-size: 28px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  width: auto; margin: 0; padding: 8px 14px; border-radius: 20px; font-weight: 500; font-size: 15px;
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+}
+.chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+input.chip { width: auto; padding: 7px 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); margin-top: 8px; }
+.field.inline { flex-direction: row; align-items: center; gap: 10px; }
+.field.inline select { width: auto; }
+.note-input { margin-top: 4px; }
+
+/* editors */
+.edit-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.edit-row:first-child { border-top: 0; }
+.edit-row.compact { align-items: center; padding: 6px 0; }
+.edit-row.off input[type=text] { color: var(--muted); text-decoration: line-through; }
+.edit-row input[type=checkbox] { width: 22px; height: 22px; margin-top: 8px; accent-color: var(--accent); flex: none; }
+.edit-row.compact input[type=checkbox] { margin-top: 0; }
+.edit-fields { flex: 1; min-width: 0; }
+.onboarding h1 { margin-bottom: 6px; }

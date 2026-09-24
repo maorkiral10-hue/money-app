@@ -66,6 +66,21 @@ describe('backup file', () => {
     expect(copy.snapshot.stores.notes.map(x => x.text)).toEqual(['only on target']);
   });
 
+  it('restores a backup saved by version 3 (before stage 2)', async () => {
+    const v3File = {
+      format: 'money-app-backup', formatVersion: 1, appVersion: 3, dataVersion: 1, createdAt: '2026-09-24T12:00:00.000Z',
+      stores: { notes: [note('old')], meta: [['dataVersion', 1], ['deviceId', 'abc']] },
+    };
+    const db = await freshDb();
+    await startup(db);
+    await restoreSnapshot(db, parseBackup(JSON.stringify(v3File)), 'before import');
+    expect((await getNotes(db)).map(x => x.text)).toEqual(['old']);
+    expect(await getMeta(db, 'dataVersion')).toBe(2);
+    const snap = await takeSnapshot(db);
+    expect(snap.stores.transactions).toEqual([]);
+    expect(snap.stores.accounts).toEqual([]);
+  });
+
   it('rejects files that are not backups', () => {
     expect(() => parseBackup('hello')).toThrow();
     expect(() => parseBackup('{"format":"other"}')).toThrow();

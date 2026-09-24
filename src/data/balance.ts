@@ -1,0 +1,114 @@
+import { dayInMonth, endOfNextMonth } from './dates';
+import type { Account, PaymentMethod, Transaction } from './types';
+
+/** One change to one account's balance on one day. */
+export interface Effect {
+  accountId: string;
+  date: string;
+  amount: number;
+  kind: 'income' | 'expense' | 'credit' | 'transfer';
+}
+
+export interface Ledger {
+  accounts: Account[];
+  methods: PaymentMethod[];
+  transactions: Transaction[];
+  startDate: string;
+}
+
+/** First day strictly after `after` on which a card with this charge day is charged. */
+export function nextChargeDate(after: string, chargeDay: number) {
+  const thisMonth = dayInMonth(after, 0, chargeDay);
+  return thisMonth > after ? thisMonth : dayInMonth(after, 1, chargeDay);
+}
+
+/** Splits an amount into n monthly payments; any leftover agorot go on the first one. */
+export function splitInstallments(amount: number, n: number) {
+  const base = Math.floor(amount / n);
+  const parts = Array<number>(n).fill(base);
+  parts[0] += amount - base * n;
+  return parts;
+}
+
+export function transactionEffects(tx: Transaction, methods: Map<string, PaymentMethod>): Effect[] {
+  if (tx.type === 'income') {
+    return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: tx.amount, kind: 'income' }] : [];
+  }
+  if (tx.type === 'transfer') {
+    if (!tx.accountId || !tx.toAccountId) return [];
+    return [
+      { accountId: tx.accountId, date: tx.date, amount: -tx.amount, kind: 'transfer' },
+      { accountId: tx.toAccountId, date: tx.date, amount: tx.amount, kind: 'transfer' },
+    ];
+  }
+  const method = tx.methodId ? methods.get(tx.methodId) : undefined;
+  if (!method) return [];
+  if (method.kind === 'credit' && method.chargeDay) {
+    // The purchase is recorded on its own date, but the bank only pays it on the card's charge days
+    const first = nextChargeDate(tx.date, method.chargeDay);
+    return splitInstallments(tx.amount, Math.max(1, tx.installments ?? 1)).map((amount, i) => ({
+      accountId: method.accountId,
+      date: dayInMonth(first, i, method.chargeDay!),
+      amount: -amount,
+      kind: 'credit' as const,
+    }));
+  }
+  return [{ accountId: method.accountId, date: tx.date, amount: -tx.amount, kind: 'expense' }];
+}
+
+/**
+ * Every balance change since the start date. Transactions dated before the start date are
+ * left out: they are already part of the opening balances (and, for cards, of openingPending).
+ */
+export function allEffects(ledger: Ledger): Effect[] {
+  const methods = new Map(ledger.methods.map(m => [m.id, m]));
+  const effects = ledger.transactions
+    .filter(tx => tx.date >= ledger.startDate)
+    .flatMap(tx => transactionEffects(tx, methods));
+  for (const m of ledger.methods) {
+    if (m.kind === 'credit' && m.chargeDay && m.openingPending) {
+      effects.push({ accountId: m.accountId, date: nextChargeDate(ledger.startDate, m.chargeDay), amount: -m.openingPending, kind: 'credit' });
+    }
+  }
+  return effects;
+}
+
+export interface Summary {
+  /** All money available right now, across every account. */
+  liquid: number;
+  byAccount: { account: Account; balance: number }[];
+  upcoming: {
+    until: string;
+    credit: number;
+    income: number;
+    expenses: number;
+    /** liquid plus everything expected up to `until` */
+    projected: number;
+  };
+}
+
+export function summarize(ledger: Ledger, today: string): Summary {
+  const effects = allEffects(ledger);
+  const balances = new Map(ledger.accounts.map(a => [a.id, a.openingBalance]));
+  const until = endOfNextMonth(today);
+  const upcoming = { until, credit: 0, income: 0, expenses: 0, projected: 0 };
+  let future = 0;
+
+  for (const e of effects) {
+    if (e.date <= today) {
+      balances.set(e.accountId, (balances.get(e.accountId) ?? 0) + e.amount);
+    } else if (e.date <= until) {
+      future += e.amount;
+      if (e.kind === 'credit') upcoming.credit += e.amount;
+      else if (e.kind === 'income') upcoming.income += e.amount;
+      else if (e.kind === 'expense') upcoming.expenses += e.amount;
+    }
+  }
+
+  const byAccount = ledger.accounts
+    .filter(a => !a.archived || balances.get(a.id))
+    .map(account => ({ account, balance: balances.get(account.id) ?? 0 }));
+  const liquid = [...balances.values()].reduce((a, b) => a + b, 0);
+  upcoming.projected = liquid + future;
+  return { liquid, byAccount, upcoming };
+}

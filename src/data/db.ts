@@ -1,26 +1,25 @@
+import type { Note } from './types';
+export type { Note } from './types';
+
 export const DB_NAME = 'money-app';
 
 // Bump only to add stores. Stores are never deleted here, so data from older versions survives.
-const DB_SCHEMA = 2;
+const DB_SCHEMA = 3;
 
-export const DATA_STORES = ['notes', 'meta'] as const;
-export type DataStore = (typeof DATA_STORES)[number];
-
-export interface Note {
-  id: string;
-  text: string;
-  createdAt: string;
-  appVersion: number;
-}
+/** Stores holding records with an `id`. `meta` holds single named values. */
+export const RECORD_STORES = ['notes', 'accounts', 'methods', 'categories', 'transactions'] as const;
+export type RecordStore = (typeof RECORD_STORES)[number];
+export const DATA_STORES = [...RECORD_STORES, 'meta'] as const;
 
 export function openDb(name = DB_NAME): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(name, DB_SCHEMA);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' });
+      for (const store of [...RECORD_STORES, 'safetyCopies']) {
+        if (!db.objectStoreNames.contains(store)) db.createObjectStore(store, { keyPath: 'id' });
+      }
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
-      if (!db.objectStoreNames.contains('safetyCopies')) db.createObjectStore('safetyCopies', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -49,9 +48,16 @@ export const getMeta = <T = unknown>(db: IDBDatabase, key: string) =>
 export const setMeta = (db: IDBDatabase, key: string, value: unknown) =>
   run(db, 'meta', 'readwrite', tx => void tx.objectStore('meta').put(value, key));
 
-export const getNotes = async (db: IDBDatabase) =>
-  (await run<Note[]>(db, 'notes', 'readonly', tx => tx.objectStore('notes').getAll()))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export const getAll = <T>(db: IDBDatabase, store: RecordStore) =>
+  run<T[]>(db, store, 'readonly', tx => tx.objectStore(store).getAll());
 
-export const addNote = (db: IDBDatabase, note: Note) =>
-  run(db, 'notes', 'readwrite', tx => void tx.objectStore('notes').put(note));
+export const putRecords = (db: IDBDatabase, store: RecordStore, records: { id: string }[]) =>
+  run(db, store, 'readwrite', tx => records.forEach(r => tx.objectStore(store).put(r)));
+
+export const deleteRecord = (db: IDBDatabase, store: RecordStore, id: string) =>
+  run(db, store, 'readwrite', tx => void tx.objectStore(store).delete(id));
+
+export const getNotes = async (db: IDBDatabase) =>
+  (await getAll<Note>(db, 'notes')).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+export const addNote = (db: IDBDatabase, note: Note) => putRecords(db, 'notes', [note]);
