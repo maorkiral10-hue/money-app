@@ -7,6 +7,9 @@ export interface Effect {
   date: string;
   amount: number;
   kind: 'income' | 'expense' | 'credit' | 'transfer';
+  txId?: string;
+  /** Credit charges: the card. */
+  methodId?: string;
 }
 
 export interface Ledger {
@@ -31,14 +34,15 @@ export function splitInstallments(amount: number, n: number) {
 }
 
 export function transactionEffects(tx: Transaction, methods: Map<string, PaymentMethod>): Effect[] {
+  const txId = tx.id;
   if (tx.type === 'income') {
-    return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: tx.amount, kind: 'income' }] : [];
+    return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: tx.amount, kind: 'income', txId }] : [];
   }
   if (tx.type === 'transfer') {
     if (!tx.accountId || !tx.toAccountId) return [];
     return [
-      { accountId: tx.accountId, date: tx.date, amount: -tx.amount, kind: 'transfer' },
-      { accountId: tx.toAccountId, date: tx.date, amount: tx.amount, kind: 'transfer' },
+      { accountId: tx.accountId, date: tx.date, amount: -tx.amount, kind: 'transfer', txId },
+      { accountId: tx.toAccountId, date: tx.date, amount: tx.amount, kind: 'transfer', txId },
     ];
   }
   const method = tx.methodId ? methods.get(tx.methodId) : undefined;
@@ -51,9 +55,11 @@ export function transactionEffects(tx: Transaction, methods: Map<string, Payment
       date: dayInMonth(first, i, method.chargeDay!),
       amount: -amount,
       kind: 'credit' as const,
+      txId,
+      methodId: method.id,
     }));
   }
-  return [{ accountId: method.accountId, date: tx.date, amount: -tx.amount, kind: 'expense' }];
+  return [{ accountId: method.accountId, date: tx.date, amount: -tx.amount, kind: 'expense', txId }];
 }
 
 /**
@@ -67,7 +73,13 @@ export function allEffects(ledger: Ledger): Effect[] {
     .flatMap(tx => transactionEffects(tx, methods));
   for (const m of ledger.methods) {
     if (m.kind === 'credit' && m.chargeDay && m.openingPending) {
-      effects.push({ accountId: m.accountId, date: nextChargeDate(ledger.startDate, m.chargeDay), amount: -m.openingPending, kind: 'credit' });
+      effects.push({
+        accountId: m.accountId,
+        date: nextChargeDate(ledger.startDate, m.chargeDay),
+        amount: -m.openingPending,
+        kind: 'credit',
+        methodId: m.id,
+      });
     }
   }
   return effects;
@@ -111,4 +123,38 @@ export function summarize(ledger: Ledger, today: string): Summary {
   const liquid = [...balances.values()].reduce((a, b) => a + b, 0);
   upcoming.projected = liquid + future;
   return { liquid, byAccount, upcoming };
+}
+
+/** One line in the forecast: a future income or expense, or one card's charge on one day. */
+export interface UpcomingItem {
+  date: string;
+  amount: number;
+  kind: 'income' | 'expense' | 'credit';
+  txId?: string;
+  methodId?: string;
+  /** Credit charges: how many purchases/installments make up this charge. */
+  purchases: number;
+  /** Credit charges: includes what was already on the card on the start date. */
+  opening?: boolean;
+}
+
+/** Everything expected after today up to the end of next month, oldest first. Transfers are left out: they don't change the total. */
+export function upcomingItems(ledger: Ledger, today: string): UpcomingItem[] {
+  const until = endOfNextMonth(today);
+  const items: UpcomingItem[] = [];
+  const charges = new Map<string, UpcomingItem>();
+  for (const e of allEffects(ledger)) {
+    if (e.date <= today || e.date > until || e.kind === 'transfer') continue;
+    if (e.kind !== 'credit') {
+      items.push({ date: e.date, amount: e.amount, kind: e.kind, txId: e.txId, purchases: 0 });
+      continue;
+    }
+    const key = `${e.methodId}|${e.date}`;
+    const charge = charges.get(key) ?? { date: e.date, amount: 0, kind: 'credit', methodId: e.methodId, purchases: 0 };
+    charge.amount += e.amount;
+    if (e.txId) charge.purchases++;
+    else charge.opening = true;
+    charges.set(key, charge);
+  }
+  return [...items, ...charges.values()].sort((a, b) => a.date.localeCompare(b.date));
 }

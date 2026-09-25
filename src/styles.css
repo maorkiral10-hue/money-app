@@ -107,3 +107,26 @@ input.chip { width: auto; padding: 7px 12px; }
 .edit-row.compact input[type=checkbox] { margin-top: 0; }
 .edit-fields { flex: 1; min-width: 0; }
 .onboarding h1 { margin-bottom: 6px; }
+
+/* home: buttons under the big number */
+.hero-buttons { display: flex; gap: 10px; margin-top: 12px; }
+.hero-buttons button { margin: 0; padding: 10px; font-size: 15px; }
+.line.strong-head { align-items: baseline; font-weight: 700; }
+
+/* entry wizard */
+.wizard .top { min-height: 32px; }
+.dots { display: flex; justify-content: center; gap: 6px; margin: 4px 0 18px; }
+.dots span { width: 7px; height: 7px; border-radius: 4px; background: var(--line); }
+.dots span.on { background: var(--accent); width: 20px; }
+.step-title { text-align: center; font-size: 24px; margin-bottom: 20px; }
+.tiles { display: flex; flex-direction: column; gap: 12px; }
+.tile { margin: 0; padding: 22px 16px; font-size: 20px; display: flex; flex-direction: column; gap: 2px; }
+.wizard .chips { gap: 10px; justify-content: center; }
+.wizard .chips .chip { padding: 12px 18px; font-size: 17px; }
+.amount-display { text-align: center; font-size: 46px; font-weight: 700; margin: 10px 0 18px; direction: ltr; }
+.amount-display.empty { color: var(--muted); }
+.amount-display .currency { font-size: 30px; color: var(--muted); margin-right: 6px; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; direction: ltr; }
+.key { margin: 0; padding: 16px 0; font-size: 26px; font-weight: 500; background: var(--card); color: var(--text); border: 1px solid var(--line); }
+.key:active { background: var(--soft); }
+.wizard .card.list { margin-top: 4px; }

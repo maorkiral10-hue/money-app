@@ -7,11 +7,17 @@ import { loadAll, type AppData } from './data/store';
 import type { Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
+import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
 
-type Screen = { name: 'home' } | { name: 'entry'; tx?: Transaction } | { name: 'settings' } | { name: 'data'; from: 'home' | 'settings' };
+type Screen =
+  | { name: 'home' }
+  | { name: 'entry'; tx?: Transaction; from?: 'forecast' }
+  | { name: 'forecast' }
+  | { name: 'settings' }
+  | { name: 'data'; from: 'home' | 'settings' };
 
 export function App() {
   const [db, setDb] = useState<IDBDatabase | null>(null);
@@ -57,18 +63,22 @@ export function App() {
   if (!data.setupDone) {
     content = <Onboarding db={db} onDone={afterChange} />;
   } else if (screen.name === 'entry') {
+    const back = () => setScreen(screen.from === 'forecast' ? { name: 'forecast' } : { name: 'home' });
     content = (
       <EntryForm
+        key={screen.tx?.id ?? 'new'}
         db={db}
         data={data}
         tx={screen.tx}
-        onClose={home}
+        onClose={back}
         onSaved={async () => {
           await refresh();
-          home();
+          back();
         }}
       />
     );
+  } else if (screen.name === 'forecast') {
+    content = <Forecast data={data} onBack={home} onEdit={tx => setScreen({ name: 'entry', tx, from: 'forecast' })} />;
   } else if (screen.name === 'settings') {
     content = <Settings db={db} data={data} onChange={afterChange} onBack={home} onOpenData={() => setScreen({ name: 'data', from: 'settings' })} />;
   } else if (screen.name === 'data') {
@@ -90,6 +100,7 @@ export function App() {
         onEdit={tx => setScreen({ name: 'entry', tx })}
         onOpenSettings={() => setScreen({ name: 'settings' })}
         onOpenData={() => setScreen({ name: 'data', from: 'home' })}
+        onOpenForecast={() => setScreen({ name: 'forecast' })}
       />
     );
   }

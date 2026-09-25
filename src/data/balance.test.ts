@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextChargeDate, splitInstallments, summarize, type Ledger } from './balance';
+import { nextChargeDate, splitInstallments, summarize, upcomingItems, type Ledger } from './balance';
 import { parseMoney } from './money';
 import type { Account, PaymentMethod, Transaction } from './types';
 
@@ -83,6 +83,27 @@ describe('liquid balance', () => {
     expect(summarize(l, '2026-10-10').liquid).toBe(1_250_00 - 100_00);
     expect(summarize(l, '2026-11-10').liquid).toBe(1_250_00 - 200_00);
     expect(summarize(l, '2027-09-10').liquid).toBe(1_250_00 - 1_200_00);
+  });
+});
+
+describe('forecast lines', () => {
+  it('lists future income and expenses, and one line per card charge, adding up to the projection', () => {
+    const l = ledger(
+      [
+        tx({ amount: 200_00, methodId: 'max' }),
+        tx({ amount: 1_200_00, methodId: 'max', installments: 12 }),
+        tx({ type: 'income', amount: 800_00, accountId: 'bank', date: '2026-10-01' }),
+        tx({ type: 'transfer', amount: 50_00, accountId: 'bank', toAccountId: 'cash', date: '2026-10-02' }),
+      ],
+      { methods: methods.map(m => (m.id === 'max' ? { ...m, openingPending: 700_00 } : m)) },
+    );
+    const items = upcomingItems(l, '2026-09-24');
+    expect(items.map(i => [i.date, i.kind, i.amount, i.purchases])).toEqual([
+      ['2026-10-01', 'income', 800_00, 0],
+      ['2026-10-10', 'credit', -(700_00 + 200_00 + 100_00), 2],
+    ]);
+    const s = summarize(l, '2026-09-24');
+    expect(s.liquid + items.reduce((a, i) => a + i.amount, 0)).toBe(s.upcoming.projected);
   });
 });
 

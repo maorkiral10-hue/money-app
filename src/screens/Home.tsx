@@ -1,5 +1,6 @@
+import { useState } from 'preact/hooks';
 import { summarize } from '../data/balance';
-import { dayLabel, monthName, todayStr } from '../data/dates';
+import { dayLabel, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
@@ -15,12 +16,12 @@ export function Home(props: {
   onEdit: (tx: Transaction) => void;
   onOpenSettings: () => void;
   onOpenData: () => void;
+  onOpenForecast: () => void;
 }) {
   const { data } = props;
   const today = todayStr();
   const summary = summarize(data, today);
-  const { upcoming } = summary;
-  const hasUpcoming = upcoming.credit || upcoming.income || upcoming.expenses;
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const name = new Map<string, string>([...data.accounts, ...data.methods, ...data.categories].map(x => [x.id, x.name]));
   const sorted = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
@@ -39,22 +40,21 @@ export function Home(props: {
       <div class="card hero">
         <div class="muted small">כסף נזיל עכשיו</div>
         <div class="big-number">{formatMoney(summary.liquid)}</div>
-        <div class="breakdown">
-          {summary.byAccount.map(({ account, balance }) => (
-            <span key={account.id}>
-              {account.name} {formatMoney(balance)}
-            </span>
-          ))}
-        </div>
-        {hasUpcoming ? (
+        {showBreakdown && (
           <div class="upcoming">
-            <div class="muted small">צפוי עד סוף {monthName(upcoming.until)}</div>
-            {upcoming.credit !== 0 && <Line label="חיובי אשראי" value={upcoming.credit} />}
-            {upcoming.income !== 0 && <Line label="הכנסות צפויות" value={upcoming.income} />}
-            {upcoming.expenses !== 0 && <Line label="הוצאות צפויות" value={upcoming.expenses} />}
-            <Line label="יתרה צפויה" value={upcoming.projected} strong />
+            {summary.byAccount.map(({ account, balance }) => (
+              <Line key={account.id} label={account.name} value={balance} />
+            ))}
           </div>
-        ) : null}
+        )}
+        <div class="hero-buttons">
+          <button class="secondary" onClick={() => setShowBreakdown(!showBreakdown)}>
+            {showBreakdown ? 'הסתר פירוט' : 'פירוט'}
+          </button>
+          <button class="secondary" onClick={props.onOpenForecast}>
+            צפי לחודש הבא
+          </button>
+        </div>
       </div>
 
       <button class="quiet" onClick={props.onOpenData}>
@@ -100,11 +100,11 @@ export function Home(props: {
   );
 }
 
-function Line(props: { label: string; value: number; strong?: boolean }) {
+function Line(props: { label: string; value: number }) {
   return (
-    <div class={`line ${props.strong ? 'strong' : ''}`}>
+    <div class="line">
       <span>{props.label}</span>
-      <span>{formatMoney(props.value, { sign: !props.strong })}</span>
+      <span>{formatMoney(props.value)}</span>
     </div>
   );
 }
