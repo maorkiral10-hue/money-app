@@ -90,6 +90,14 @@ describe('in the forecast', () => {
     expect(items.map(i => [i.date, i.kind, i.amount])).toEqual([['2026-10-10', 'credit', -50_00]]);
   });
 
+  it('a card subscription already in the nearest charge starts from the charge after it', () => {
+    // started on the card's charge day (as the form does for "already included"): first charged a month later
+    const l = ledger([rec({ methodId: 'max', amount: 50_00, firstDate: '2026-10-10', handledThrough: '2026-10-09' })]);
+    // nothing in the October 10 charge; the first one is November 10
+    expect(upcomingItems(l, '2026-09-25')).toEqual([]);
+    expect(upcomingItems(l, '2026-10-12').map(i => [i.date, i.amount])).toEqual([['2026-11-10', -50_00]]);
+  });
+
   it('a variable income still waiting for confirmation is expected, not in the balance', () => {
     const l = ledger([rec({ type: 'income', variable: true, accountId: 'bank', methodId: undefined, amount: 500_00, firstDate: '2026-09-25', handledThrough: '2026-09-24' })]);
     const s = summarize(l, '2026-09-28');

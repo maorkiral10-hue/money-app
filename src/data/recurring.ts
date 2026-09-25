@@ -65,5 +65,8 @@ export function expectedTransactions(recurring: Recurring[], transactions: Trans
   });
 }
 
-export const nextOccurrence = (rec: Recurring, today: string) =>
-  occurrencesBetween(rec, addDays(today, -1), addDays(today, 400))[0] as string | undefined;
+/** The next occurrence not yet recorded: today's counts until it has been. */
+export function nextOccurrence(rec: Recurring, today: string) {
+  const yesterday = addDays(today, -1);
+  return occurrencesBetween(rec, rec.handledThrough > yesterday ? rec.handledThrough : yesterday, addDays(today, 400))[0] as string | undefined;
+}

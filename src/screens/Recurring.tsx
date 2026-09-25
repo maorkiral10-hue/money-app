@@ -1,14 +1,26 @@
 import { useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
+import { nextChargeDate } from '../data/balance';
 import { addDays, dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import { estimateFor, nextOccurrence } from '../data/recurring';
 import { saveRecurring, type AppData } from '../data/store';
-import type { Recurring } from '../data/types';
+import type { PaymentMethod, Recurring } from '../data/types';
 
 const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
-export function scheduleText(rec: Recurring) {
+/** The card an expense is paid with, if it is a credit card: then the card's charge day decides when the bank pays. */
+const creditCard = (rec: Pick<Recurring, 'type' | 'methodId'>, methods: PaymentMethod[]) => {
+  const m = rec.type === 'expense' ? methods.find(x => x.id === rec.methodId) : undefined;
+  return m?.kind === 'credit' && m.chargeDay ? m : undefined;
+};
+
+export function scheduleText(rec: Recurring, methods: PaymentMethod[]) {
+  const card = creditCard(rec, methods);
+  if (card) {
+    const often = rec.frequency === 'daily' ? 'כל יום' : rec.frequency === 'weekly' ? 'כל שבוע' : 'כל חודש';
+    return `${often}, בחיוב של ${card.name} ב-${card.chargeDay}`;
+  }
   const { y, m0, d } = parseDate(rec.firstDate);
   if (rec.frequency === 'daily') return 'כל יום';
   if (rec.frequency === 'weekly') return `כל יום ${WEEKDAYS[new Date(y, m0, d).getDay()]}`;
@@ -21,14 +33,16 @@ export function RecurringList(props: { data: AppData; onBack: () => void; onEdit
   const ended = props.data.recurring.filter(r => r.endDate && r.endDate < today);
 
   const Row = ({ rec }: { rec: Recurring }) => {
-    const next = nextOccurrence(rec, today);
+    const occ = nextOccurrence(rec, today);
+    const card = creditCard(rec, props.data.methods);
+    const next = occ && card ? nextChargeDate(occ, card.chargeDay!) : occ;
     const amount = estimateFor(rec, props.data.transactions);
     return (
       <button class="tx" onClick={() => props.onEdit(rec)}>
         <div>
           <div>{rec.name}</div>
           <div class="muted small">
-            {[scheduleText(rec), next && !rec.endDate ? `הבא: ${dayLabel(next, today)}` : rec.endDate ? 'הסתיימה' : '', rec.variable ? 'סכום משתנה' : '']
+            {[scheduleText(rec, props.data.methods), next && !rec.endDate ? `הבא: ${dayLabel(next, today)}` : rec.endDate ? 'הסתיימה' : '', rec.variable ? 'סכום משתנה' : '']
               .filter(Boolean)
               .join(' · ')}
           </div>
@@ -87,6 +101,7 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
   const [categoryId, setCategoryId] = useState(rec?.categoryId);
   const [methodId, setMethodId] = useState(rec?.methodId);
   const [accountId, setAccountId] = useState(rec?.accountId);
+  const [skipNearestCharge, setSkipNearestCharge] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === rec?.categoryId));
@@ -94,11 +109,22 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
   const accounts = data.accounts.filter(a => a.name.trim() && (!a.archived || a.id === rec?.accountId));
   const valid = name.trim() && amount > 0 && categoryId && (type === 'expense' ? methodId : accountId) && nextDate;
 
+  // Paid by credit card: no date to ask, the bank pays it on the card's charge day
+  const card = creditCard({ type, methodId }, data.methods);
+  const wasCard = rec ? creditCard(rec, data.methods) : undefined;
+  const cardScheduleChanged = !rec || !wasCard || rec.frequency !== frequency;
+  // Starting today puts the first one in the nearest charge; starting on the charge day puts it in the one after
+  const cardStart = card ? (skipNearestCharge ? nextChargeDate(today, card.chargeDay!) : today) : today;
+  const firstCharge = card ? nextChargeDate(cardScheduleChanged ? cardStart : (nextOccurrence(rec!, today) ?? today), card.chargeDay!) : undefined;
+
   const save = async () => {
     if (!valid || saving) return;
     setSaving(true);
-    // A changed schedule starts again from the chosen next date; what was already recorded stays as it is
-    const scheduleChanged = !rec || rec.frequency !== frequency || nextOccurrence(rec, today) !== nextDate;
+    // A changed schedule starts again from its new first date; what was already recorded stays as it is
+    const start = card ? cardStart : nextDate;
+    const scheduleChanged = card
+      ? cardScheduleChanged
+      : !rec || !!wasCard || rec.frequency !== frequency || nextOccurrence(rec, today) !== nextDate;
     await saveRecurring(props.db, {
       id: rec?.id ?? crypto.randomUUID(),
       createdAt: rec?.createdAt ?? new Date().toISOString(),
@@ -110,8 +136,8 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
       frequency,
       categoryId,
       ...(type === 'expense' ? { methodId, accountId: undefined } : { accountId, methodId: undefined }),
-      firstDate: scheduleChanged ? nextDate : rec!.firstDate,
-      handledThrough: scheduleChanged ? addDays(nextDate, -1) : rec!.handledThrough,
+      firstDate: scheduleChanged ? start : rec!.firstDate,
+      handledThrough: scheduleChanged ? addDays(start, -1) : rec!.handledThrough,
       endDate: rec?.endDate,
     });
     props.onDone();
@@ -188,37 +214,52 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
       </section>
 
       <section>
-        <h2>כל כמה זמן</h2>
-        <Segmented
-          value={frequency}
-          onChange={setFrequency}
-          options={[
-            ['monthly', 'כל חודש'],
-            ['weekly', 'כל שבוע'],
-            ['daily', 'כל יום'],
-          ]}
-        />
-        <label class="field">
-          <span>מתי בפעם הבאה</span>
-          <input type="date" value={nextDate} onChange={e => e.currentTarget.value && setNextDate(e.currentTarget.value)} />
-        </label>
-        {nextDate && (
-          <p class="muted small">{scheduleText({ frequency, firstDate: nextDate } as Recurring)}</p>
-        )}
-      </section>
-
-      <section>
-        <h2>{type === 'expense' ? 'על מה' : 'מה נכנס'}</h2>
-        <Chips items={categories} value={categoryId} onChange={setCategoryId} />
-      </section>
-
-      <section>
         <h2>{type === 'expense' ? 'איך משלמים' : 'לאן נכנס'}</h2>
         {type === 'expense' ? (
           <Chips items={methods} value={methodId} onChange={setMethodId} />
         ) : (
           <Chips items={accounts} value={accountId} onChange={setAccountId} />
         )}
+      </section>
+
+      {(type === 'income' || methodId) && (
+        <section>
+          <h2>כל כמה זמן</h2>
+          <Segmented
+            value={frequency}
+            onChange={setFrequency}
+            options={[
+              ['monthly', 'כל חודש'],
+              ['weekly', 'כל שבוע'],
+              ['daily', 'כל יום'],
+            ]}
+          />
+          {card ? (
+            <>
+              <p class="muted small">
+                יורד מהבנק בחיוב של {card.name} ב-{card.chargeDay} לחודש. החיוב הראשון שייכלל: {dayLabel(firstCharge!, today)}.
+              </p>
+              {cardScheduleChanged && (
+                <button type="button" class="link small" onClick={() => setSkipNearestCharge(!skipNearestCharge)}>
+                  {skipNearestCharge ? 'בעצם עוד לא, לכלול כבר בחיוב הקרוב' : 'כבר כלול בחיוב הקרוב? להתחיל מהחיוב שאחריו'}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <label class="field">
+                <span>מתי בפעם הבאה</span>
+                <input type="date" value={nextDate} onChange={e => e.currentTarget.value && setNextDate(e.currentTarget.value)} />
+              </label>
+              {nextDate && <p class="muted small">{scheduleText({ type, frequency, firstDate: nextDate } as Recurring, [])}</p>}
+            </>
+          )}
+        </section>
+      )}
+
+      <section>
+        <h2>{type === 'expense' ? 'על מה' : 'מה נכנס'}</h2>
+        <Chips items={categories} value={categoryId} onChange={setCategoryId} />
       </section>
 
       <button disabled={!valid || saving} onClick={save}>
