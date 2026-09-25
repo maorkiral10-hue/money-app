@@ -9,7 +9,7 @@ import type { Transaction, TxType } from '../data/types';
 
 type Step = 'type' | 'amount' | 'category' | 'method' | 'account' | 'from' | 'to' | 'review';
 
-// One question per screen. Picking an answer moves on by itself; the last screen shows everything before saving.
+// One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
 const STEPS: Record<TxType, Step[]> = {
   expense: ['type', 'amount', 'category', 'method', 'review'],
   income: ['type', 'amount', 'category', 'account', 'review'],
@@ -45,8 +45,7 @@ export function EntryForm(props: {
   const [installments, setInstallments] = useState(tx?.installments ?? 1);
   const [note, setNote] = useState(tx?.note ?? '');
   const [step, setStep] = useState<Step>(tx ? 'review' : props.startType ? 'amount' : 'type');
-  // After the first pass (or when editing), changing one answer goes straight back to the summary
-  const [reviewed, setReviewed] = useState(!!tx);
+  const [fromSummary, setFromSummary] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const amount = parseMoney(amountText) ?? 0;
@@ -64,28 +63,41 @@ export function EntryForm(props: {
     amount > 0 &&
     (type === 'expense' ? !!categoryId && !!methodId : type === 'income' ? !!categoryId && !!accountId : !!accountId && !!toAccountId && accountId !== toAccountId);
 
-  const goTo = (s: Step) => {
-    if (s === 'review') setReviewed(true);
-    setStep(s);
+  // Choosing only marks the answer; "המשך" moves on in order, or straight back to the summary
+  // when the step was opened by tapping one of the summary's rows
+  const next = () => {
+    const target = fromSummary ? 'review' : steps[steps.indexOf(step) + 1];
+    setFromSummary(false);
+    setStep(target);
   };
-  const next = (from: Step, t: TxType = type) => {
-    const list = STEPS[t];
-    goTo(reviewed && from !== 'type' ? 'review' : list[list.indexOf(from) + 1]);
-  };
+  // Always one step back in order; from the first step (or from the summary when editing) it closes
   const back = () => {
     const i = steps.indexOf(step);
+    setFromSummary(false);
     if (i <= 0 || (tx && step === 'review')) props.onClose();
-    else setStep(reviewed ? 'review' : steps[i - 1]);
+    else setStep(steps[i - 1]);
+  };
+  const change = (s: Step) => {
+    setFromSummary(true);
+    setStep(s);
   };
 
-  const pickType = (t: TxType) => {
-    if (t === type && reviewed) return goTo('review');
-    if (t !== type) {
-      setType(t);
-      setCategoryId(undefined);
-      setReviewed(false);
-    }
-    next('type', t);
+  const chooseType = (t: TxType) => {
+    if (t === type) return;
+    setType(t);
+    setCategoryId(undefined);
+    // A different type asks different questions: go through them in order
+    setFromSummary(false);
+  };
+
+  const canContinue: Partial<Record<Step, boolean>> = {
+    type: true,
+    amount: amount > 0,
+    category: !!categoryId,
+    method: !!methodId,
+    account: !!accountId,
+    from: !!accountId,
+    to: !!toAccountId && toAccountId !== accountId,
   };
 
   const save = async () => {
@@ -147,96 +159,48 @@ export function EntryForm(props: {
 
       {step === 'type' && (
         <div class="tiles">
-          <button class="tile" onClick={() => pickType('expense')}>
-            הוצאה
-          </button>
-          <button class="tile" onClick={() => pickType('income')}>
-            הכנסה
-          </button>
-          <button class="tile secondary" onClick={() => pickType('transfer')}>
-            העברה
-            <span class="muted small">בין בנק, מזומן וביט</span>
-          </button>
+          {(['expense', 'income', 'transfer'] as const).map(t => (
+            <button key={t} class={`tile ${type === t ? 'on' : ''}`} onClick={() => chooseType(t)}>
+              {TYPE_NAMES[t]}
+              {t === 'transfer' && <span class="small">בין בנק, מזומן וביט</span>}
+            </button>
+          ))}
         </div>
       )}
 
-      {step === 'amount' && (
-        <>
-          <Keypad text={amountText} onChange={setAmountText} />
-          <button disabled={amount <= 0} onClick={() => next('amount')}>
-            המשך
-          </button>
-        </>
-      )}
+      {step === 'amount' && <Keypad text={amountText} onChange={setAmountText} />}
 
-      {step === 'category' && (
-        <Chips
-          items={categories}
-          value={categoryId}
-          onChange={id => {
-            setCategoryId(id);
-            next('category');
-          }}
-        />
-      )}
+      {step === 'category' && <Chips items={categories} value={categoryId} onChange={setCategoryId} />}
 
-      {step === 'method' && (
-        <Chips
-          items={methods}
-          value={methodId}
-          onChange={id => {
-            setMethodId(id);
-            next('method');
-          }}
-        />
-      )}
+      {step === 'method' && <Chips items={methods} value={methodId} onChange={setMethodId} />}
 
-      {step === 'account' && (
-        <Chips
-          items={accounts}
-          value={accountId}
-          onChange={id => {
-            setAccountId(id);
-            next('account');
-          }}
-        />
-      )}
+      {step === 'account' && <Chips items={accounts} value={accountId} onChange={setAccountId} />}
 
       {step === 'from' && (
         <>
-          <Chips
-            items={accounts}
-            value={accountId}
-            onChange={id => {
-              setAccountId(id);
-              next('from');
-            }}
-          />
+          <Chips items={accounts} value={accountId} onChange={setAccountId} />
           <p class="muted small">למשל משיכת מזומן מהכספומט, או העברה מביט לבנק. זה לא הוצאה, הכסף רק עובר ממקום למקום.</p>
         </>
       )}
 
-      {step === 'to' && (
-        <Chips
-          items={accounts.filter(a => a.id !== accountId)}
-          value={toAccountId}
-          onChange={id => {
-            setToAccountId(id);
-            next('to');
-          }}
-        />
+      {step === 'to' && <Chips items={accounts.filter(a => a.id !== accountId)} value={toAccountId} onChange={setToAccountId} />}
+
+      {step !== 'review' && (
+        <button class="continue" disabled={!canContinue[step]} onClick={next}>
+          המשך
+        </button>
       )}
 
       {step === 'review' && (
         <>
           <div class="card list">
-            <ReviewRow label="סוג" value={TYPE_NAMES[type]} onClick={() => goTo('type')} />
-            <ReviewRow label="סכום" value={formatMoney(amount)} onClick={() => setStep('amount')} />
-            {type !== 'transfer' && <ReviewRow label={type === 'expense' ? 'על מה' : 'מה נכנס'} value={name(categoryId)} onClick={() => setStep('category')} />}
-            {type === 'expense' && <ReviewRow label="איך שילמת" value={name(methodId)} onClick={() => setStep('method')} />}
-            {type === 'income' && <ReviewRow label="לאן נכנס" value={name(accountId)} onClick={() => setStep('account')} />}
-            {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => setStep('from')} />}
-            {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => setStep('to')} />}
+            <ReviewRow label="סוג" value={TYPE_NAMES[type]} onClick={() => change('type')} />
+            <ReviewRow label="סכום" value={formatMoney(amount)} onClick={() => change('amount')} />
+            {type !== 'transfer' && <ReviewRow label={type === 'expense' ? 'על מה' : 'מה נכנס'} value={name(categoryId)} onClick={() => change('category')} />}
+            {type === 'expense' && <ReviewRow label="איך שילמת" value={name(methodId)} onClick={() => change('method')} />}
+            {type === 'income' && <ReviewRow label="לאן נכנס" value={name(accountId)} onClick={() => change('account')} />}
+            {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => change('from')} />}
+            {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
           </div>
 
           {isCredit && (
@@ -303,14 +267,15 @@ function ReviewRow(props: { label: string; value: string; onClick: () => void })
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 
 /** On-screen number pad: no waiting for the phone keyboard, and only valid amounts can be typed. */
-function Keypad(props: { text: string; onChange: (text: string) => void }) {
-  const press = (k: string) => {
-    const t = props.text;
-    if (k === '⌫') return props.onChange(t.slice(0, -1));
-    if (k === '.') return t.includes('.') ? undefined : props.onChange((t || '0') + '.');
-    if (/\.\d\d$/.test(t) || t.replace('.', '').length >= 9) return;
-    props.onChange(t === '0' ? k : t + k);
-  };
+function Keypad(props: { text: string; onChange: (update: (text: string) => string) => void }) {
+  // Works from the latest text, so quick taps in a row are never lost
+  const press = (k: string) =>
+    props.onChange(t => {
+      if (k === '⌫') return t.slice(0, -1);
+      if (k === '.') return t.includes('.') ? t : (t || '0') + '.';
+      if (/\.\d\d$/.test(t) || t.replace('.', '').length >= 9) return t;
+      return t === '0' ? k : t + k;
+    });
   const [whole, cents] = props.text.split('.');
   const display = props.text ? `${Number(whole || 0).toLocaleString('he-IL')}${cents !== undefined ? '.' + cents : ''}` : '0';
 

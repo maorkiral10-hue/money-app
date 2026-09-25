@@ -12,7 +12,7 @@ import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
-import { Settings } from './screens/Settings';
+import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
 type Place = 'home' | 'settings' | 'forecast';
 type Screen =
@@ -20,6 +20,7 @@ type Screen =
   | { name: 'entry'; tx?: Transaction; startType?: TxType; from: Place }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
+  | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'data'; from: Place };
 
 /** Quick entry link, e.g. from an iPhone Shortcut: …/money-app/?add=expense opens straight on the amount. */
@@ -129,15 +130,16 @@ export function App() {
     );
   } else if (screen.name === 'settings') {
     content = (
-      <Settings
-        db={db}
+      <SettingsMenu
         data={data}
-        onChange={afterChange}
         onBack={() => go({ name: 'home' })}
+        onOpen={page => go({ name: 'settingsPage', page })}
         onOpenData={() => go({ name: 'data', from: 'settings' })}
         onOpenRecurring={() => go({ name: 'recurring', from: 'settings' })}
       />
     );
+  } else if (screen.name === 'settingsPage') {
+    content = <SettingsPageScreen db={db} data={data} page={screen.page} onChange={afterChange} onBack={() => go({ name: 'settings' })} />;
   } else if (screen.name === 'data') {
     const from = screen.from;
     content = (
