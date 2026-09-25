@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { APP_VERSION } from '../version';
 import { addNote, getMeta, getNotes, openDb, setMeta, type Note } from './db';
-import { migrateSnapshot } from './migrations';
+import { CURRENT_DATA_VERSION, migrateSnapshot } from './migrations';
 import { createSafetyCopy, listSafetyCopies, restoreSnapshot, SAFETY_COPIES_KEPT } from './safety';
 import { parseBackup, takeSnapshot } from './snapshot';
 import { startup } from './startup';
@@ -75,10 +75,11 @@ describe('backup file', () => {
     await startup(db);
     await restoreSnapshot(db, parseBackup(JSON.stringify(v3File)), 'before import');
     expect((await getNotes(db)).map(x => x.text)).toEqual(['old']);
-    expect(await getMeta(db, 'dataVersion')).toBe(2);
+    expect(await getMeta(db, 'dataVersion')).toBe(CURRENT_DATA_VERSION);
     const snap = await takeSnapshot(db);
     expect(snap.stores.transactions).toEqual([]);
     expect(snap.stores.accounts).toEqual([]);
+    expect(snap.stores.recurring).toEqual([]);
   });
 
   it('rejects files that are not backups', () => {

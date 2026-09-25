@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../version';
 import { DATA_STORES, RECORD_STORES, run } from './db';
-import type { Account, Category, Note, PaymentMethod, Transaction } from './types';
+import type { Account, Category, Note, PaymentMethod, Recurring, Transaction } from './types';
 
 /** Everything the user has entered, in one object. Used for backup files and safety copies alike. */
 export interface Snapshot {
@@ -20,6 +20,8 @@ export interface SnapshotStores {
   methods: PaymentMethod[];
   categories: Category[];
   transactions: Transaction[];
+  // Missing before data version 3
+  recurring: Recurring[];
 }
 
 export async function takeSnapshot(db: IDBDatabase): Promise<Snapshot> {

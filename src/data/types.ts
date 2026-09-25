@@ -59,6 +59,32 @@ export interface Transaction {
   /** Credit card expenses split into monthly payments. */
   installments?: number;
   note?: string;
+  /** Set when the transaction was created from a recurring item, for that item's occurrence on `occurrence`. */
+  recurringId?: string;
+  occurrence?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Salary, rent, standing orders: something that repeats on a schedule. */
+export interface Recurring {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  frequency: 'monthly' | 'weekly' | 'daily';
+  /** First occurrence; its day of month / weekday sets the schedule. */
+  firstDate: string;
+  /** No occurrences after this day (set when the user ends the item). */
+  endDate?: string;
+  /** Fixed amounts are recorded automatically; variable ones wait for the user to confirm how much it really was. */
+  variable: boolean;
+  /** Variable only: forecast with `amount`, or with the average of the last few confirmed amounts. */
+  estimate: 'set' | 'average';
+  amount: number;
+  categoryId?: string;
+  methodId?: string;
+  accountId?: string;
+  /** Every occurrence up to and including this day has been recorded or dismissed. */
+  handledThrough: string;
+  createdAt: string;
 }

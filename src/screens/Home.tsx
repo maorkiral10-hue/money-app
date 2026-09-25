@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks';
 import { summarize } from '../data/balance';
+import { PendingCard } from '../components/PendingCard';
 import { dayLabel, todayStr } from '../data/dates';
+import { openOccurrences } from '../data/recurring';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
@@ -11,7 +13,9 @@ function daysAgo(iso: string) {
 }
 
 export function Home(props: {
+  db: IDBDatabase;
   data: AppData;
+  onChange: () => void;
   onAdd: () => void;
   onEdit: (tx: Transaction) => void;
   onOpenSettings: () => void;
@@ -22,6 +26,10 @@ export function Home(props: {
   const today = todayStr();
   const summary = summarize(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const pending = data.recurring
+    .filter(r => r.variable)
+    .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
+    .filter(p => p.open.length > 0);
 
   const name = new Map<string, string>([...data.accounts, ...data.methods, ...data.categories].map(x => [x.id, x.name]));
   const sorted = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
@@ -60,6 +68,10 @@ export function Home(props: {
       <button class="quiet" onClick={props.onOpenData}>
         {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
       </button>
+
+      {pending.map(({ rec, open }) => (
+        <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
+      ))}
 
       {groups.size === 0 && <p class="muted center">עדיין אין תנועות. לחץ על + כדי להוסיף את הראשונה.</p>}
       {[...groups].map(([date, txs]) => (

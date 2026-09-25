@@ -18,7 +18,15 @@ const STEPS: Record<TxType, Step[]> = {
 const TYPE_NAMES: Record<TxType, string> = { expense: 'הוצאה', income: 'הכנסה', transfer: 'העברה' };
 const INSTALLMENTS = Array.from({ length: 36 }, (_, i) => i + 1);
 
-export function EntryForm(props: { db: IDBDatabase; data: AppData; tx?: Transaction; onClose: () => void; onSaved: () => void }) {
+export function EntryForm(props: {
+  db: IDBDatabase;
+  data: AppData;
+  tx?: Transaction;
+  /** Quick entry: skip the first question and start at the amount. */
+  startType?: TxType;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { data, tx } = props;
   const today = todayStr();
   // Hidden items stay available only for the transaction that already uses them
@@ -26,7 +34,7 @@ export function EntryForm(props: { db: IDBDatabase; data: AppData; tx?: Transact
   const methods = data.methods.filter(m => m.name.trim() && (!m.archived || m.id === tx?.methodId));
   const defaultMethod = methods.find(m => m.id === data.lastMethodId && !m.archived);
 
-  const [type, setType] = useState<TxType>(tx?.type ?? 'expense');
+  const [type, setType] = useState<TxType>(tx?.type ?? props.startType ?? 'expense');
   const [amountText, setAmountText] = useState(tx ? moneyInputText(tx.amount) : '');
   const [categoryId, setCategoryId] = useState(tx?.categoryId);
   const [methodId, setMethodId] = useState(tx?.methodId ?? defaultMethod?.id);
@@ -35,7 +43,7 @@ export function EntryForm(props: { db: IDBDatabase; data: AppData; tx?: Transact
   const [date, setDate] = useState(tx?.date ?? today);
   const [installments, setInstallments] = useState(tx?.installments ?? 1);
   const [note, setNote] = useState(tx?.note ?? '');
-  const [step, setStep] = useState<Step>(tx ? 'review' : 'type');
+  const [step, setStep] = useState<Step>(tx ? 'review' : props.startType ? 'amount' : 'type');
   // After the first pass (or when editing), changing one answer goes straight back to the summary
   const [reviewed, setReviewed] = useState(!!tx);
   const [saving, setSaving] = useState(false);

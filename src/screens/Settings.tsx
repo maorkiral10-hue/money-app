@@ -2,7 +2,14 @@ import { AccountsEditor, CategoriesEditor, MethodsEditor } from '../components/E
 import { putRecords } from '../data/db';
 import type { AppData } from '../data/store';
 
-export function Settings(props: { db: IDBDatabase; data: AppData; onChange: () => void; onBack: () => void; onOpenData: () => void }) {
+export function Settings(props: {
+  db: IDBDatabase;
+  data: AppData;
+  onChange: () => void;
+  onBack: () => void;
+  onOpenData: () => void;
+  onOpenRecurring: () => void;
+}) {
   const { db, data } = props;
   const save = (store: 'accounts' | 'methods' | 'categories') => async (items: { id: string }[]) => {
     await putRecords(db, store, items);
@@ -18,6 +25,10 @@ export function Settings(props: { db: IDBDatabase; data: AppData; onChange: () =
         </button>
       </header>
       <p class="muted small">שינויים נשמרים מיד. ביטול סימון מסתיר מהטופס, אבל תנועות קודמות נשארות כמו שהן.</p>
+
+      <button class="secondary" onClick={props.onOpenRecurring}>
+        הכנסות והוצאות קבועות ({data.recurring.filter(r => !r.endDate).length})
+      </button>
 
       <div class="card">
         <h2>איפה הכסף נמצא</h2>

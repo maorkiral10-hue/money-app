@@ -130,3 +130,7 @@ input.chip { width: auto; padding: 7px 12px; }
 .key { margin: 0; padding: 16px 0; font-size: 26px; font-weight: 500; background: var(--card); color: var(--text); border: 1px solid var(--line); }
 .key:active { background: var(--soft); }
 .wizard .card.list { margin-top: 4px; }
+
+/* waiting for "how much really came in" */
+.card.pending { border-color: var(--accent); }
+.card.pending h2 { margin: 2px 0 10px; }

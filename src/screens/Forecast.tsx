@@ -2,9 +2,15 @@ import { summarize, upcomingItems, type UpcomingItem } from '../data/balance';
 import { dayLabel, monthName, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
-import type { Transaction } from '../data/types';
+import type { Recurring, Transaction } from '../data/types';
 
-export function Forecast(props: { data: AppData; onBack: () => void; onEdit: (tx: Transaction) => void }) {
+export function Forecast(props: {
+  data: AppData;
+  onBack: () => void;
+  onEdit: (tx: Transaction) => void;
+  onEditRecurring: (rec: Recurring) => void;
+  onOpenRecurring: () => void;
+}) {
   const { data } = props;
   const today = todayStr();
   const summary = summarize(data, today);
@@ -15,8 +21,9 @@ export function Forecast(props: { data: AppData; onBack: () => void; onEdit: (tx
 
   const name = new Map<string, string>([...data.accounts, ...data.methods, ...data.categories].map(x => [x.id, x.name]));
   const txs = new Map(data.transactions.map(t => [t.id, t]));
+  const recs = new Map(data.recurring.map(r => [r.id, r]));
 
-  const describe = (item: UpcomingItem) => {
+  const describe = (item: UpcomingItem): { title: string; sub: string; tx?: Transaction; rec?: Recurring } => {
     if (item.kind === 'credit') {
       return {
         title: `חיוב ${name.get(item.methodId!) ?? 'אשראי'}`,
@@ -27,6 +34,10 @@ export function Forecast(props: { data: AppData; onBack: () => void; onEdit: (tx
           .filter(Boolean)
           .join(' + '),
       };
+    }
+    if (item.txId?.startsWith('expected:')) {
+      const rec = recs.get(item.txId.split(':')[1])!;
+      return { title: rec.name, sub: rec.variable ? 'קבועה · הערכה' : 'קבועה', rec };
     }
     const tx = txs.get(item.txId!)!;
     return {
@@ -54,8 +65,8 @@ export function Forecast(props: { data: AppData; onBack: () => void; onEdit: (tx
             <div class={`amount ${item.kind === 'income' ? 'income' : ''}`}>{formatMoney(item.amount, { sign: item.kind === 'income' })}</div>
           </>
         );
-        return d.tx ? (
-          <button key={`${item.date}${item.txId}`} class="tx" onClick={() => props.onEdit(d.tx!)}>
+        return d.tx || d.rec ? (
+          <button key={`${item.date}${item.txId}`} class="tx" onClick={() => (d.tx ? props.onEdit(d.tx) : props.onEditRecurring(d.rec!))}>
             {content}
           </button>
         ) : (
@@ -89,7 +100,9 @@ export function Forecast(props: { data: AppData; onBack: () => void; onEdit: (tx
         <div class="muted small">צפוי להישאר בסוף {monthName(summary.upcoming.until)}</div>
         <div class="big-number">{formatMoney(summary.upcoming.projected)}</div>
       </div>
-      <p class="muted small center">משכורת קבועה והוראות קבע יופיעו כאן אוטומטית אחרי שלב 3. עד אז אפשר לרשום אותן כתנועה עם תאריך עתידי.</p>
+      <button class="secondary" onClick={props.onOpenRecurring}>
+        הכנסות והוצאות קבועות ({data.recurring.filter(r => !r.endDate).length})
+      </button>
     </>
   );
 }

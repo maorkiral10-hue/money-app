@@ -1,7 +1,7 @@
 import type { Snapshot, SnapshotStores } from './snapshot';
 
 /** The shape of saved data this version of the app expects. Bump together with a new entry in MIGRATIONS. */
-export const CURRENT_DATA_VERSION = 2;
+export const CURRENT_DATA_VERSION = 3;
 
 /** MIGRATIONS[n] converts data from version n to n+1. Each one gets a copy and returns new data; it must never drop records. */
 export type Migration = (stores: SnapshotStores) => SnapshotStores;
@@ -14,6 +14,8 @@ export const MIGRATIONS: Record<number, Migration> = {
     categories: s.categories ?? [],
     transactions: s.transactions ?? [],
   }),
+  // v3 (stage 3): recurring income and expenses. Nothing existing changes.
+  2: s => ({ ...s, recurring: s.recurring ?? [] }),
 };
 
 /** Brings a snapshot up to `target`, working on a copy so the original stays untouched. */

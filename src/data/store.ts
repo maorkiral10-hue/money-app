@@ -1,12 +1,14 @@
-import { getAll, getMeta, run, type RecordStore } from './db';
+import { getAll, getMeta, putRecords, run, type RecordStore } from './db';
 import { todayStr } from './dates';
-import type { Account, Category, PaymentMethod, Transaction } from './types';
+import { occurrenceTransaction, openOccurrences } from './recurring';
+import type { Account, Category, PaymentMethod, Recurring, Transaction } from './types';
 
 export interface AppData {
   accounts: Account[];
   methods: PaymentMethod[];
   categories: Category[];
   transactions: Transaction[];
+  recurring: Recurring[];
   setupDone: boolean;
   startDate: string;
   lastBackupAt?: string;
@@ -21,6 +23,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     methods: (await getAll<PaymentMethod>(db, 'methods')).sort(byOrder),
     categories: (await getAll<Category>(db, 'categories')).sort(byOrder),
     transactions: await getAll<Transaction>(db, 'transactions'),
+    recurring: (await getAll<Recurring>(db, 'recurring')).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     setupDone: (await getMeta<boolean>(db, 'setupDone')) === true,
     startDate: (await getMeta<string>(db, 'startDate')) ?? todayStr(),
     lastBackupAt: await getMeta<string>(db, 'lastBackupAt'),
@@ -37,3 +40,35 @@ export function finishSetup(db: IDBDatabase, setup: { accounts: Account[]; metho
     tx.objectStore('meta').put(true, 'setupDone');
   });
 }
+
+/**
+ * Records every fixed-amount occurrence that has come due (e.g. rent on the 1st) and marks it handled.
+ * Reads and writes inside one transaction, so even two runs at once never record an occurrence twice.
+ * Returns true if anything was recorded.
+ */
+export async function recordDueRecurring(db: IDBDatabase, startDate: string, today: string) {
+  let changed = false;
+  await run(db, ['transactions', 'recurring'], 'readwrite', tx => {
+    const req = tx.objectStore('recurring').getAll();
+    req.onsuccess = () => {
+      for (const rec of (req.result as Recurring[]).filter(r => !r.variable)) {
+        const due = openOccurrences(rec, today, startDate);
+        if (!due.length) continue;
+        due.forEach(occ => tx.objectStore('transactions').put(occurrenceTransaction(rec, occ, rec.amount)));
+        tx.objectStore('recurring').put({ ...rec, handledThrough: due[due.length - 1] });
+        changed = true;
+      }
+    };
+  });
+  return changed;
+}
+
+/** Variable items whose date has come: the user says how much it really was (or null: it didn't happen). */
+export async function resolveOccurrence(db: IDBDatabase, rec: Recurring, occurrence: string, amount: number | null) {
+  await run(db, ['transactions', 'recurring'], 'readwrite', tx => {
+    if (amount) tx.objectStore('transactions').put(occurrenceTransaction(rec, occurrence, amount));
+    tx.objectStore('recurring').put({ ...rec, handledThrough: occurrence });
+  });
+}
+
+export const saveRecurring = (db: IDBDatabase, rec: Recurring) => putRecords(db, 'recurring', [rec]);

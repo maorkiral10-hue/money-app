@@ -1,5 +1,6 @@
 import { dayInMonth, endOfNextMonth } from './dates';
-import type { Account, PaymentMethod, Transaction } from './types';
+import { expectedTransactions } from './recurring';
+import type { Account, PaymentMethod, Recurring, Transaction } from './types';
 
 /** One change to one account's balance on one day. */
 export interface Effect {
@@ -16,6 +17,7 @@ export interface Ledger {
   accounts: Account[];
   methods: PaymentMethod[];
   transactions: Transaction[];
+  recurring?: Recurring[];
   startDate: string;
 }
 
@@ -66,9 +68,14 @@ export function transactionEffects(tx: Transaction, methods: Map<string, Payment
  * Every balance change since the start date. Transactions dated before the start date are
  * left out: they are already part of the opening balances (and, for cards, of openingPending).
  */
-export function allEffects(ledger: Ledger): Effect[] {
+export function allEffects(ledger: Ledger, today?: string): Effect[] {
   const methods = new Map(ledger.methods.map(m => [m.id, m]));
-  const effects = ledger.transactions
+  // Expected recurring occurrences are always dated after today, so they only ever reach the forecast
+  const expected =
+    today && ledger.recurring
+      ? expectedTransactions(ledger.recurring, ledger.transactions, today, endOfNextMonth(today), ledger.startDate)
+      : [];
+  const effects = [...ledger.transactions, ...expected]
     .filter(tx => tx.date >= ledger.startDate)
     .flatMap(tx => transactionEffects(tx, methods));
   for (const m of ledger.methods) {
@@ -100,7 +107,7 @@ export interface Summary {
 }
 
 export function summarize(ledger: Ledger, today: string): Summary {
-  const effects = allEffects(ledger);
+  const effects = allEffects(ledger, today);
   const balances = new Map(ledger.accounts.map(a => [a.id, a.openingBalance]));
   const until = endOfNextMonth(today);
   const upcoming = { until, credit: 0, income: 0, expenses: 0, projected: 0 };
@@ -143,7 +150,7 @@ export function upcomingItems(ledger: Ledger, today: string): UpcomingItem[] {
   const until = endOfNextMonth(today);
   const items: UpcomingItem[] = [];
   const charges = new Map<string, UpcomingItem>();
-  for (const e of allEffects(ledger)) {
+  for (const e of allEffects(ledger, today)) {
     if (e.date <= today || e.date > until || e.kind === 'transfer') continue;
     if (e.kind !== 'credit') {
       items.push({ date: e.date, amount: e.amount, kind: e.kind, txId: e.txId, purchases: 0 });
