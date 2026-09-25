@@ -132,6 +132,37 @@ export function summarize(ledger: Ledger, today: string): Summary {
   return { liquid, byAccount, upcoming };
 }
 
+export interface CardUsage {
+  card: PaymentMethod;
+  /** Everything bought on the card and not yet charged, including all future installments. */
+  used: number;
+  /** limit − used; undefined when no limit is set. */
+  available?: number;
+  nextCharge?: { date: string; amount: number };
+}
+
+/** How much of each credit card's limit is taken up right now. Purchases dated in the future don't count yet. */
+export function cardUsage(ledger: Ledger, today: string): CardUsage[] {
+  const txDates = new Map(ledger.transactions.map(t => [t.id, t.date]));
+  const pending = allEffects(ledger).filter(
+    e => e.kind === 'credit' && e.date > today && (!e.txId || (txDates.get(e.txId) ?? '') <= today),
+  );
+  return ledger.methods
+    .filter(m => m.kind === 'credit')
+    .map(card => {
+      const own = pending.filter(e => e.methodId === card.id);
+      const used = -own.reduce((a, e) => a + e.amount, 0);
+      const first = own.map(e => e.date).sort()[0];
+      return {
+        card,
+        used,
+        available: card.creditLimit ? card.creditLimit - used : undefined,
+        nextCharge: first ? { date: first, amount: -own.filter(e => e.date === first).reduce((a, e) => a + e.amount, 0) } : undefined,
+      };
+    })
+    .filter(u => !u.card.archived || u.used);
+}
+
 /** One line in the forecast: a future income or expense, or one card's charge on one day. */
 export interface UpcomingItem {
   date: string;

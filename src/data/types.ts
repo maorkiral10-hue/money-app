@@ -31,6 +31,8 @@ export interface PaymentMethod {
   chargeDay?: number;
   /** Credit cards: purchases made before the start date that the next charge will include. */
   openingPending?: number;
+  /** Credit cards: the card's limit (מסגרת). Optional; added in app version 8. */
+  creditLimit?: number;
   order: number;
   archived?: boolean;
 }

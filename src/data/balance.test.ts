@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextChargeDate, splitInstallments, summarize, upcomingItems, type Ledger } from './balance';
+import { cardUsage, nextChargeDate, splitInstallments, summarize, upcomingItems, type Ledger } from './balance';
 import { parseMoney } from './money';
 import type { Account, PaymentMethod, Transaction } from './types';
 
@@ -104,6 +104,27 @@ describe('forecast lines', () => {
     ]);
     const s = summarize(l, '2026-09-24');
     expect(s.liquid + items.reduce((a, i) => a + i.amount, 0)).toBe(s.upcoming.projected);
+  });
+});
+
+describe('credit limit', () => {
+  it('installments take up the limit in full and free it month by month', () => {
+    const l = ledger(
+      [
+        tx({ amount: 1_200_00, methodId: 'max', installments: 12 }),
+        tx({ amount: 300_00, methodId: 'max' }),
+        tx({ amount: 999_00, methodId: 'max', date: '2026-12-01' }), // not bought yet
+        tx({ amount: 50_00, methodId: 'cash' }),
+      ],
+      { methods: methods.map(m => (m.id === 'max' ? { ...m, creditLimit: 3_000_00, openingPending: 500_00 } : m)) },
+    );
+    const [max] = cardUsage(l, '2026-09-24');
+    expect(max.used).toBe(500_00 + 300_00 + 1_200_00);
+    expect(max.available).toBe(1_000_00);
+    expect(max.nextCharge).toEqual({ date: '2026-10-10', amount: 500_00 + 300_00 + 100_00 });
+
+    const [afterFirstCharge] = cardUsage(l, '2026-10-10');
+    expect(afterFirstCharge.used).toBe(1_100_00);
   });
 });
 

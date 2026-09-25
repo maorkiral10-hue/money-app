@@ -89,6 +89,10 @@ export function MethodsEditor(props: { items: PaymentMethod[]; accounts: Account
                       <span>כמה כבר נצבר לחיוב הקרוב (ביום ההתחלה)</span>
                       <MoneyInput value={m.openingPending ?? 0} onChange={v => set(m.id, { openingPending: v })} />
                     </label>
+                    <label class="field">
+                      <span>מסגרת האשראי של הכרטיס</span>
+                      <MoneyInput value={m.creditLimit ?? 0} onChange={v => set(m.id, { creditLimit: v || undefined })} />
+                    </label>
                   </>
                 )}
               </>

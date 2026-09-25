@@ -131,6 +131,14 @@ input.chip { width: auto; padding: 7px 12px; }
 .key:active { background: var(--soft); }
 .wizard .card.list { margin-top: 4px; }
 
+/* credit limits under the breakdown */
+.section-label { margin: 10px 0 2px; }
+.warn { color: var(--neg); font-weight: 600; }
+.card-line { padding: 4px 0 6px; }
+.bar { height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; margin: 3px 0 2px; }
+.bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.bar.high span { background: var(--neg); }
+
 /* waiting for "how much really came in" */
 .card.pending { border-color: var(--accent); }
 .card.pending h2 { margin: 2px 0 10px; }

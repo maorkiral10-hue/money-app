@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Chips } from '../components/inputs';
+import { cardUsage } from '../data/balance';
 import { deleteRecord, putRecords, setMeta } from '../data/db';
 import { addDays, dayLabel, todayStr } from '../data/dates';
 import { formatMoney, moneyInputText, parseMoney } from '../data/money';
@@ -53,6 +54,10 @@ export function EntryForm(props: {
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === tx?.categoryId));
   const method = methods.find(m => m.id === methodId);
   const isCredit = type === 'expense' && method?.kind === 'credit';
+  // What the card's limit will have left once this purchase is saved (a purchase dated later doesn't use it yet)
+  const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
+  const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? tx.amount : 0;
+  const limitLeft = usage?.available !== undefined && date <= today ? usage.available + alreadyCounted - amount : undefined;
   const name = (id?: string) => [...accounts, ...methods, ...categories].find(x => x.id === id)?.name ?? '';
 
   const valid =
@@ -246,6 +251,11 @@ export function EntryForm(props: {
               </select>
               {installments > 1 && <span class="muted small">בערך {formatMoney(Math.floor(amount / installments))} לחודש</span>}
             </label>
+          )}
+          {limitLeft !== undefined && (
+            <p class={`small ${limitLeft < 0 ? 'warn' : 'muted'}`}>
+              {limitLeft < 0 ? `חורג מהמסגרת של ${method!.name} ב-${formatMoney(-limitLeft)}` : `יישאר פנוי במסגרת של ${method!.name}: ${formatMoney(limitLeft)}`}
+            </p>
           )}
 
           <section>

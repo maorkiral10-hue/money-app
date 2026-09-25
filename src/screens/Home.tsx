@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { summarize } from '../data/balance';
+import { cardUsage, summarize, type CardUsage } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
@@ -25,6 +25,7 @@ export function Home(props: {
   const { data } = props;
   const today = todayStr();
   const summary = summarize(data, today);
+  const cards = cardUsage(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const pending = data.recurring
     .filter(r => r.variable)
@@ -52,6 +53,10 @@ export function Home(props: {
           <div class="upcoming">
             {summary.byAccount.map(({ account, balance }) => (
               <Line key={account.id} label={account.name} value={balance} />
+            ))}
+            {cards.length > 0 && <div class="muted small section-label">מסגרות אשראי</div>}
+            {cards.map(u => (
+              <CardLine key={u.card.id} usage={u} today={today} />
             ))}
           </div>
         )}
@@ -109,6 +114,32 @@ export function Home(props: {
         +
       </button>
     </>
+  );
+}
+
+function CardLine({ usage, today }: { usage: CardUsage; today: string }) {
+  const limit = usage.card.creditLimit;
+  const share = limit ? Math.min(1, usage.used / limit) : 0;
+  return (
+    <div class="card-line">
+      <div class="line">
+        <span>{usage.card.name}</span>
+        <span>{limit ? `פנוי ${formatMoney(usage.available!)}` : `נוצל ${formatMoney(usage.used)}`}</span>
+      </div>
+      {limit ? (
+        <>
+          <div class={`bar ${share >= 0.9 ? 'high' : ''}`}>
+            <span style={{ width: `${share * 100}%` }} />
+          </div>
+          <div class="muted small">
+            נוצל {formatMoney(usage.used)} מתוך {formatMoney(limit)}
+            {usage.nextCharge && ` · חיוב ${dayLabel(usage.nextCharge.date, today)}: ${formatMoney(usage.nextCharge.amount)}`}
+          </div>
+        </>
+      ) : (
+        <div class="muted small">לא הוגדרה מסגרת. אפשר להוסיף בהגדרות ← אמצעי תשלום</div>
+      )}
+    </div>
   );
 }
 
