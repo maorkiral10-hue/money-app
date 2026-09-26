@@ -155,3 +155,12 @@ button.continue { margin-top: 22px; }
 /* waiting for "how much really came in" */
 .card.pending { border-color: var(--accent); }
 .card.pending h2 { margin: 2px 0 10px; }
+
+/* slide a row left to delete it */
+.swipe { position: relative; overflow: hidden; }
+.swipe-delete {
+  position: absolute; top: 0; bottom: 0; right: 0; width: 88px; margin: 0; border-radius: 0;
+  background: var(--neg); color: #fff; font-weight: 600;
+}
+.swipe-content { position: relative; background: var(--card); touch-action: pan-y; }
+.swipe-content.dragging, .swipe-content.dragging input { user-select: none; -webkit-user-select: none; }

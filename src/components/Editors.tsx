@@ -1,9 +1,12 @@
+import type { ComponentChildren } from 'preact';
 import type { Account, Category, PaymentMethod } from '../data/types';
 import { MoneyInput } from './inputs';
+import { SwipeRow } from './SwipeRow';
 
-// Shared by the first-run questionnaire and the settings screen.
-// Unticking an item sets `archived`: the questionnaire then leaves it out, settings hides it
-// from the entry form but keeps it so past transactions still show where they came from.
+// Shared by the first-run questionnaire and the settings screens.
+// Questionnaire: every suggestion has a tick box, and unticked ones are left out when it finishes.
+// Settings (onDelete given): no tick boxes; slide a row left to delete it. Deleted items that past
+// transactions still use are kept as `archived` and hidden everywhere, so history and balances stay right.
 
 type Patch<T> = (id: string, patch: Partial<T>) => void;
 
@@ -11,13 +14,37 @@ function update<T extends { id: string }>(items: T[], onChange: (items: T[]) => 
   return (id, patch) => onChange(items.map(i => (i.id === id ? { ...i, ...patch } : i)));
 }
 
+function Row<T extends { id: string; archived?: boolean }>(props: {
+  item: T;
+  set: Patch<T>;
+  onDelete?: (id: string) => void;
+  compact?: boolean;
+  children: ComponentChildren;
+}) {
+  const { item } = props;
+  if (props.onDelete) {
+    return (
+      <SwipeRow onDelete={() => props.onDelete!(item.id)}>
+        <div class={`edit-row ${props.compact ? 'compact' : ''}`}>{props.children}</div>
+      </SwipeRow>
+    );
+  }
+  return (
+    <div class={`edit-row ${props.compact ? 'compact' : ''} ${item.archived ? 'off' : ''}`}>
+      <input type="checkbox" checked={!item.archived} onChange={e => props.set(item.id, { archived: !e.currentTarget.checked } as Partial<T>)} />
+      {props.children}
+    </div>
+  );
+}
+
+const visible = <T extends { archived?: boolean }>(items: T[], deleting: boolean) => (deleting ? items.filter(i => !i.archived) : items);
+
 export function AccountsEditor(props: { items: Account[]; onChange: (items: Account[]) => void; balanceLabel: string }) {
   const set = update(props.items, props.onChange);
   return (
     <>
       {props.items.map(a => (
-        <div key={a.id} class={`edit-row ${a.archived ? 'off' : ''}`}>
-          <input type="checkbox" checked={!a.archived} onChange={e => set(a.id, { archived: !e.currentTarget.checked })} />
+        <Row key={a.id} item={a} set={set}>
           <div class="edit-fields">
             <input type="text" value={a.name} onInput={e => set(a.id, { name: e.currentTarget.value })} />
             {!a.archived && (
@@ -27,7 +54,7 @@ export function AccountsEditor(props: { items: Account[]; onChange: (items: Acco
               </label>
             )}
           </div>
-        </div>
+        </Row>
       ))}
       <button
         type="button"
@@ -44,7 +71,12 @@ export function AccountsEditor(props: { items: Account[]; onChange: (items: Acco
 
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
-export function MethodsEditor(props: { items: PaymentMethod[]; accounts: Account[]; onChange: (items: PaymentMethod[]) => void }) {
+export function MethodsEditor(props: {
+  items: PaymentMethod[];
+  accounts: Account[];
+  onChange: (items: PaymentMethod[]) => void;
+  onDelete?: (id: string) => void;
+}) {
   const set = update(props.items, props.onChange);
   const accounts = props.accounts.filter(a => !a.archived);
   const banks = accounts.filter(a => a.kind === 'bank');
@@ -56,9 +88,8 @@ export function MethodsEditor(props: { items: PaymentMethod[]; accounts: Account
 
   return (
     <>
-      {props.items.map(m => (
-        <div key={m.id} class={`edit-row ${m.archived ? 'off' : ''}`}>
-          <input type="checkbox" checked={!m.archived} onChange={e => set(m.id, { archived: !e.currentTarget.checked })} />
+      {visible(props.items, !!props.onDelete).map(m => (
+        <Row key={m.id} item={m} set={set} onDelete={props.onDelete}>
           <div class="edit-fields">
             <input type="text" value={m.name} placeholder={m.kind === 'credit' ? 'שם הכרטיס, למשל מקס' : 'שם'} onInput={e => set(m.id, { name: e.currentTarget.value })} />
             {!m.archived && (
@@ -98,7 +129,7 @@ export function MethodsEditor(props: { items: PaymentMethod[]; accounts: Account
               </>
             )}
           </div>
-        </div>
+        </Row>
       ))}
       <button type="button" class="secondary" onClick={() => add({ kind: 'credit', chargeDay: 10, openingPending: 0, accountId: banks[0]?.id ?? accounts[0]?.id })}>
         + כרטיס אשראי
@@ -110,17 +141,21 @@ export function MethodsEditor(props: { items: PaymentMethod[]; accounts: Account
   );
 }
 
-export function CategoriesEditor(props: { items: Category[]; kind: Category['kind']; onChange: (items: Category[]) => void }) {
+export function CategoriesEditor(props: {
+  items: Category[];
+  kind: Category['kind'];
+  onChange: (items: Category[]) => void;
+  onDelete?: (id: string) => void;
+}) {
   const set = update(props.items, props.onChange);
   return (
     <>
-      {props.items
+      {visible(props.items, !!props.onDelete)
         .filter(c => c.kind === props.kind)
         .map(c => (
-          <div key={c.id} class={`edit-row compact ${c.archived ? 'off' : ''}`}>
-            <input type="checkbox" checked={!c.archived} onChange={e => set(c.id, { archived: !e.currentTarget.checked })} />
+          <Row key={c.id} item={c} set={set} onDelete={props.onDelete} compact>
             <input type="text" value={c.name} onInput={e => set(c.id, { name: e.currentTarget.value })} />
-          </div>
+          </Row>
         ))}
       <button
         type="button"

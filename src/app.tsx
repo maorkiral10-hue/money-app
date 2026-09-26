@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
 import { todayStr } from './data/dates';
-import { openDb } from './data/db';
+import { deleteRecord, openDb } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, type AppData } from './data/store';
@@ -103,7 +103,18 @@ export function App() {
     );
   } else if (screen.name === 'recurring') {
     const from = screen.from;
-    content = <RecurringList data={data} onBack={() => go({ name: from })} onEdit={rec => go({ name: 'recurringForm', rec, from })} />;
+    content = (
+      <RecurringList
+        data={data}
+        onBack={() => go({ name: from })}
+        onEdit={rec => go({ name: 'recurringForm', rec, from })}
+        onDelete={async rec => {
+          // Transactions it already recorded stay; only the schedule goes
+          await deleteRecord(db, 'recurring', rec.id);
+          await refresh();
+        }}
+      />
+    );
   } else if (screen.name === 'recurringForm') {
     const from = screen.from;
     content = (

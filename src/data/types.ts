@@ -73,7 +73,7 @@ export interface Recurring {
   id: string;
   name: string;
   type: 'income' | 'expense';
-  frequency: 'monthly' | 'weekly' | 'daily';
+  frequency: 'yearly' | 'monthly' | 'weekly' | 'daily';
   /** First occurrence; its day of month / weekday sets the schedule. */
   firstDate: string;
   /** No occurrences after this day (set when the user ends the item). */

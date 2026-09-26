@@ -10,7 +10,11 @@ export function occurrencesBetween(rec: Recurring, after: string, through: strin
   const dates: string[] = [];
   for (let i = 0; ; i++) {
     const d =
-      rec.frequency === 'monthly' ? dayInMonth(rec.firstDate, i, day) : addDays(rec.firstDate, rec.frequency === 'weekly' ? i * 7 : i);
+      rec.frequency === 'yearly'
+        ? dayInMonth(rec.firstDate, i * 12, day)
+        : rec.frequency === 'monthly'
+          ? dayInMonth(rec.firstDate, i, day)
+          : addDays(rec.firstDate, rec.frequency === 'weekly' ? i * 7 : i);
     if (d > last) break;
     if (d > after) dates.push(d);
   }

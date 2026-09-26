@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { summarize, upcomingItems, type Ledger } from './balance';
 import { getAll, openDb, putRecords, setMeta } from './db';
 import { estimateFor, occurrencesBetween, openOccurrences } from './recurring';
-import { recordDueRecurring, resolveOccurrence } from './store';
+import { deleteSetting, recordDueRecurring, resolveOccurrence } from './store';
 import type { Account, PaymentMethod, Recurring, Transaction } from './types';
 
 const rec = (r: Partial<Recurring>): Recurring => ({
@@ -21,6 +21,11 @@ describe('schedule', () => {
       '2026-09-25', '2026-10-02', '2026-10-09',
     ]);
     expect(occurrencesBetween(rec({ frequency: 'daily', firstDate: '2026-09-25' }), '2026-09-25', '2026-09-27')).toEqual(['2026-09-26', '2026-09-27']);
+  });
+  it('yearly keeps the date, using Feb 28 in years without Feb 29', () => {
+    expect(occurrencesBetween(rec({ frequency: 'yearly', firstDate: '2028-02-29' }), '2028-02-28', '2031-12-31')).toEqual([
+      '2028-02-29', '2029-02-28', '2030-02-28', '2031-02-28',
+    ]);
   });
   it('stops at the end date', () => {
     expect(occurrencesBetween(rec({ endDate: '2026-11-15' }), '2026-09-30', '2027-01-31')).toEqual(['2026-10-01', '2026-11-01']);
@@ -64,6 +69,24 @@ describe('recording', () => {
     await resolveOccurrence(db, r, '2026-10-01', 123_45);
     const [t] = await getAll<Transaction>(db, 'transactions');
     expect([t.amount, t.date, t.accountId]).toEqual([123_45, '2026-10-01', 'bank']);
+  });
+});
+
+describe('deleting a category or payment method', () => {
+  let n = 0;
+  it('removes unused ones and hides used ones, keeping history', async () => {
+    const db = await openDb(`del-test-${++n}`);
+    const methods: PaymentMethod[] = [
+      { id: 'used', name: 'used', kind: 'bank', accountId: 'bank', order: 0 },
+      { id: 'unused', name: 'unused', kind: 'bank', accountId: 'bank', order: 1 },
+      { id: 'card', name: 'card', kind: 'credit', accountId: 'bank', chargeDay: 10, openingPending: 100_00, order: 2 },
+    ];
+    const txs: Transaction[] = [{ id: 't', type: 'expense', amount: 1, date: '2026-09-25', methodId: 'used', categoryId: 'c', createdAt: '', updatedAt: '' }];
+    await putRecords(db, 'methods', methods);
+    const data = { accounts: [], methods, categories: [], transactions: txs, recurring: [], setupDone: true, startDate: '2026-09-24' };
+    for (const id of ['used', 'unused', 'card']) await deleteSetting(db, data, 'methods', id);
+    const left = await getAll<PaymentMethod>(db, 'methods');
+    expect(left.map(m => [m.id, m.archived]).sort()).toEqual([['card', true], ['used', true]]);
   });
 });
 

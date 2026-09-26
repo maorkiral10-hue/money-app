@@ -1,6 +1,6 @@
 import { AccountsEditor, CategoriesEditor, MethodsEditor } from '../components/Editors';
 import { putRecords } from '../data/db';
-import type { AppData } from '../data/store';
+import { deleteSetting, type AppData } from '../data/store';
 import { APP_VERSION } from '../version';
 
 export type SettingsPage = 'accounts' | 'methods' | 'categories';
@@ -82,6 +82,10 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
     await putRecords(db, store, items);
     props.onChange();
   };
+  const remove = (store: 'categories' | 'methods') => async (id: string) => {
+    await deleteSetting(db, data, store, id);
+    props.onChange();
+  };
 
   return (
     <>
@@ -91,7 +95,11 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
           חזרה
         </button>
       </header>
-      <p class="muted small">שינויים נשמרים מיד. ביטול סימון מסתיר מהטופס, אבל תנועות קודמות נשארות כמו שהן.</p>
+      <p class="muted small">
+        {props.page === 'accounts'
+          ? 'שינויים נשמרים מיד. ביטול סימון מסתיר מהטופס, אבל תנועות קודמות נשארות כמו שהן.'
+          : 'שינויים נשמרים מיד. כדי למחוק, החלק שורה שמאלה. תנועות שכבר נרשמו נשארות כמו שהן.'}
+      </p>
 
       {props.page === 'accounts' && (
         <div class="card">
@@ -100,18 +108,18 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
       )}
       {props.page === 'methods' && (
         <div class="card">
-          <MethodsEditor items={data.methods} accounts={data.accounts} onChange={save('methods')} />
+          <MethodsEditor items={data.methods} accounts={data.accounts} onChange={save('methods')} onDelete={remove('methods')} />
         </div>
       )}
       {props.page === 'categories' && (
         <>
           <div class="card">
             <h2>הוצאות</h2>
-            <CategoriesEditor items={data.categories} kind="expense" onChange={save('categories')} />
+            <CategoriesEditor items={data.categories} kind="expense" onChange={save('categories')} onDelete={remove('categories')} />
           </div>
           <div class="card">
             <h2>הכנסות</h2>
-            <CategoriesEditor items={data.categories} kind="income" onChange={save('categories')} />
+            <CategoriesEditor items={data.categories} kind="income" onChange={save('categories')} onDelete={remove('categories')} />
           </div>
         </>
       )}

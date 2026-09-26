@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
+import { SwipeRow } from '../components/SwipeRow';
 import { nextChargeDate } from '../data/balance';
 import { addDays, dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
@@ -18,16 +19,17 @@ const creditCard = (rec: Pick<Recurring, 'type' | 'methodId'>, methods: PaymentM
 export function scheduleText(rec: Recurring, methods: PaymentMethod[]) {
   const card = creditCard(rec, methods);
   if (card) {
-    const often = rec.frequency === 'daily' ? 'כל יום' : rec.frequency === 'weekly' ? 'כל שבוע' : 'כל חודש';
+    const often = { daily: 'כל יום', weekly: 'כל שבוע', monthly: 'כל חודש', yearly: 'כל שנה' }[rec.frequency];
     return `${often}, בחיוב של ${card.name} ב-${card.chargeDay}`;
   }
   const { y, m0, d } = parseDate(rec.firstDate);
   if (rec.frequency === 'daily') return 'כל יום';
+  if (rec.frequency === 'yearly') return `כל שנה ב-${d}.${m0 + 1}`;
   if (rec.frequency === 'weekly') return `כל יום ${WEEKDAYS[new Date(y, m0, d).getDay()]}`;
   return `כל חודש ב-${d}`;
 }
 
-export function RecurringList(props: { data: AppData; onBack: () => void; onEdit: (rec?: Recurring) => void }) {
+export function RecurringList(props: { data: AppData; onBack: () => void; onEdit: (rec?: Recurring) => void; onDelete: (rec: Recurring) => void }) {
   const today = todayStr();
   const active = props.data.recurring.filter(r => !r.endDate || r.endDate >= today);
   const ended = props.data.recurring.filter(r => r.endDate && r.endDate < today);
@@ -38,20 +40,22 @@ export function RecurringList(props: { data: AppData; onBack: () => void; onEdit
     const next = occ && card ? nextChargeDate(occ, card.chargeDay!) : occ;
     const amount = estimateFor(rec, props.data.transactions);
     return (
-      <button class="tx" onClick={() => props.onEdit(rec)}>
-        <div>
-          <div>{rec.name}</div>
-          <div class="muted small">
-            {[scheduleText(rec, props.data.methods), next && !rec.endDate ? `הבא: ${dayLabel(next, today)}` : rec.endDate ? 'הסתיימה' : '', rec.variable ? 'סכום משתנה' : '']
-              .filter(Boolean)
-              .join(' · ')}
+      <SwipeRow onDelete={() => props.onDelete(rec)}>
+        <button class="tx" onClick={() => props.onEdit(rec)}>
+          <div>
+            <div>{rec.name}</div>
+            <div class="muted small">
+              {[scheduleText(rec, props.data.methods), next && !rec.endDate ? `הבא: ${dayLabel(next, today)}` : rec.endDate ? 'הסתיימה' : '', rec.variable ? 'סכום משתנה' : '']
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
           </div>
-        </div>
-        <div class={`amount ${rec.type}`}>
-          {rec.variable ? '~' : ''}
-          {formatMoney(rec.type === 'expense' ? -amount : amount, { sign: rec.type === 'income' })}
-        </div>
-      </button>
+          <div class={`amount ${rec.type}`}>
+            {rec.variable ? '~' : ''}
+            {formatMoney(rec.type === 'expense' ? -amount : amount, { sign: rec.type === 'income' })}
+          </div>
+        </button>
+      </SwipeRow>
     );
   };
 
@@ -64,7 +68,7 @@ export function RecurringList(props: { data: AppData; onBack: () => void; onEdit
         </button>
       </header>
       <p class="muted small">
-        משכורת, שכר דירה, הוראות קבע ומנויים. סכום קבוע נרשם לבד כשמגיע התאריך. סכום משתנה מופיע בצפי לפי הערכה, ובתאריך האפליקציה שואלת כמה היה בפועל.
+        משכורת, שכר דירה, הוראות קבע ומנויים. סכום קבוע נרשם לבד כשמגיע התאריך. סכום משתנה מופיע בצפי לפי הערכה, ובתאריך האפליקציה שואלת כמה היה בפועל. כדי למחוק, החלק שורה שמאלה.
       </p>
       {active.length > 0 && (
         <div class="card list">
@@ -232,6 +236,7 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
               ['monthly', 'כל חודש'],
               ['weekly', 'כל שבוע'],
               ['daily', 'כל יום'],
+              ['yearly', 'כל שנה'],
             ]}
           />
           {card ? (

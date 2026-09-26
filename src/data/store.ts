@@ -1,4 +1,4 @@
-import { getAll, getMeta, putRecords, run, type RecordStore } from './db';
+import { deleteRecord, getAll, getMeta, putRecords, run, type RecordStore } from './db';
 import { todayStr } from './dates';
 import { occurrenceTransaction, openOccurrences } from './recurring';
 import type { Account, Category, PaymentMethod, Recurring, Transaction } from './types';
@@ -72,3 +72,21 @@ export async function resolveOccurrence(db: IDBDatabase, rec: Recurring, occurre
 }
 
 export const saveRecurring = (db: IDBDatabase, rec: Recurring) => putRecords(db, 'recurring', [rec]);
+
+/**
+ * Deletes a category or payment method the user no longer wants. One that transactions, recurring items
+ * or a card's opening amount still depend on is kept but hidden everywhere, so past transactions keep
+ * their names and balances don't change.
+ */
+export async function deleteSetting(db: IDBDatabase, data: AppData, store: 'categories' | 'methods', id: string) {
+  const field = store === 'categories' ? 'categoryId' : 'methodId';
+  const inUse =
+    data.transactions.some(t => t[field] === id) ||
+    data.recurring.some(r => r[field] === id) ||
+    (store === 'methods' && !!data.methods.find(m => m.id === id)?.openingPending);
+  if (!inUse) return deleteRecord(db, store, id);
+  const item: Category | PaymentMethod | undefined = (store === 'categories' ? data.categories : data.methods).find(x => x.id === id);
+  if (!item) return;
+  const hidden = { ...item, archived: true };
+  await putRecords(db, store, [hidden]);
+}
