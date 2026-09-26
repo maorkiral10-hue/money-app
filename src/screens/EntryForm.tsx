@@ -9,6 +9,13 @@ import type { Transaction, TxType } from '../data/types';
 
 type Step = 'type' | 'amount' | 'category' | 'method' | 'account' | 'from' | 'to' | 'review';
 
+export interface QuickPreset {
+  amount?: number;
+  /** Category and payment method (or account, for income) by name, as typed in the Shortcut. */
+  category?: string;
+  method?: string;
+}
+
 // One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
 const STEPS: Record<TxType, Step[]> = {
   expense: ['type', 'amount', 'category', 'method', 'review'],
@@ -25,6 +32,8 @@ export function EntryForm(props: {
   tx?: Transaction;
   /** Quick entry: skip the first question and start at the amount. */
   startType?: TxType;
+  /** Quick entry: answers the iPhone Shortcut already asked for; those steps are skipped. */
+  preset?: QuickPreset;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -35,16 +44,35 @@ export function EntryForm(props: {
   const methods = data.methods.filter(m => m.name.trim() && (!m.archived || m.id === tx?.methodId));
   const defaultMethod = methods.find(m => m.id === data.lastMethodId && !m.archived);
 
-  const [type, setType] = useState<TxType>(tx?.type ?? props.startType ?? 'expense');
-  const [amountText, setAmountText] = useState(tx ? moneyInputText(tx.amount) : '');
-  const [categoryId, setCategoryId] = useState(tx?.categoryId);
-  const [methodId, setMethodId] = useState(tx?.methodId ?? defaultMethod?.id);
-  const [accountId, setAccountId] = useState(tx?.accountId);
+  const initialType = tx?.type ?? props.startType ?? 'expense';
+  const preset = props.preset;
+  const byName = <T extends { name: string; archived?: boolean }>(items: T[], name?: string) =>
+    name ? items.find(i => !i.archived && i.name.trim() === name) : undefined;
+  const presetCategory = byName(data.categories.filter(c => c.kind === initialType), preset?.category);
+  const presetMethod = byName(methods, preset?.method);
+  const presetAccount = byName(accounts, preset?.method);
+
+  const [type, setType] = useState<TxType>(initialType);
+  const [amountText, setAmountText] = useState(tx ? moneyInputText(tx.amount) : preset?.amount ? moneyInputText(preset.amount) : '');
+  const [categoryId, setCategoryId] = useState(tx?.categoryId ?? presetCategory?.id);
+  const [methodId, setMethodId] = useState(tx?.methodId ?? presetMethod?.id ?? defaultMethod?.id);
+  const [accountId, setAccountId] = useState(tx?.accountId ?? presetAccount?.id);
   const [toAccountId, setToAccountId] = useState(tx?.toAccountId);
   const [date, setDate] = useState(tx?.date ?? today);
   const [installments, setInstallments] = useState(tx?.installments ?? 1);
   const [note, setNote] = useState(tx?.note ?? '');
-  const [step, setStep] = useState<Step>(tx ? 'review' : props.startType ? 'amount' : 'type');
+  const [step, setStep] = useState<Step>(() => {
+    if (tx) return 'review';
+    if (!props.startType) return 'type';
+    // Start at the first question the Shortcut didn't answer
+    const answered: Partial<Record<Step, boolean>> = {
+      amount: !!preset?.amount,
+      category: !!presetCategory,
+      method: !!presetMethod,
+      account: !!presetAccount,
+    };
+    return STEPS[initialType].find(s => s !== 'type' && !answered[s]) ?? 'review';
+  });
   const [fromSummary, setFromSummary] = useState(false);
   const [saving, setSaving] = useState(false);
 

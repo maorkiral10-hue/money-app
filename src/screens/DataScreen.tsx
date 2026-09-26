@@ -11,6 +11,7 @@ export function DataScreen(props: {
   copies: SafetyCopy[];
   lastBackupAt?: string;
   persisted: boolean | null;
+  openLog: string[];
   onChange: () => void;
   onBack: () => void;
 }) {
@@ -115,6 +116,14 @@ export function DataScreen(props: {
       <p class="muted small center">
         גרסה {APP_VERSION} · אחסון קבוע: {props.persisted === null ? '…' : props.persisted ? 'מאושר' : 'לא אושר'}
       </p>
+      <details class="muted small">
+        <summary>אבחון הזנה מהירה</summary>
+        {props.openLog.slice(-5).map((line, i) => (
+          <div key={i} class="ltr">
+            {line}
+          </div>
+        ))}
+      </details>
     </>
   );
 }

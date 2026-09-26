@@ -164,3 +164,4 @@ button.continue { margin-top: 22px; }
 }
 .swipe-content { position: relative; background: var(--card); touch-action: pan-y; }
 .swipe-content.dragging, .swipe-content.dragging input { user-select: none; -webkit-user-select: none; }
+.ltr { direction: ltr; text-align: left; word-break: break-all; }

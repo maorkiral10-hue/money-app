@@ -5,9 +5,10 @@ import { deleteRecord, openDb } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, type AppData } from './data/store';
+import { parseMoney } from './data/money';
 import type { Recurring, Transaction, TxType } from './data/types';
 import { DataScreen } from './screens/DataScreen';
-import { EntryForm } from './screens/EntryForm';
+import { EntryForm, type QuickPreset } from './screens/EntryForm';
 import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -17,20 +18,30 @@ import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/S
 type Place = 'home' | 'settings' | 'forecast';
 type Screen =
   | { name: Place }
-  | { name: 'entry'; tx?: Transaction; startType?: TxType; from: Place }
+  | { name: 'entry'; tx?: Transaction; startType?: TxType; preset?: QuickPreset; from: Place }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'data'; from: Place };
 
-/** Quick entry link, e.g. from an iPhone Shortcut: …/money-app/?add=expense opens straight on the amount. */
+/**
+ * Quick entry link, e.g. from an iPhone Shortcut: …/money-app/?add=expense opens straight on the amount.
+ * The Shortcut may also pass what it already asked in its own pop-ups: &amount=45&cat=סופר&pay=מקס
+ * (category and payment method by name); whatever is given is filled in and skipped.
+ */
+// Temporary: how the app was opened and resumed, shown on the backup screen, to see whether the
+// iPhone Shortcut's link reaches the app (cold start) or is dropped when the app is resumed
+const openLog: string[] = [`פתיחה: ${location.href}`];
+
 function takeQuickAddParam(): Screen | null {
   const params = new URLSearchParams(location.search);
   const add = params.get('add');
   if (add === null) return null;
   history.replaceState(null, '', location.pathname);
   const startType = (['expense', 'income', 'transfer'] as const).find(t => t === add);
-  return { name: 'entry', startType, from: 'home' };
+  const amount = parseMoney(params.get('amount') ?? '') ?? undefined;
+  const preset = { amount, category: params.get('cat')?.trim() || undefined, method: params.get('pay')?.trim() || undefined };
+  return { name: 'entry', startType, preset, from: 'home' };
 }
 
 export function App() {
@@ -65,6 +76,7 @@ export function App() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible' || !db) return;
+      openLog.push(`חזרה: ${location.href}`);
       const quick = takeQuickAddParam();
       if (quick) setScreen(quick);
       refresh(db);
@@ -94,6 +106,7 @@ export function App() {
         data={data}
         tx={screen.tx}
         startType={screen.startType}
+        preset={screen.preset}
         onClose={back}
         onSaved={async () => {
           await refresh();
@@ -154,7 +167,7 @@ export function App() {
   } else if (screen.name === 'data') {
     const from = screen.from;
     content = (
-      <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
+      <DataScreen openLog={openLog} db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
   } else {
     content = (
