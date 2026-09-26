@@ -12,6 +12,7 @@ export function SettingsMenu(props: {
   onOpen: (page: SettingsPage) => void;
   onOpenRecurring: () => void;
   onOpenData: () => void;
+  onSetOpenOnEntry: (on: boolean) => void;
 }) {
   const { data } = props;
   const active = <T extends { archived?: boolean; name: string }>(items: T[]) => items.filter(i => !i.archived && i.name.trim());
@@ -49,6 +50,16 @@ export function SettingsMenu(props: {
           sub={`${categories.filter(c => c.kind === 'expense').length} הוצאה · ${categories.filter(c => c.kind === 'income').length} הכנסה`}
           onClick={() => props.onOpen('categories')}
         />
+      </div>
+
+      <div class="card">
+        <label class="toggle-row">
+          <span>
+            פתיחה ישר על הזנה חדשה
+            <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי כמה דקות</span>
+          </span>
+          <input type="checkbox" checked={data.openOnEntry} onChange={e => props.onSetOpenOnEntry(e.currentTarget.checked)} />
+        </label>
       </div>
 
       <div class="card list">

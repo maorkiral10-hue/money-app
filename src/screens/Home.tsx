@@ -4,6 +4,7 @@ import { PendingCard } from '../components/PendingCard';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { formatMoney } from '../data/money';
+import type { Toast } from '../app';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 
@@ -15,6 +16,8 @@ function daysAgo(iso: string) {
 export function Home(props: {
   db: IDBDatabase;
   data: AppData;
+  toast: Toast | null;
+  onUndo: (txId: string) => void;
   onChange: () => void;
   onAdd: () => void;
   onEdit: (tx: Transaction) => void;
@@ -48,6 +51,17 @@ export function Home(props: {
           </svg>
         </button>
       </header>
+
+      {props.toast && (
+        <div class="card toast">
+          <span>✓ {props.toast.text}</span>
+          {props.toast.undoId && (
+            <button class="link" onClick={() => props.onUndo(props.toast!.undoId!)}>
+              ביטול
+            </button>
+          )}
+        </div>
+      )}
 
       <div class="card hero">
         <div class="muted small">כסף נזיל עכשיו</div>

@@ -4,17 +4,12 @@ import { cardUsage } from '../data/balance';
 import { deleteRecord, putRecords, setMeta } from '../data/db';
 import { addDays, dayLabel, todayStr } from '../data/dates';
 import { formatMoney, moneyInputText, parseMoney } from '../data/money';
+import { summarize } from '../data/balance';
+import { resolvePreset, type QuickPreset } from '../data/quick';
 import type { AppData } from '../data/store';
 import type { Transaction, TxType } from '../data/types';
 
 type Step = 'type' | 'amount' | 'category' | 'method' | 'account' | 'from' | 'to' | 'review';
-
-export interface QuickPreset {
-  amount?: number;
-  /** Category and payment method (or account, for income) by name, as typed in the Shortcut. */
-  category?: string;
-  method?: string;
-}
 
 // One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
 const STEPS: Record<TxType, Step[]> = {
@@ -30,12 +25,14 @@ export function EntryForm(props: {
   db: IDBDatabase;
   data: AppData;
   tx?: Transaction;
-  /** Quick entry: skip the first question and start at the amount. */
-  startType?: TxType;
   /** Quick entry: answers the iPhone Shortcut already asked for; those steps are skipped. */
   preset?: QuickPreset;
+  /** Shown because the app opened straight on a new entry: offer the way to the home screen instead of "cancel". */
+  launch?: boolean;
+  /** Reads what the iPhone Shortcut copied; resolves with a message to show when there was nothing usable. */
+  onPaste?: () => Promise<string | void>;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (saved?: Transaction) => void;
 }) {
   const { data, tx } = props;
   const today = todayStr();
@@ -44,13 +41,12 @@ export function EntryForm(props: {
   const methods = data.methods.filter(m => m.name.trim() && (!m.archived || m.id === tx?.methodId));
   const defaultMethod = methods.find(m => m.id === data.lastMethodId && !m.archived);
 
-  const initialType = tx?.type ?? props.startType ?? 'expense';
   const preset = props.preset;
-  const byName = <T extends { name: string; archived?: boolean }>(items: T[], name?: string) =>
-    name ? items.find(i => !i.archived && i.name.trim() === name) : undefined;
-  const presetCategory = byName(data.categories.filter(c => c.kind === initialType), preset?.category);
-  const presetMethod = byName(methods, preset?.method);
-  const presetAccount = byName(accounts, preset?.method);
+  const initialType = tx?.type ?? preset?.type ?? 'expense';
+  const resolved = preset ? resolvePreset(preset, data) : undefined;
+  const presetCategory = resolved?.category;
+  const presetMethod = resolved?.method;
+  const presetAccount = resolved?.account;
 
   const [type, setType] = useState<TxType>(initialType);
   const [amountText, setAmountText] = useState(tx ? moneyInputText(tx.amount) : preset?.amount ? moneyInputText(preset.amount) : '');
@@ -63,7 +59,7 @@ export function EntryForm(props: {
   const [note, setNote] = useState(tx?.note ?? '');
   const [step, setStep] = useState<Step>(() => {
     if (tx) return 'review';
-    if (!props.startType) return 'type';
+    if (!preset?.type) return 'type';
     // Start at the first question the Shortcut didn't answer
     const answered: Partial<Record<Step, boolean>> = {
       amount: !!preset?.amount,
@@ -75,6 +71,7 @@ export function EntryForm(props: {
   });
   const [fromSummary, setFromSummary] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pasteMessage, setPasteMessage] = useState('');
 
   const amount = parseMoney(amountText) ?? 0;
   const steps = STEPS[type];
@@ -146,7 +143,7 @@ export function EntryForm(props: {
     };
     await putRecords(props.db, 'transactions', [record]);
     if (type === 'expense' && methodId) await setMeta(props.db, 'lastMethodId', methodId);
-    props.onSaved();
+    props.onSaved(record);
   };
 
   const remove = async () => {
@@ -170,8 +167,9 @@ export function EntryForm(props: {
     <div class="sheet wizard">
       <header class="top">
         <button class="link" onClick={back}>
-          {step === 'type' || (tx && step === 'review') ? 'ביטול' : '→ חזרה'}
+          {step === 'type' || (tx && step === 'review') ? (props.launch ? 'למסך הראשי' : 'ביטול') : '→ חזרה'}
         </button>
+        {props.launch && step === 'type' && <span class="muted small">{formatMoney(summarize(data, today).liquid)} נזיל</span>}
         {step !== 'type' && !(tx && step === 'review') && (
           <button class="link" onClick={props.onClose}>
             ביטול
@@ -217,6 +215,22 @@ export function EntryForm(props: {
         <button class="continue" disabled={!canContinue[step]} onClick={next}>
           המשך
         </button>
+      )}
+
+      {step === 'type' && !tx && props.onPaste && (
+        <>
+          <button
+            class="secondary"
+            onClick={async () => {
+              setPasteMessage('');
+              const problem = await props.onPaste!();
+              if (problem) setPasteMessage(problem);
+            }}
+          >
+            הוסף מהקיצור
+          </button>
+          {pasteMessage && <p class="small warn">{pasteMessage}</p>}
+        </>
       )}
 
       {step === 'review' && (

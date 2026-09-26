@@ -165,3 +165,8 @@ button.continue { margin-top: 22px; }
 .swipe-content { position: relative; background: var(--card); touch-action: pan-y; }
 .swipe-content.dragging, .swipe-content.dragging input { user-select: none; -webkit-user-select: none; }
 .ltr { direction: ltr; text-align: left; word-break: break-all; }
+.card.toast { display: flex; justify-content: space-between; align-items: center; background: var(--soft); color: var(--pos); font-weight: 600; padding: 10px 14px; }
+.card.toast button { color: var(--text); font-weight: 500; }
+.toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.toggle-row input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.block { display: block; }

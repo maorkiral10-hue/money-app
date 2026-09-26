@@ -13,6 +13,8 @@ export interface AppData {
   startDate: string;
   lastBackupAt?: string;
   lastMethodId?: string;
+  /** Open the app straight on a new entry (default on). */
+  openOnEntry: boolean;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -28,6 +30,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     startDate: (await getMeta<string>(db, 'startDate')) ?? todayStr(),
     lastBackupAt: await getMeta<string>(db, 'lastBackupAt'),
     lastMethodId: await getMeta<string>(db, 'lastMethodId'),
+    openOnEntry: (await getMeta<boolean>(db, 'openOnEntry')) !== false,
   };
 }
 

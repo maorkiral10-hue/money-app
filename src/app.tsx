@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
 import { todayStr } from './data/dates';
-import { deleteRecord, openDb } from './data/db';
+import { deleteRecord, openDb, putRecords, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, type AppData } from './data/store';
-import { parseMoney } from './data/money';
-import type { Recurring, Transaction, TxType } from './data/types';
+import { formatMoney } from './data/money';
+import { presetFromClipboard, presetFromParams, quickTransaction, type QuickPreset } from './data/quick';
+import type { Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
-import { EntryForm, type QuickPreset } from './screens/EntryForm';
+import { EntryForm } from './screens/EntryForm';
 import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -18,36 +19,47 @@ import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/S
 type Place = 'home' | 'settings' | 'forecast';
 type Screen =
   | { name: Place }
-  | { name: 'entry'; tx?: Transaction; startType?: TxType; preset?: QuickPreset; from: Place }
+  | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'data'; from: Place };
 
 /**
- * Quick entry link, e.g. from an iPhone Shortcut: …/money-app/?add=expense opens straight on the amount.
- * The Shortcut may also pass what it already asked in its own pop-ups: &amount=45&cat=סופר&pay=מקס
- * (category and payment method by name); whatever is given is filled in and skipped.
+ * Quick entry link: …/money-app/?add=expense&amount=45&cat=סופר&pay=מקס fills in what it gives.
+ * (Opened from an iPhone Shortcut the iPhone drops the "?…" part, so there the Shortcut copies the
+ * same details to the clipboard instead; see data/quick.ts.)
  */
-// Temporary: how the app was opened and resumed, shown on the backup screen, to see whether the
-// iPhone Shortcut's link reaches the app (cold start) or is dropped when the app is resumed
-const openLog: string[] = [`פתיחה: ${location.href}`];
-
 function takeQuickAddParam(): Screen | null {
-  const params = new URLSearchParams(location.search);
-  const add = params.get('add');
-  if (add === null) return null;
+  const preset = presetFromParams(new URLSearchParams(location.search));
+  if (!preset) return null;
   history.replaceState(null, '', location.pathname);
-  const startType = (['expense', 'income', 'transfer'] as const).find(t => t === add);
-  const amount = parseMoney(params.get('amount') ?? '') ?? undefined;
-  const preset = { amount, category: params.get('cat')?.trim() || undefined, method: params.get('pay')?.trim() || undefined };
-  return { name: 'entry', startType, preset, from: 'home' };
+  return { name: 'entry', preset, from: 'home' };
+}
+
+/** After this long away, coming back to the app opens a new entry (a quick switch keeps your place). */
+const AWAY_FOR_NEW_ENTRY = 3 * 60_000;
+
+function savedText(tx: Transaction, data: AppData) {
+  const label = data.categories.find(c => c.id === tx.categoryId)?.name ?? (tx.type === 'transfer' ? 'העברה' : '');
+  return `נשמר: ${formatMoney(tx.amount)} ${label}`.trim();
+}
+
+export interface Toast {
+  text: string;
+  /** Saved from the Shortcut without a summary screen: offer to take it back. */
+  undoId?: string;
 }
 
 export function App() {
   const [db, setDb] = useState<IDBDatabase | null>(null);
   const [error, setError] = useState('');
   const [screen, setScreen] = useState<Screen>(() => takeQuickAddParam() ?? { name: 'home' });
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  const hiddenAt = useRef<number | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const lastPaste = useRef<{ text: string; at: number } | null>(null);
   const [data, setData] = useState<AppData | null>(null);
   const [copies, setCopies] = useState<SafetyCopy[]>([]);
   const [persisted, setPersisted] = useState<boolean | null>(null);
@@ -58,6 +70,7 @@ export function App() {
     if (loaded.setupDone && (await recordDueRecurring(d, loaded.startDate, todayStr()))) loaded = await loadAll(d);
     setData(loaded);
     setCopies(await listSafetyCopies(d));
+    return loaded;
   };
 
   useEffect(() => {
@@ -65,21 +78,41 @@ export function App() {
       const d = await openDb();
       await startup(d);
       setDb(d);
-      await refresh(d);
+      const loaded = await refresh(d);
+      // Opening the app is usually to write something down
+      if (loaded.setupDone && loaded.openOnEntry && screenRef.current.name === 'home') {
+        setScreen({ name: 'entry', launch: true, from: 'home' });
+      }
       if (navigator.storage?.persist) {
         setPersisted((await navigator.storage.persisted()) || (await navigator.storage.persist()));
       }
     })().catch(e => setError(String(e)));
   }, []);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // Coming back to the app on a new day: dates like "today" and the balance must move on
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState !== 'visible' || !db) return;
-      openLog.push(`חזרה: ${location.href}`);
+      if (document.visibilityState === 'hidden') {
+        hiddenAt.current = Date.now();
+        return;
+      }
+      if (!db) return;
+      const awayLong = hiddenAt.current !== null && Date.now() - hiddenAt.current > AWAY_FOR_NEW_ENTRY;
+      hiddenAt.current = null;
       const quick = takeQuickAddParam();
-      if (quick) setScreen(quick);
-      refresh(db);
+      refresh(db).then(loaded => {
+        if (quick) setScreen(quick);
+        else if (awayLong && loaded.setupDone && loaded.openOnEntry && screenRef.current.name !== 'entry') {
+          setToast(null);
+          setScreen({ name: 'entry', launch: true, from: 'home' });
+        }
+      });
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -92,24 +125,57 @@ export function App() {
     setScreen(s);
     scrollTo(0, 0);
   };
+
+  /** Adds what the iPhone Shortcut copied: straight away when it names everything, else via the entry screens. */
+  const pasteFromShortcut = async (entry: Extract<Screen, { name: 'entry' }>): Promise<string | void> => {
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      return 'לא הצלחתי לקרוא מהקיצור. נסה שוב, ובבועה שקופצת לחץ "הדבק".';
+    }
+    const preset = presetFromClipboard(text);
+    if (!preset) return 'לא נמצאו פרטים מהקיצור. הפעל קודם את הקיצור, ואז לחץ כאן.';
+    // A double tap shouldn't add the same thing twice
+    if (lastPaste.current && lastPaste.current.text === text && Date.now() - lastPaste.current.at < 60_000) {
+      return 'זה כבר נוסף הרגע.';
+    }
+    lastPaste.current = { text, at: Date.now() };
+    // Clear it so a later tap can't add it again (the iPhone may refuse; harmless then)
+    navigator.clipboard.writeText('').catch(() => {});
+    const tx = quickTransaction(preset, data, todayStr());
+    if (!tx) {
+      // A name the app doesn't know, or something missing: continue from the first open question
+      go({ ...entry, preset });
+      return;
+    }
+    await putRecords(db, 'transactions', [tx]);
+    if (tx.methodId) await setMeta(db, 'lastMethodId', tx.methodId);
+    const loaded = await refresh();
+    setToast({ text: savedText(tx, loaded), undoId: tx.id });
+    go({ name: 'home' });
+  };
   const afterChange = () => refresh();
 
   let content;
   if (!data.setupDone) {
     content = <Onboarding db={db} onDone={afterChange} />;
   } else if (screen.name === 'entry') {
-    const back = () => go({ name: screen.from });
+    const entry = screen;
+    const back = () => go({ name: entry.from });
     content = (
       <EntryForm
-        key={screen.tx?.id ?? `new-${screen.startType}`}
+        key={entry.tx?.id ?? `new-${JSON.stringify(entry.preset ?? {})}`}
         db={db}
         data={data}
-        tx={screen.tx}
-        startType={screen.startType}
-        preset={screen.preset}
+        tx={entry.tx}
+        preset={entry.preset}
+        launch={entry.launch}
+        onPaste={() => pasteFromShortcut(entry)}
         onClose={back}
-        onSaved={async () => {
-          await refresh();
+        onSaved={async saved => {
+          const loaded = await refresh();
+          if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
           back();
         }}
       />
@@ -160,6 +226,10 @@ export function App() {
         onOpen={page => go({ name: 'settingsPage', page })}
         onOpenData={() => go({ name: 'data', from: 'settings' })}
         onOpenRecurring={() => go({ name: 'recurring', from: 'settings' })}
+        onSetOpenOnEntry={async on => {
+          await setMeta(db, 'openOnEntry', on);
+          await refresh();
+        }}
       />
     );
   } else if (screen.name === 'settingsPage') {
@@ -167,13 +237,19 @@ export function App() {
   } else if (screen.name === 'data') {
     const from = screen.from;
     content = (
-      <DataScreen openLog={openLog} db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
+      <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
   } else {
     content = (
       <Home
         db={db}
         data={data}
+        toast={toast}
+        onUndo={async id => {
+          await deleteRecord(db, 'transactions', id);
+          setToast({ text: 'בוטל' });
+          await refresh();
+        }}
         onChange={afterChange}
         onAdd={() => go({ name: 'entry', from: 'home' })}
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
