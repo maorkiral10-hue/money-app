@@ -56,7 +56,7 @@ export function SettingsMenu(props: {
         <label class="toggle-row">
           <span>
             פתיחה ישר על הזנה חדשה
-            <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי כמה דקות</span>
+            <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי 10 שניות ומעלה (לא באמצע הקלדה)</span>
           </span>
           <input type="checkbox" checked={data.openOnEntry} onChange={e => props.onSetOpenOnEntry(e.currentTarget.checked)} />
         </label>

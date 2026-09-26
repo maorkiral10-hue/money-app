@@ -37,8 +37,12 @@ function takeQuickAddParam(): Screen | null {
   return { name: 'entry', preset, from: 'home' };
 }
 
-/** After this long away, coming back to the app opens a new entry (a quick switch keeps your place). */
-const AWAY_FOR_NEW_ENTRY = 3 * 60_000;
+/**
+ * Coming back after this long opens a new entry: long enough to have run the iPhone Shortcut's pop-ups,
+ * which the app has no other way of noticing. Screens where you are typing are never left this way.
+ */
+const AWAY_FOR_NEW_ENTRY = 10_000;
+const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage'];
 
 function savedText(tx: Transaction, data: AppData) {
   const label = data.categories.find(c => c.id === tx.categoryId)?.name ?? (tx.type === 'transfer' ? 'העברה' : '');
@@ -108,7 +112,7 @@ export function App() {
       const quick = takeQuickAddParam();
       refresh(db).then(loaded => {
         if (quick) setScreen(quick);
-        else if (awayLong && loaded.setupDone && loaded.openOnEntry && screenRef.current.name !== 'entry') {
+        else if (awayLong && loaded.setupDone && loaded.openOnEntry && !TYPING_SCREENS.includes(screenRef.current.name)) {
           setToast(null);
           setScreen({ name: 'entry', launch: true, from: 'home' });
         }
