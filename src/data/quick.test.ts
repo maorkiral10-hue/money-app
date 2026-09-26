@@ -26,6 +26,15 @@ describe('quick entry from the iPhone Shortcut', () => {
     expect([income.categoryId, income.accountId]).toEqual(['salary', 'bank']);
   });
 
+  it('one Shortcut for both: the type comes as the Hebrew word picked, and shared lists resolve by type', () => {
+    const income = quickTransaction(presetFromClipboard('money-app:add=הכנסה&amount=500&cat=משכורת&pay=חשבון הבנק')!, data, '2026-09-26')!;
+    expect([income.type, income.categoryId, income.accountId]).toEqual(['income', 'salary', 'bank']);
+    const expense = quickTransaction(presetFromClipboard('money-app:add=הוצאה&amount=20&cat=אוכל בחוץ&pay=מזומן')!, data, '2026-09-26')!;
+    expect([expense.type, expense.methodId]).toEqual(['expense', 'cash']);
+    // an income category chosen for an expense isn't taken
+    expect(quickTransaction(presetFromClipboard('money-app:add=הוצאה&amount=20&cat=משכורת&pay=מזומן')!, data, '2026-09-26')).toBeNull();
+  });
+
   it('leaves it to the entry screen when a name is unknown', () => {
     expect(quickTransaction(presetFromClipboard('money-app:add=expense&amount=45&cat=אחר לגמרי&pay=מזומן')!, data, '2026-09-26')).toBeNull();
   });

@@ -18,11 +18,17 @@ export interface QuickPreset {
  */
 export const CLIPBOARD_PREFIX = 'money-app:';
 
+// The Shortcut's own "what are you recording?" pop-up passes the Hebrew word the user picked
+const TYPE_WORDS: Record<string, TxType> = {
+  expense: 'expense', income: 'income', transfer: 'transfer',
+  הוצאה: 'expense', הכנסה: 'income', העברה: 'transfer',
+};
+
 export function presetFromParams(params: URLSearchParams): QuickPreset | null {
   const add = params.get('add');
   if (add === null) return null;
   return {
-    type: (['expense', 'income', 'transfer'] as const).find(t => t === add.trim()),
+    type: TYPE_WORDS[add.trim()],
     amount: parseMoney(params.get('amount') ?? '') || undefined,
     category: params.get('cat')?.trim() || undefined,
     method: params.get('pay')?.trim() || undefined,
