@@ -137,6 +137,8 @@ export function EntryForm(props: {
       note: note.trim() || undefined,
       createdAt: tx?.createdAt ?? now,
       updatedAt: now,
+      // Editing a transaction a standing order recorded keeps it tied to that order, so it isn't counted twice
+      ...(tx?.recurringId && type === tx.type && { recurringId: tx.recurringId, occurrence: tx.occurrence }),
       ...(type === 'expense' && { categoryId, methodId, installments: isCredit && installments > 1 ? installments : undefined }),
       ...(type === 'income' && { categoryId, accountId }),
       ...(type === 'transfer' && { accountId, toAccountId }),

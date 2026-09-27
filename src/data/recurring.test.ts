@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { summarize, upcomingItems, type Ledger } from './balance';
 import { getAll, openDb, putRecords, setMeta } from './db';
 import { estimateFor, occurrencesBetween, openOccurrences, scheduleDatesIn } from './recurring';
-import { deleteSetting, recordDueRecurring, resolveOccurrence } from './store';
+import { deleteSetting, recordDueRecurring, relinkEditedRecurring, resolveOccurrence } from './store';
 import type { Account, PaymentMethod, Recurring, Transaction } from './types';
 
 const rec = (r: Partial<Recurring>): Recurring => ({
@@ -77,6 +77,19 @@ describe('recording', () => {
     expect((await getAll<Recurring>(db, 'recurring'))[0].handledThrough).toBe('2026-11-01');
     // a deleted automatic transaction is not recorded again
     expect(await recordDueRecurring(db, '2026-09-24', '2026-11-05')).toBe(false);
+  });
+
+  it('re-ties a standing-order transaction that editing had untied, once per date', async () => {
+    const db = await freshDb();
+    const r = rec({ name: 'ג׳מיני', methodId: 'max', firstDate: '2026-09-27', createdAt: '2026-09-27T10:00:00Z' });
+    const edited = { id: 'a', type: 'expense' as const, amount: 80_00, date: '2026-09-02', note: 'ג׳מיני', categoryId: 'c', methodId: 'max', createdAt: '2026-09-27T10:00:01Z', updatedAt: '' };
+    const duplicate = { ...edited, id: 'b' };
+    const unrelated = { ...edited, id: 'c', note: 'משהו אחר' };
+    await putRecords(db, 'recurring', [r]);
+    await putRecords(db, 'transactions', [edited, duplicate, unrelated]);
+    await relinkEditedRecurring(db);
+    const txs = await getAll<Transaction>(db, 'transactions');
+    expect(txs.filter(t => t.recurringId).map(t => [t.id, t.occurrence])).toEqual([['a', '2026-09-27']]);
   });
 
   it('leaves variable items for the user to confirm', async () => {

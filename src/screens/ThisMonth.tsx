@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
 import { ExpectedGroups } from '../components/ExpectedGroups';
@@ -99,7 +100,7 @@ export function ThisMonth(props: {
         <Section
           title="עד סוף החודש"
           sub={rest.lateCharges.length ? 'אחרי חיובי האשראי' : `יתרה צפויה ב-${shortDate(rest.end)}`}
-          value={formatMoney(rest.lateCharges.length ? rest.afterCards : rest.projectedEnd)}
+          value={<AnimatedMoney value={rest.lateCharges.length ? rest.afterCards : rest.projectedEnd} />}
         >
           <ExpectedGroups data={data} items={restItems} today={today} onEdit={props.onEdit} onEditRecurring={props.onEditRecurring} />
           <div class="totals">
@@ -110,13 +111,13 @@ export function ThisMonth(props: {
       )}
 
       {next && (
-        <Section title="החודש הבא" sub={`יתרה צפויה ב-${shortDate(next.end)}`} value={formatMoney(next.projected)}>
+        <Section title="החודש הבא" sub={`יתרה צפויה ב-${shortDate(next.end)}`} value={<AnimatedMoney value={next.projected} />}>
           <ExpectedGroups data={data} items={next.items} today={today} onEdit={props.onEdit} onEditRecurring={props.onEditRecurring} />
         </Section>
       )}
 
       {cards.length > 0 && (
-        <Section title="כרטיסי אשראי" sub={cards.some(c => c.available !== undefined) ? 'פנוי במסגרות' : 'נוצל'} value={formatMoney(cards.some(c => c.available !== undefined) ? free : cards.reduce((a, c) => a + c.used, 0))}>
+        <Section title="כרטיסי אשראי" sub={cards.some(c => c.available !== undefined) ? 'פנוי במסגרות' : 'נוצל'} value={<AnimatedMoney value={cards.some(c => c.available !== undefined) ? free : cards.reduce((a, c) => a + c.used, 0)} />}>
           {cards.map(u => (
             <CardLine key={u.card.id} usage={u} today={today} />
           ))}
@@ -126,7 +127,7 @@ export function ThisMonth(props: {
       <Section
         title="על מה הולך הכסף"
         sub={spending[0] ? `הכי הרבה: ${name(spending[0].categoryId)}${expectedTotal ? ' · כולל קבועות שעוד ירדו' : ''}` : 'אין הוצאות'}
-        value={formatMoney(-(stats.expenses + expectedTotal))}
+        value={<AnimatedMoney value={-(stats.expenses + expectedTotal)} />}
         tone="exp"
       >
         {spending.map(c => (
@@ -185,7 +186,7 @@ export function ThisMonth(props: {
 }
 
 /** A card showing only its title and main number until tapped. */
-function Section(props: { title: string; sub: string; value: string; tone?: 'inc' | 'exp'; children: ComponentChildren }) {
+function Section(props: { title: string; sub: string; value: ComponentChildren; tone?: 'inc' | 'exp'; children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
   return (
     <div class="card section">
@@ -216,7 +217,8 @@ function Stat(props: { label: string; value: number; strong?: boolean; tone: 'in
   return (
     <div class={`stat ${props.strong ? 'strong' : ''}`}>
       <div class={`small ${props.tone}`}>{props.label}</div>
-      <div class={`stat-value ${props.tone}`}>{formatMoney(props.value, { sign: props.strong })}</div>
+      <div class={`stat-value ${props.tone}`}><AnimatedMoney value={props.value} sign={props.strong} />
+      </div>
     </div>
   );
 }

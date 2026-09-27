@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MoneyInput, Segmented } from '../components/inputs';
 import { budgetStatus, monthCommitments, usualSpending, type Budget, type BudgetLine } from '../data/budget';
 import { periodEnd, periodKey, periodStart } from '../data/dashboard';
@@ -50,7 +51,9 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
       {status.overall && (
         <div class="card hero">
           <div class={`small ${status.overall.remaining >= 0 ? 'inc' : 'exp'}`}>{status.overall.remaining >= 0 ? 'נשאר להוציא החודש' : 'חריגה מהתקציב'}</div>
-          <div class={`big-number ${status.overall.remaining >= 0 ? 'inc' : 'exp'}`}>{formatMoney(Math.abs(status.overall.remaining))}</div>
+          <div class={`big-number ${status.overall.remaining >= 0 ? 'inc' : 'exp'}`}>
+            <AnimatedMoney value={Math.abs(status.overall.remaining)} />
+          </div>
           <Meter line={status.overall} color={status.overall.remaining >= 0 ? 'var(--inc-bar)' : 'var(--exp-bar)'} />
           <div class="budget-parts">
             {status.fixedMode === 'included' && (
@@ -86,7 +89,7 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
               </span>
             </span>
             <span class="section-value exp">
-              {formatMoney(-fixedTotal)} <span class={`chevron ${showFixed ? 'open' : ''}`}>‹</span>
+              <AnimatedMoney value={-fixedTotal} /> <span class={`chevron ${showFixed ? 'open' : ''}`}>‹</span>
             </span>
           </button>
           {showFixed &&
@@ -135,13 +138,17 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
         </div>
       )}
 
-      {data.budget.savingsMode === 'separate' && (
+      {/* Only once something was actually moved to savings this month */}
+      {data.budget.savingsMode === 'separate' && status.saved > 0 && (
         <div class="card">
           <div class="line">
-            <span class="inc">חסכת החודש</span>
+            <span class="inc">הועבר לחיסכון החודש</span>
             <span class="inc">{formatMoney(status.saved)}</span>
           </div>
-          <p class="muted small">כסף שעבר לחיסכון לא נספר כהוצאה ולא בתקציב.</p>
+          <p class="muted small">
+            מה שרשמת בקטגוריה "{data.categories.find(c => c.id === data.budget!.savingsCategoryId)?.name ?? 'חיסכון'}". הכסף ירד מהכסף הנזיל,
+            אבל הוא לא הוצאה, ולכן לא נספר בתקציב.
+          </p>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { CardLine } from '../components/CardLine';
 import { cardUsage, summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
@@ -58,7 +59,9 @@ export function Home(props: {
 
       <div class="card hero">
         <div class="muted small">כסף נזיל עכשיו</div>
-        <div class="big-number">{formatMoney(summary.liquid)}</div>
+        <div class="big-number">
+          <AnimatedMoney value={summary.liquid} />
+        </div>
         {showBreakdown && (
           <div class="upcoming">
             {summary.byAccount.map(({ account, balance }) => (

@@ -1,6 +1,6 @@
 import { deleteRecord, getAll, getMeta, putRecords, run, type RecordStore } from './db';
 import { todayStr } from './dates';
-import { occurrenceTransaction, openOccurrences } from './recurring';
+import { occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recurring';
 import type { Budget } from './budget';
 import type { Account, Category, PaymentMethod, Recurring, Transaction } from './types';
 
@@ -72,6 +72,41 @@ export async function recordDueRecurring(db: IDBDatabase, startDate: string, tod
         tx.objectStore('recurring').put({ ...rec, handledThrough: due[due.length - 1] });
         changed = true;
       }
+    };
+  });
+  return changed;
+}
+
+/**
+ * Repairs transactions a standing order recorded that lost their tie to it when edited (before version 24):
+ * same name as the order's note, same category and payment method. Each is tied back to the order's date in
+ * its month, so it counts once, as the standing order, and not as day-to-day spending. Returns true if any.
+ */
+export async function relinkEditedRecurring(db: IDBDatabase) {
+  let changed = false;
+  await run(db, ['transactions', 'recurring'], 'readwrite', tx => {
+    const recReq = tx.objectStore('recurring').getAll();
+    recReq.onsuccess = () => {
+      const recs = recReq.result as Recurring[];
+      const txReq = tx.objectStore('transactions').getAll();
+      txReq.onsuccess = () => {
+        const all = txReq.result as Transaction[];
+        const taken = new Set(all.filter(t => t.recurringId).map(t => `${t.recurringId}|${t.occurrence}`));
+        for (const t of all) {
+          if (t.recurringId || !t.note) continue;
+          const rec = recs.find(
+            r => r.name === t.note && r.type === t.type && r.categoryId === t.categoryId && (r.type === 'income' ? r.accountId === t.accountId : r.methodId === t.methodId),
+          );
+          if (!rec || t.createdAt < rec.createdAt) continue;
+          const month = t.date.slice(0, 7);
+          const occurrence = scheduleDatesIn(rec, `${month}-01`, `${month}-31`)[0] ?? t.date;
+          // Never two transactions for the same order's date: the second stays as it is
+          if (taken.has(`${rec.id}|${occurrence}`)) continue;
+          taken.add(`${rec.id}|${occurrence}`);
+          tx.objectStore('transactions').put({ ...t, recurringId: rec.id, occurrence });
+          changed = true;
+        }
+      };
     };
   });
   return changed;

@@ -1,4 +1,6 @@
+import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { Segmented } from '../components/inputs';
 import { Donut, IncomeExpenseBars, NetBars, OTHER_COLOR, SERIES, StackBar } from '../components/charts';
 import { statsTransactions } from '../data/budget';
@@ -83,9 +85,9 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
       )}
 
       <div class="stat-row four">
-        <Stat label="הכנסות" value={formatMoney(sum.income)} tone="inc" />
-        <Stat label="הוצאות" value={formatMoney(-sum.expenses)} tone="exp" />
-        <Stat label={sum.net >= 0 ? 'נשאר' : 'חסר'} value={formatMoney(sum.net, { sign: true })} tone={sum.net >= 0 ? 'inc' : 'exp'} />
+        <Stat label="הכנסות" value={<AnimatedMoney value={sum.income} />} tone="inc" />
+        <Stat label="הוצאות" value={<AnimatedMoney value={-sum.expenses} />} tone="exp" />
+        <Stat label={sum.net >= 0 ? 'נשאר' : 'חסר'} value={<AnimatedMoney value={sum.net} sign />} tone={sum.net >= 0 ? 'inc' : 'exp'} />
         <Stat
           label="חיסכון מההכנסה"
           value={sum.savingsRate === undefined ? '—' : `${Math.round(sum.savingsRate * 100)}%`}
@@ -244,7 +246,7 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
   );
 }
 
-function Stat(props: { label: string; value: string; tone: 'inc' | 'exp' }) {
+function Stat(props: { label: string; value: ComponentChildren; tone: 'inc' | 'exp' }) {
   return (
     <div class="stat">
       <div class={`small ${props.tone}`}>{props.label}</div>

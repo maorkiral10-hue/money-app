@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
 import { todayStr } from './data/dates';
-import { deleteRecord, openDb, setMeta } from './data/db';
+import { deleteRecord, getMeta, openDb, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
-import { loadAll, recordDueRecurring, type AppData } from './data/store';
+import { loadAll, recordDueRecurring, relinkEditedRecurring, type AppData } from './data/store';
 import { formatMoney } from './data/money';
 import { presetFromParams, type QuickPreset } from './data/quick';
 import type { Recurring, Transaction } from './data/types';
@@ -88,6 +88,11 @@ export function App() {
     (async () => {
       const d = await openDb();
       await startup(d);
+      // One-time repair for version 24: re-tie standing-order transactions that editing had untied
+      if (!(await getMeta(d, 'relinkedRecurring'))) {
+        await relinkEditedRecurring(d);
+        await setMeta(d, 'relinkedRecurring', true);
+      }
       setDb(d);
       const loaded = await refresh(d);
       // Opening the app is usually to write something down
