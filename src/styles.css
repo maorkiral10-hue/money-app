@@ -358,3 +358,20 @@ button.stat { margin: 0; width: auto; font: inherit; color: var(--text); font-we
 button.quiet.due { color: var(--accent); font-weight: 600; }
 .check-result h2 { margin-bottom: 8px; }
 .list-title { padding-top: 12px; }
+
+.last-entry { margin-top: 2px; }
+/* balance check due: prominent, gently bouncing, until a check is done */
+.check-due {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; margin: 0 0 14px;
+  padding: 14px; border-radius: 16px; background: var(--accent); color: var(--on-accent);
+  box-shadow: 0 6px 18px rgba(15,118,110,.3); animation: nudge 2.4s ease-in-out infinite;
+}
+.check-due-title { font-size: 17px; font-weight: 700; }
+@keyframes nudge {
+  0%, 70%, 100% { transform: translateY(0); }
+  76% { transform: translateY(-5px); }
+  82% { transform: translateY(0); }
+  88% { transform: translateY(-3px); }
+  94% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .check-due { animation: none; } }

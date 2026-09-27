@@ -182,6 +182,8 @@ export interface CardUsage {
   /** limit − used; undefined when no limit is set. */
   available?: number;
   nextCharge?: { date: string; amount: number };
+  /** Date of the latest purchase recorded on the card (up to today): where to look from when it doesn't match the card's app. */
+  lastEntry?: string;
 }
 
 /** How much of each credit card's limit is taken up right now. Purchases dated in the future don't count yet. */
@@ -196,8 +198,12 @@ export function cardUsage(ledger: Ledger, today: string): CardUsage[] {
       const own = pending.filter(e => e.methodId === card.id);
       const used = -own.reduce((a, e) => a + e.amount, 0);
       const first = own.map(e => e.date).sort()[0];
+      const lastEntry = ledger.transactions
+        .filter(t => t.type === 'expense' && t.methodId === card.id && t.date <= today)
+        .reduce<string | undefined>((max, t) => (!max || t.date > max ? t.date : max), undefined);
       return {
         card,
+        lastEntry,
         used,
         available: card.creditLimit ? card.creditLimit - used : undefined,
         nextCharge: first ? { date: first, amount: -own.filter(e => e.date === first).reduce((a, e) => a + e.amount, 0) } : undefined,

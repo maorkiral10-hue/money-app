@@ -50,6 +50,9 @@ export function CardLine(props: {
           לא הוגדרה מסגרת
         </div>
       )}
+      <div class="muted small last-entry">
+        {usage.lastEntry ? `רכישה אחרונה שנרשמה: ${dayLabel(usage.lastEntry, today)}` : 'עוד לא נרשמו רכישות בכרטיס'}
+      </div>
     </>
   );
 

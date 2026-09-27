@@ -59,6 +59,16 @@ export function Home(props: {
         <h1>הכסף שלי</h1>
       </header>
 
+      {checkDue(data.checkEvery, data.balanceChecks[0]?.date, today) && (
+        // Stays until a check is done
+        <button class="check-due" onClick={props.onOpenCheck}>
+          <span class="check-due-title">הגיע הזמן לבדוק מול הבנק</span>
+          <span class="small">
+            {data.balanceChecks[0] ? `בדיקה אחרונה: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')}` : 'עוד לא נבדק אף פעם'} · לחץ לבדיקה
+          </span>
+        </button>
+      )}
+
       <div class="card hero">
         <div class="muted small">כסף נזיל עכשיו</div>
         <div class="big-number">
@@ -128,11 +138,10 @@ export function Home(props: {
       ))}
 
       <div class="quiet-lines">
-        <button class={`quiet ${checkDue(data.checkEvery, data.balanceChecks[0]?.date, today) ? 'due' : ''}`} onClick={props.onOpenCheck}>
+        <button class="quiet" onClick={props.onOpenCheck}>
           {data.balanceChecks[0]
             ? `בדיקה מול הבנק: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')}`
             : 'בדיקה מול הבנק'}
-          {checkDue(data.checkEvery, data.balanceChecks[0]?.date, today) && ' · הגיע הזמן'}
         </button>
         <button class="quiet" onClick={props.onOpenData}>
           {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}

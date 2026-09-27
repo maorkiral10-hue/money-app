@@ -121,8 +121,8 @@ export function BalanceCheck(props: {
       {done && <div class="card note">{done}</div>}
 
       <div class="card">
-        <h2>תזכורת שקטה</h2>
-        <p class="muted small">בלי הודעות: רק השורה בתחתית מסך הבית משנה צבע כשהגיע הזמן.</p>
+        <h2>תזכורת</h2>
+        <p class="muted small">כשמגיע הזמן, מופיעה בראש מסך הבית בועה שנשארת עד שבודקים.</p>
         <Segmented
           value={data.checkEvery}
           onChange={async (v: CheckEvery) => {

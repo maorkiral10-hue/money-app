@@ -44,7 +44,8 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     monthStartDay: (await getMeta<number>(db, 'monthStartDay')) ?? 1,
     budget: await getMeta<Budget>(db, 'budget'),
     balanceChecks: (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [],
-    checkEvery: (await getMeta<CheckEvery>(db, 'checkEvery')) ?? 'never',
+    // Weekly unless chosen otherwise (28.9.2026: the reminder should show without having to turn it on)
+    checkEvery: (await getMeta<CheckEvery>(db, 'checkEvery')) ?? 'week',
   };
 }
 
