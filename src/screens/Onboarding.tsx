@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { AccountsEditor, CategoriesEditor, MethodsEditor } from '../components/Editors';
+import { MonthStartPicker } from '../components/MonthStartPicker';
 import { suggestedAccounts, suggestedCategories, suggestedMethods } from '../data/defaults';
 import { finishSetup } from '../data/store';
 import type { Account, Category, PaymentMethod } from '../data/types';
@@ -11,6 +12,7 @@ export function Onboarding(props: { db: IDBDatabase; onDone: () => void }) {
   const [accounts, setAccounts] = useState<Account[]>(suggestedAccounts);
   const [methods, setMethods] = useState<PaymentMethod[] | null>(null);
   const [categories, setCategories] = useState<Category[]>(suggestedCategories);
+  const [monthStartDay, setMonthStartDay] = useState(1);
   const [saving, setSaving] = useState(false);
 
   const toMethods = () => {
@@ -27,13 +29,14 @@ export function Onboarding(props: { db: IDBDatabase; onDone: () => void }) {
       accounts: keptAccounts,
       methods: named(methods ?? []).filter(m => keptIds.has(m.accountId)),
       categories: named(categories),
+      monthStartDay,
     });
     props.onDone();
   };
 
   return (
     <div class="onboarding">
-      <p class="muted small">שאלה {step + 1} מתוך 3 · אפשר לשנות הכול אחר כך בהגדרות</p>
+      <p class="muted small">שאלה {step + 1} מתוך 4 · אפשר לשנות הכול אחר כך בהגדרות</p>
 
       {step === 0 && (
         <>
@@ -78,10 +81,24 @@ export function Onboarding(props: { db: IDBDatabase; onDone: () => void }) {
             <h2>הכנסות</h2>
             <CategoriesEditor items={categories} kind="income" onChange={setCategories} />
           </div>
+          <button onClick={() => setStep(3)}>המשך</button>
+          <button class="link" onClick={() => setStep(1)}>
+            חזרה
+          </button>
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+          <h1>מתי מתחיל אצלך החודש?</h1>
+          <p class="muted">לפי זה האפליקציה תסכם כל חודש: כמה נכנס, כמה יצא ומה נשאר.</p>
+          <div class="card">
+            <MonthStartPicker value={monthStartDay} onChange={setMonthStartDay} />
+          </div>
           <button disabled={saving} onClick={finish}>
             סיום
           </button>
-          <button class="link" onClick={() => setStep(1)}>
+          <button class="link" onClick={() => setStep(2)}>
             חזרה
           </button>
         </>

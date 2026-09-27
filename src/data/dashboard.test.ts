@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
-import { bestAndWorst, monthsSince, monthStats, restOfMonth } from './dashboard';
+import { bestAndWorst, monthsSince, monthStats, periodEnd, periodKey, restOfMonth } from './dashboard';
 import type { Account, PaymentMethod, Transaction } from './types';
 
 let n = 0;
@@ -36,6 +36,20 @@ describe('month numbers', () => {
   });
 });
 
+describe('financial month starting on another day', () => {
+  it('runs from the start day to the day before the next one', () => {
+    expect(periodKey('2026-09-09', 10)).toBe('2026-08');
+    expect(periodKey('2026-09-10', 10)).toBe('2026-09');
+    expect(periodEnd('2026-09', 10)).toBe('2026-10-09');
+    expect(periodEnd('2027-01', 31)).toBe('2027-02-27'); // Feb has no 31st: the next month starts on the 28th
+    expect(monthsSince('2026-09-05', '2026-10-12', 10)).toEqual(['2026-08', '2026-09', '2026-10']);
+  });
+  it('counts transactions by their financial month', () => {
+    const txs = [tx({ amount: 1, date: '2026-09-09' }), tx({ amount: 2, date: '2026-09-10' }), tx({ amount: 4, date: '2026-10-09' })];
+    expect(monthStats(txs, '2026-09', 10).expenses).toBe(6);
+  });
+});
+
 describe('rest of the month', () => {
   const accounts: Account[] = [{ id: 'bank', name: 'bank', kind: 'bank', openingBalance: 2_000_00, order: 0 }];
   const methods: PaymentMethod[] = [
@@ -55,5 +69,21 @@ describe('rest of the month', () => {
     const r = restOfMonth(ledger, '2026-09-05');
     expect([r.expectedOut, r.expectedIn]).toEqual([-400_00, 500_00]);
     expect(r.projectedEnd).toBe(2_000_00 - 400_00 + 500_00);
+  });
+
+  it('shows the card charge that falls just after the month (charged on the 2nd)', () => {
+    const card: PaymentMethod = { id: 'isracard', name: 'c', kind: 'credit', accountId: 'bank', chargeDay: 2, order: 2 };
+    const ledger: Ledger = {
+      accounts, methods: [...methods, card], startDate: '2026-09-01',
+      transactions: [
+        tx({ amount: 250_00, methodId: 'isracard', date: '2026-09-20' }),
+        tx({ amount: 600_00, methodId: 'isracard', date: '2026-09-21', installments: 3 }),
+      ],
+    };
+    const r = restOfMonth(ledger, '2026-09-25');
+    expect(r.expectedOut).toBe(0);
+    // Oct 2 charge: 250 + first 200 installment; the later installments aren't this month's bill
+    expect(r.lateCharges).toEqual([{ methodId: 'isracard', date: '2026-10-02', amount: -450_00 }]);
+    expect(r.afterCards).toBe(2_000_00 - 450_00);
   });
 });

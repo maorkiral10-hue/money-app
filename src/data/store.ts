@@ -15,6 +15,8 @@ export interface AppData {
   lastMethodId?: string;
   /** Open the app straight on a new entry (default on). */
   openOnEntry: boolean;
+  /** Day of the month the financial month starts on (1 = calendar month). */
+  monthStartDay: number;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -31,14 +33,19 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     lastBackupAt: await getMeta<string>(db, 'lastBackupAt'),
     lastMethodId: await getMeta<string>(db, 'lastMethodId'),
     openOnEntry: (await getMeta<boolean>(db, 'openOnEntry')) !== false,
+    monthStartDay: (await getMeta<number>(db, 'monthStartDay')) ?? 1,
   };
 }
 
 /** Saves the first-run questionnaire in one go; the start date is today. */
-export function finishSetup(db: IDBDatabase, setup: { accounts: Account[]; methods: PaymentMethod[]; categories: Category[] }) {
+export function finishSetup(
+  db: IDBDatabase,
+  setup: { accounts: Account[]; methods: PaymentMethod[]; categories: Category[]; monthStartDay: number },
+) {
   const stores: RecordStore[] = ['accounts', 'methods', 'categories'];
   return run(db, [...stores, 'meta'], 'readwrite', tx => {
-    for (const s of stores) setup[s as keyof typeof setup].forEach(r => tx.objectStore(s).put(r));
+    for (const s of stores) (setup[s as 'accounts' | 'methods' | 'categories'] as { id: string }[]).forEach(r => tx.objectStore(s).put(r));
+    tx.objectStore('meta').put(setup.monthStartDay, 'monthStartDay');
     tx.objectStore('meta').put(todayStr(), 'startDate');
     tx.objectStore('meta').put(true, 'setupDone');
   });

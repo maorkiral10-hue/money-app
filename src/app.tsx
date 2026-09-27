@@ -236,6 +236,10 @@ export function App() {
           await setMeta(db, 'openOnEntry', on);
           await refresh();
         }}
+        onSetMonthStartDay={async day => {
+          await setMeta(db, 'monthStartDay', day);
+          await refresh();
+        }}
       />
     );
   } else if (screen.name === 'settingsPage') {
@@ -246,7 +250,13 @@ export function App() {
       <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
   } else if (screen.name === 'dashboard') {
-    content = <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />;
+    content = (
+      <Dashboard
+        data={data}
+        onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })}
+        onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'dashboard' })}
+      />
+    );
   } else {
     content = (
       <Home

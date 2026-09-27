@@ -198,3 +198,4 @@ button.continue { margin-top: 22px; }
 .bar-detail { padding: 0 10px 6px; border-right: 2px solid var(--line); margin-bottom: 4px; }
 .bar-detail .tx { padding: 6px 0; }
 .bar span.neg { background: var(--neg); }
+.totals { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }

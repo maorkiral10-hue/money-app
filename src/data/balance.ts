@@ -176,9 +176,8 @@ export interface UpcomingItem {
   opening?: boolean;
 }
 
-/** Everything expected after today up to the end of next month, oldest first. Transfers are left out: they don't change the total. */
-export function upcomingItems(ledger: Ledger, today: string): UpcomingItem[] {
-  const until = endOfNextMonth(today);
+/** Everything expected after today up to `until` (default: end of next month), oldest first. Transfers are left out: they don't change the total. */
+export function upcomingItems(ledger: Ledger, today: string, until = endOfNextMonth(today)): UpcomingItem[] {
   const items: UpcomingItem[] = [];
   const charges = new Map<string, UpcomingItem>();
   for (const e of allEffects(ledger, today)) {

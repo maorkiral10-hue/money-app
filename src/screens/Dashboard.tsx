@@ -1,29 +1,45 @@
 import { useState } from 'preact/hooks';
-import { bestAndWorst, monthKey, monthsSince, monthStats, restOfMonth } from '../data/dashboard';
-import { dayLabel, todayStr } from '../data/dates';
+import { CardLine } from '../components/CardLine';
+import { ExpectedList } from '../components/ExpectedList';
+import { cardUsage, upcomingItems } from '../data/balance';
+import { bestAndWorst, monthsSince, monthStats, periodEnd, periodKey, periodStart, restOfMonth } from '../data/dashboard';
+import { dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
-import type { Transaction } from '../data/types';
-
-const monthTitle = (key: string, withYear = true) =>
-  new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, 1).toLocaleDateString('he-IL', withYear ? { month: 'long', year: 'numeric' } : { month: 'long' });
+import type { Recurring, Transaction } from '../data/types';
 
 /** How many months the comparison shows. */
 const COMPARE = 6;
 
-export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => void }) {
+const shortDate = (date: string) => {
+  const { m0, d } = parseDate(date);
+  return `${d}.${m0 + 1}`;
+};
+
+export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => void; onEditRecurring: (rec: Recurring) => void }) {
   const { data } = props;
+  const startDay = data.monthStartDay;
   const today = todayStr();
-  const months = monthsSince(data.startDate, today);
-  const [key, setKey] = useState(monthKey(today));
+  const months = monthsSince(data.startDate, today, startDay);
+  const currentKey = periodKey(today, startDay);
+  const [key, setKey] = useState(currentKey);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
 
+  // A calendar month is named ("ספטמבר"); one starting on another day shows its dates ("10.9–9.10")
+  const title = (k: string, withYear = true) =>
+    startDay === 1
+      ? new Date(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, 1).toLocaleDateString('he-IL', withYear ? { month: 'long', year: 'numeric' } : { month: 'long' })
+      : `${shortDate(periodStart(k, startDay))}–${shortDate(periodEnd(k, startDay))}`;
+
   const index = months.indexOf(key);
-  const stats = monthStats(data.transactions, key);
-  const isCurrent = key === monthKey(today);
-  const rest = isCurrent ? restOfMonth(data, today) : undefined;
-  const allStats = months.map(k => monthStats(data.transactions, k));
-  const { best, worst } = bestAndWorst(allStats, today);
+  const stats = monthStats(data.transactions, key, startDay);
+  const isCurrent = key === currentKey;
+  const rest = isCurrent ? restOfMonth(data, today, startDay) : undefined;
+  const restItems = rest ? upcomingItems(data, today, rest.end) : [];
+  const cards = cardUsage(data, today);
+  const cardName = (id: string) => data.methods.find(m => m.id === id)?.name ?? 'אשראי';
+  const allStats = months.map(k => monthStats(data.transactions, k, startDay));
+  const { best, worst } = bestAndWorst(allStats, today, startDay);
   const recent = allStats.slice(-COMPARE).reverse();
   const maxNet = Math.max(1, ...recent.map(s => Math.abs(s.net)));
   const maxCat = Math.max(1, ...stats.byCategory.map(c => c.amount));
@@ -39,7 +55,7 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
         <button class="link" disabled={index <= 0} onClick={() => setKey(months[index - 1])} aria-label="חודש קודם">
           ›
         </button>
-        <span>{monthTitle(key)}</span>
+        <span>{title(key)}</span>
         <button class="link" disabled={index >= months.length - 1} onClick={() => setKey(months[index + 1])} aria-label="חודש הבא">
           ‹
         </button>
@@ -54,19 +70,48 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
 
       {rest && (
         <div class="card">
-          <h2>עד סוף {monthTitle(key, false)}</h2>
-          <div class="line">
-            <span>עוד צפוי לרדת</span>
-            <span>{formatMoney(rest.expectedOut)}</span>
+          <h2>עד סוף החודש ({dayLabel(rest.end, today)})</h2>
+          {restItems.length === 0 && <p class="muted small">לא צפוי לרדת או להיכנס עוד כלום עד סוף החודש.</p>}
+          <ExpectedList data={data} items={restItems} today={today} onEdit={props.onEdit} onEditRecurring={props.onEditRecurring} />
+          <div class="totals">
+            <div class="line">
+              <span>עוד צפוי לרדת</span>
+              <span>{formatMoney(rest.expectedOut)}</span>
+            </div>
+            <div class="line">
+              <span>עוד צפוי להיכנס</span>
+              <span>{formatMoney(rest.expectedIn, { sign: true })}</span>
+            </div>
+            <div class="line strong">
+              <span>יתרה צפויה בסוף החודש</span>
+              <span>{formatMoney(rest.projectedEnd)}</span>
+            </div>
+            {rest.lateCharges.length > 0 && (
+              <>
+                {rest.lateCharges.map(c => (
+                  <div key={c.methodId} class="line">
+                    <span>
+                      חיוב {cardName(c.methodId)} ב-{shortDate(c.date)} <span class="muted small">(על קניות החודש)</span>
+                    </span>
+                    <span>{formatMoney(c.amount)}</span>
+                  </div>
+                ))}
+                <div class="line strong">
+                  <span>ואחרי חיובי האשראי</span>
+                  <span>{formatMoney(rest.afterCards)}</span>
+                </div>
+              </>
+            )}
           </div>
-          <div class="line">
-            <span>עוד צפוי להיכנס</span>
-            <span>{formatMoney(rest.expectedIn, { sign: true })}</span>
-          </div>
-          <div class="line strong">
-            <span>יתרה צפויה בסוף החודש</span>
-            <span>{formatMoney(rest.projectedEnd)}</span>
-          </div>
+        </div>
+      )}
+
+      {cards.length > 0 && (
+        <div class="card">
+          <h2>כרטיסי אשראי</h2>
+          {cards.map(u => (
+            <CardLine key={u.card.id} usage={u} today={today} />
+          ))}
         </div>
       )}
 
@@ -89,7 +134,13 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
             {openCategory === c.categoryId && (
               <div class="bar-detail">
                 {data.transactions
-                  .filter(t => t.type === 'expense' && monthKey(t.date) === key && (t.categoryId ?? '') === c.categoryId)
+                  .filter(
+                    t =>
+                      t.type === 'expense' &&
+                      t.date >= periodStart(key, startDay) &&
+                      t.date <= periodEnd(key, startDay) &&
+                      (t.categoryId ?? '') === c.categoryId,
+                  )
                   .sort((a, b) => b.date.localeCompare(a.date))
                   .map(t => (
                     <button key={t.id} class="tx" onClick={() => props.onEdit(t)}>
@@ -108,10 +159,10 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
         {!best && <p class="muted small">ההשוואה תתמלא כשיסתיים החודש הראשון. עד אז אפשר לראות את החודש הנוכחי.</p>}
         {best && (
           <p class="small">
-            הכי רווחי: <b>{monthTitle(best.key, false)}</b> ({formatMoney(best.net, { sign: true })})
+            הכי רווחי: <b>{title(best.key, false)}</b> ({formatMoney(best.net, { sign: true })})
             {worst && (
               <>
-                {' '}· הכי פחות: <b>{monthTitle(worst.key, false)}</b> ({formatMoney(worst.net, { sign: true })})
+                {' '}· הכי פחות: <b>{title(worst.key, false)}</b> ({formatMoney(worst.net, { sign: true })})
               </>
             )}
           </p>
@@ -120,8 +171,8 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
           <button key={s.key} class="bar-row" onClick={() => setKey(s.key)}>
             <div class="line">
               <span>
-                {monthTitle(s.key, false)}
-                {s.key === monthKey(today) && <span class="muted small"> (עד כה)</span>}
+                {title(s.key, false)}
+                {s.key === currentKey && <span class="muted small"> (עד כה)</span>}
               </span>
               <span>{formatMoney(s.net, { sign: true })}</span>
             </div>

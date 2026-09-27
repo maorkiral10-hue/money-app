@@ -1,4 +1,5 @@
 import { AccountsEditor, CategoriesEditor, MethodsEditor } from '../components/Editors';
+import { MonthStartPicker } from '../components/MonthStartPicker';
 import { putRecords } from '../data/db';
 import { deleteSetting, type AppData } from '../data/store';
 import { APP_VERSION } from '../version';
@@ -13,6 +14,7 @@ export function SettingsMenu(props: {
   onOpenRecurring: () => void;
   onOpenData: () => void;
   onSetOpenOnEntry: (on: boolean) => void;
+  onSetMonthStartDay: (day: number) => void;
 }) {
   const { data } = props;
   const active = <T extends { archived?: boolean; name: string }>(items: T[]) => items.filter(i => !i.archived && i.name.trim());
@@ -50,6 +52,11 @@ export function SettingsMenu(props: {
           sub={`${categories.filter(c => c.kind === 'expense').length} הוצאה · ${categories.filter(c => c.kind === 'income').length} הכנסה`}
           onClick={() => props.onOpen('categories')}
         />
+      </div>
+
+      <div class="card">
+        <h2>מתי מתחיל החודש הכספי</h2>
+        <MonthStartPicker value={data.monthStartDay} onChange={props.onSetMonthStartDay} />
       </div>
 
       <div class="card">
