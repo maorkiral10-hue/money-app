@@ -1,10 +1,11 @@
 import { useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
-import { CardLine } from '../components/CardLine';
+import { MonthSummary } from '../components/MonthSummary';
 import { StatementItems } from '../components/StatementItems';
 import { cardStatements, cardUsage, summarize, type Statement } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
 import { categoryColor } from '../data/colors';
+import { periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { formatMoney } from '../data/money';
@@ -29,6 +30,7 @@ export function Home(props: {
   const cards = cardUsage(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [openCharge, setOpenCharge] = useState<string | null>(null);
+  const [showLedger, setShowLedger] = useState(false);
   const pending = data.recurring
     .filter(r => r.variable)
     .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
@@ -44,6 +46,8 @@ export function Home(props: {
     ...data.transactions.filter(t => !(t.type === 'expense' && creditIds.has(t.methodId ?? ''))).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
     ...[...statements.values()].flat().filter(st => st.date <= today).map(st => ({ kind: 'charge' as const, date: st.date, st })),
   ].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === 'tx' && b.kind === 'tx' ? b.tx.createdAt.localeCompare(a.tx.createdAt) : 0));
+  const monthStart = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
+  const thisMonthCount = rows.filter(r => r.date >= monthStart && r.date <= today).length;
   const groups = new Map<string, Row[]>();
   for (const r of rows) groups.set(r.date, [...(groups.get(r.date) ?? []), r]);
 
@@ -63,10 +67,6 @@ export function Home(props: {
             {summary.byAccount.map(({ account, balance }) => (
               <Line key={account.id} label={account.name} value={balance} />
             ))}
-            {cards.length > 0 && <div class="muted small section-label">מסגרות אשראי</div>}
-            {cards.map(u => (
-              <CardLine key={u.card.id} usage={u} today={today} statements={statements.get(u.card.id)} data={data} onEdit={props.onEdit} />
-            ))}
           </div>
         )}
         <div class="hero-buttons">
@@ -76,16 +76,26 @@ export function Home(props: {
         </div>
       </div>
 
-      <button class="quiet" onClick={props.onOpenData}>
-        {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
-      </button>
+      <MonthSummary data={data} onEdit={props.onEdit} />
 
       {pending.map(({ rec, open }) => (
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
       ))}
 
-      {groups.size === 0 && <p class="muted center">עדיין אין תנועות. לחץ על + כדי להוסיף את הראשונה.</p>}
-      {[...groups].map(([date, items]) => (
+      <div class="card section">
+        <button class="section-head" onClick={() => setShowLedger(!showLedger)} aria-expanded={showLedger}>
+          <span>
+            <span class="section-title">עובר ושב</span>
+            <span class="muted small block">
+              {rows.length === 0 ? 'עדיין אין פעולות' : `${thisMonthCount === 1 ? 'פעולה אחת' : `${thisMonthCount} פעולות`} החודש · לחץ לפירוט`}
+            </span>
+          </span>
+          <span class={`chevron ${showLedger ? 'open' : ''}`}>‹</span>
+        </button>
+      </div>
+
+      {showLedger && groups.size === 0 && <p class="muted center">עדיין אין תנועות. לחץ על + כדי להוסיף את הראשונה.</p>}
+      {showLedger && [...groups].map(([date, items]) => (
         <div key={date} class="day">
           <div class="day-label">
             {dayLabel(date, today)}
@@ -115,6 +125,9 @@ export function Home(props: {
         </div>
       ))}
 
+      <button class="quiet backup-line" onClick={props.onOpenData}>
+        {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
+      </button>
     </>
   );
 

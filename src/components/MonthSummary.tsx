@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
-import { AnimatedMoney } from '../components/AnimatedMoney';
-import { CardLine } from '../components/CardLine';
+import { AnimatedMoney } from './AnimatedMoney';
+import { CardLine } from './CardLine';
 import { cardStatements, cardUsage } from '../data/balance';
 import { statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
@@ -8,7 +8,7 @@ import { expectedExpenses, monthsSince, monthStats, periodEnd, periodKey, period
 import { dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
-import type { Recurring, Transaction } from '../data/types';
+import type { Transaction } from '../data/types';
 
 // The rest-of-month and next-month forecasts were taken off this screen (28.9.2026) until they come
 // back in a clearer form; components/ExpectedGroups.tsx and data/dashboard.ts restOfMonth() keep the logic.
@@ -33,12 +33,12 @@ const pct = (part: number, total: number) => {
   return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`;
 };
 
-/** "What's happening this month": income and spending (tap either for its breakdown) and the credit cards. */
-export function ThisMonth(props: {
-  data: AppData;
-  onEdit: (tx: Transaction) => void;
-  onEditRecurring: (rec: Recurring) => void;
-}) {
+/**
+ * The month on the home screen, under the big number: income and spending (tap either for its breakdown)
+ * and the credit cards together. There's no "left over" figure: income and spending land in different
+ * months (salary, card bills), so their difference didn't mean much.
+ */
+export function MonthSummary(props: { data: AppData; onEdit: (tx: Transaction) => void }) {
   const { data } = props;
   const startDay = data.monthStartDay;
   const today = todayStr();
@@ -95,10 +95,6 @@ export function ThisMonth(props: {
 
   return (
     <>
-      <header class="top">
-        <h1>החודש</h1>
-      </header>
-
       <div class="month-switch">
         <button class="link" disabled={index <= 0} onClick={() => setKey(months[index - 1])} aria-label="חודש קודם">
           ›
@@ -109,7 +105,7 @@ export function ThisMonth(props: {
         </button>
       </div>
 
-      <div class="stat-row">
+      <div class="stat-row two">
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>
           <div class="small inc">הכנסות</div>
           <div class="stat-value inc">
@@ -122,12 +118,6 @@ export function ThisMonth(props: {
             <AnimatedMoney value={-stats.expenses} />
           </div>
         </button>
-        <div class="stat strong">
-          <div class={`small ${stats.net >= 0 ? 'inc' : 'exp'}`}>{stats.net >= 0 ? 'נשאר' : 'חסר'}</div>
-          <div class={`stat-value ${stats.net >= 0 ? 'inc' : 'exp'}`}>
-            <AnimatedMoney value={stats.net} sign />
-          </div>
-        </div>
       </div>
       {!open && <p class="muted small center">לחץ על הכנסות או הוצאות לפירוט</p>}
 

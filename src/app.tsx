@@ -14,13 +14,12 @@ import { SettingsButton } from './components/SettingsButton';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { Dashboard } from './screens/Dashboard';
-import { ThisMonth } from './screens/ThisMonth';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'month' | 'budget' | 'dashboard' | 'settings';
+type Place = 'home' | 'budget' | 'dashboard' | 'settings';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
@@ -237,13 +236,7 @@ export function App() {
 
   /** A main screen, drawn for the current tab and, while dragging, for its neighbour. */
   const renderTab = (t: Tab) =>
-    t === 'month' ? (
-      <ThisMonth
-        data={data}
-        onEdit={tx => go({ name: 'entry', tx, from: 'month' })}
-        onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'month' })}
-      />
-    ) : t === 'budget' ? (
+    t === 'budget' ? (
       <BudgetTab data={data} onEdit={() => go({ name: 'budgetSetup' })} />
     ) : t === 'dashboard' ? (
       <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />

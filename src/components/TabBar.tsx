@@ -1,18 +1,12 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-export type Tab = 'home' | 'month' | 'budget' | 'dashboard';
+export type Tab = 'home' | 'budget' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
-export const TABS: Tab[] = ['home', 'month', 'budget', 'dashboard'];
+export const TABS: Tab[] = ['home', 'budget', 'dashboard'];
 
 const ICONS: Record<Tab, ComponentChildren> = {
   home: <path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />,
-  month: (
-    <>
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M4 10h16M9 3v4M15 3v4" />
-    </>
-  ),
   budget: (
     <>
       <path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1z" />
@@ -28,7 +22,7 @@ const ICONS: Record<Tab, ComponentChildren> = {
     </>
   ),
 };
-const LABELS: Record<Tab, string> = { home: 'בית', month: 'החודש', budget: 'תקציב', dashboard: 'דשבורד' };
+const LABELS: Record<Tab, string> = { home: 'בית', budget: 'תקציב', dashboard: 'דשבורד' };
 
 /** The floating bar at the bottom: the main screens, with "+" (new entry) in the middle. */
 /** How far a drag between screens has gone, so the bar's highlight can follow the finger. */
