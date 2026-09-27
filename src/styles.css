@@ -279,3 +279,7 @@ button.continue { margin-top: 22px; }
 .tab-panel.enter-from-right { animation: from-right .22s ease-out; }
 @keyframes from-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @keyframes from-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.tabbar { position: fixed; }
+.tab-indicator { position: absolute; top: 6px; bottom: 6px; border-radius: 22px; background: var(--soft); z-index: 0; }
+.tab, .tab-add { position: relative; z-index: 1; }
+.tab.on { background: none; }

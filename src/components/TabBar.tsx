@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 export type Tab = 'home' | 'month' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
@@ -24,11 +24,48 @@ const ICONS: Record<Tab, ComponentChildren> = {
 const LABELS: Record<Tab, string> = { home: 'בית', month: 'החודש', dashboard: 'דשבורד' };
 
 /** The floating bar at the bottom: the main screens, with "+" (new entry) in the middle. */
+/** How far a drag between screens has gone, so the bar's highlight can follow the finger. */
+interface DragProgress {
+  /** Fraction of the way to the neighbouring tab: + towards the next one, − towards the previous. */
+  fraction: number;
+  /** Released: glide to where it ends instead of tracking the finger. */
+  settle: boolean;
+}
+const DRAG_EVENT = 'tab-drag';
+const reportDrag = (detail: DragProgress) => window.dispatchEvent(new CustomEvent(DRAG_EVENT, { detail }));
+
 export function TabBar(props: { current: Tab; onSelect: (tab: Tab) => void; onAdd: () => void }) {
   // "+" sits in the middle of the bar
   const half = Math.ceil(TABS.length / 2);
+  const buttons = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const [drag, setDrag] = useState<DragProgress>({ fraction: 0, settle: true });
+  const [, remeasure] = useState(0);
+
+  useEffect(() => {
+    const onDrag = (e: Event) => setDrag((e as CustomEvent<DragProgress>).detail);
+    window.addEventListener(DRAG_EVENT, onDrag);
+    // First paint has no sizes yet: measure once the buttons are laid out
+    requestAnimationFrame(() => remeasure(n => n + 1));
+    return () => window.removeEventListener(DRAG_EVENT, onDrag);
+  }, []);
+  useEffect(() => setDrag({ fraction: 0, settle: true }), [props.current]);
+
+  // The highlight sits under the current tab and slides towards the neighbour as far as the drag has gone
+  const i = TABS.indexOf(props.current);
+  const toward = TABS[drag.fraction > 0 ? i + 1 : i - 1];
+  const at = (t?: Tab) => {
+    const b = t && buttons.current[t];
+    return b ? { left: b.offsetLeft, width: b.offsetWidth } : undefined;
+  };
+  const from = at(props.current);
+  const to = at(toward) ?? from;
+  const f = Math.min(1, Math.abs(drag.fraction));
+  const indicator = from && to && { left: from.left + (to.left - from.left) * f, width: from.width + (to.width - from.width) * f };
+
   const item = (tab: Tab) => (
-    <button key={tab} class={`tab ${props.current === tab ? 'on' : ''}`} onClick={() => props.onSelect(tab)}>
+    <button key={tab} ref={el => {
+        buttons.current[tab] = el;
+      }} class={`tab ${props.current === tab ? 'on' : ''}`} onClick={() => props.onSelect(tab)}>
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         {ICONS[tab]}
       </svg>
@@ -37,6 +74,12 @@ export function TabBar(props: { current: Tab; onSelect: (tab: Tab) => void; onAd
   );
   return (
     <nav class="tabbar">
+      {indicator && (
+        <span
+          class="tab-indicator"
+          style={{ left: `${indicator.left}px`, width: `${indicator.width}px`, transition: drag.settle ? 'left .22s ease-out, width .22s ease-out' : 'none' }}
+        />
+      )}
       {TABS.slice(0, half).map(item)}
       <button class="tab-add" aria-label="תנועה חדשה" onClick={props.onAdd}>
         +
@@ -77,6 +120,7 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
   const finish = (target: Tab | undefined, to: number) => {
     setAnimating(true);
     setDx(to);
+    reportDrag({ fraction: target ? (to > 0 ? 1 : -1) : 0, settle: true });
     setTimeout(() => {
       if (target) {
         byDrag.current = true;
@@ -111,6 +155,7 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
         const hasNeighbour = mx > 0 ? !!TABS[i + 1] : !!TABS[i - 1];
         // Past the first or last tab it only gives a little, like a rubber band
         setDx(hasNeighbour ? mx : mx * 0.25);
+        if (hasNeighbour) reportDrag({ fraction: mx / width(), settle: false });
       }}
       onTouchEnd={() => {
         const d = drag.current;

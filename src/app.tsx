@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
 import { todayStr } from './data/dates';
-import { deleteRecord, openDb, putRecords, setMeta } from './data/db';
+import { deleteRecord, openDb, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, type AppData } from './data/store';
 import { formatMoney } from './data/money';
-import { presetFromClipboard, presetFromParams, quickTransaction, type QuickPreset } from './data/quick';
+import { presetFromParams, type QuickPreset } from './data/quick';
 import type { Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
@@ -66,7 +66,6 @@ export function App() {
   screenRef.current = screen;
   const hiddenAt = useRef<number | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const lastPaste = useRef<{ text: string; at: number } | null>(null);
   // The main screen settings was opened from, to come back to it
   const lastTab = useRef<Tab>('home');
   if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
@@ -136,35 +135,6 @@ export function App() {
     scrollTo(0, 0);
   };
 
-  /** Adds what the iPhone Shortcut copied: straight away when it names everything, else via the entry screens. */
-  const pasteFromShortcut = async (entry: Extract<Screen, { name: 'entry' }>): Promise<string | void> => {
-    let text: string;
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {
-      return 'לא הצלחתי לקרוא מהקיצור. נסה שוב, ובבועה שקופצת לחץ "הדבק".';
-    }
-    const preset = presetFromClipboard(text);
-    if (!preset) return 'לא נמצאו פרטים מהקיצור. הפעל קודם את הקיצור, ואז לחץ כאן.';
-    // A double tap shouldn't add the same thing twice
-    if (lastPaste.current && lastPaste.current.text === text && Date.now() - lastPaste.current.at < 60_000) {
-      return 'זה כבר נוסף הרגע.';
-    }
-    lastPaste.current = { text, at: Date.now() };
-    // Clear it so a later tap can't add it again (the iPhone may refuse; harmless then)
-    navigator.clipboard.writeText('').catch(() => {});
-    const tx = quickTransaction(preset, data, todayStr());
-    if (!tx) {
-      // A name the app doesn't know, or something missing: continue from the first open question
-      go({ ...entry, preset });
-      return;
-    }
-    await putRecords(db, 'transactions', [tx]);
-    if (tx.methodId) await setMeta(db, 'lastMethodId', tx.methodId);
-    const loaded = await refresh();
-    setToast({ text: savedText(tx, loaded), undoId: tx.id });
-    go({ name: 'home' });
-  };
   const afterChange = () => refresh();
 
   let content;
@@ -181,7 +151,6 @@ export function App() {
         tx={entry.tx}
         preset={entry.preset}
         launch={entry.launch}
-        onPaste={() => pasteFromShortcut(entry)}
         onClose={back}
         onSaved={async saved => {
           const loaded = await refresh();
