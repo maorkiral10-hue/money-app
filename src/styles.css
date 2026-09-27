@@ -348,3 +348,4 @@ button.stat { margin: 0; width: auto; font: inherit; color: var(--text); font-we
 .cards-head-text { flex: 1; display: block; }
 .cards-used { display: block; font-size: 26px; font-weight: 700; margin: 2px 0; }
 .cards-head .meter { display: block; margin: 6px 0 4px; }
+.field-label { font-size: 14px; color: var(--muted); margin: 12px 0 0; }

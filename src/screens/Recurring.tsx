@@ -2,13 +2,16 @@ import { useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { SwipeRow } from '../components/SwipeRow';
 import { nextChargeDate } from '../data/balance';
-import { addDays, dayLabel, parseDate, todayStr } from '../data/dates';
+import { addDays, dayInMonth, dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import { estimateFor, nextOccurrence } from '../data/recurring';
 import { saveRecurring, type AppData } from '../data/store';
 import type { PaymentMethod, Recurring } from '../data/types';
 
 const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+
+/** A month from the given day: the natural next date to offer when it doesn't go out today. */
+const dayInMonthAfter = (date: string) => dayInMonth(date, 1, parseDate(date).d);
 
 /** The card an expense is paid with, if it is a credit card: then the card's charge day decides when the bank pays. */
 const creditCard = (rec: Pick<Recurring, 'type' | 'methodId'>, methods: PaymentMethod[]) => {
@@ -241,21 +244,47 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
           />
           {card ? (
             <>
-              <p class="muted small">
-                יורד מהבנק בחיוב של {card.name} ב-{card.chargeDay} לחודש. החיוב הראשון שייכלל: {dayLabel(firstCharge!, today)}.
-              </p>
               {cardScheduleChanged && (
-                <button type="button" class="link small" onClick={() => setSkipNearestCharge(!skipNearestCharge)}>
-                  {skipNearestCharge ? 'בעצם עוד לא, לכלול כבר בחיוב הקרוב' : 'כבר כלול בחיוב הקרוב? להתחיל מהחיוב שאחריו'}
-                </button>
+                <>
+                  <p class="field-label">החיוב הראשון</p>
+                  <Segmented
+                    value={skipNearestCharge ? 'next' : 'now'}
+                    onChange={v => setSkipNearestCharge(v === 'next')}
+                    options={[
+                      ['now', 'כבר עכשיו'],
+                      ['next', 'רק מהחודש הבא'],
+                    ]}
+                  />
+                </>
               )}
+              <p class="muted small">
+                {skipNearestCharge && cardScheduleChanged
+                  ? 'מתאים אם החודש כבר שולם (למשל כבר צבור על הכרטיס). '
+                  : 'נרשם היום על הכרטיס, ומופיע בפירוט הכרטיס ובהוצאות החודש. '}
+                יורד מהבנק בחיוב של {card.name} ב-{card.chargeDay} לחודש, לראשונה ב-{dayLabel(firstCharge!, today)}.
+              </p>
             </>
           ) : (
             <>
-              <label class="field">
-                <span>מתי בפעם הבאה</span>
-                <input type="date" value={nextDate} onChange={e => e.currentTarget.value && setNextDate(e.currentTarget.value)} />
-              </label>
+              {!rec && (
+                <>
+                  <p class="field-label">{type === 'income' ? 'נכנס כבר היום?' : 'יורד כבר היום?'}</p>
+                  <Segmented
+                    value={nextDate === today ? 'today' : 'later'}
+                    onChange={v => setNextDate(v === 'today' ? today : dayInMonthAfter(today))}
+                    options={[
+                      ['today', type === 'income' ? 'כן, נכנס היום' : 'כן, יורד היום'],
+                      ['later', 'לא, בתאריך אחר'],
+                    ]}
+                  />
+                </>
+              )}
+              {(rec || nextDate !== today) && (
+                <label class="field">
+                  <span>{rec ? 'מתי בפעם הבאה' : 'מתי בפעם הראשונה'}</span>
+                  <input type="date" value={nextDate} onChange={e => e.currentTarget.value && setNextDate(e.currentTarget.value)} />
+                </label>
+              )}
               {nextDate && <p class="muted small">{scheduleText({ type, frequency, firstDate: nextDate } as Recurring, [])}</p>}
             </>
           )}

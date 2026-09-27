@@ -27,6 +27,12 @@ export function periodTitle(key: string, startDay: number, withYear = true) {
 
 type Open = 'income' | 'expenses' | null;
 
+/** Share of a total, "<1%" rather than a misleading 0% for a small real amount. */
+const pct = (part: number, total: number) => {
+  const p = total > 0 ? (part / total) * 100 : 0;
+  return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`;
+};
+
 /** "What's happening this month": income and spending (tap either for its breakdown) and the credit cards. */
 export function ThisMonth(props: {
   data: AppData;
@@ -63,6 +69,7 @@ export function ThisMonth(props: {
   }
   const spendingRows = [...spending.values()].sort((a, b) => b.spent + b.expected - (a.spent + a.expected));
   const maxSpend = Math.max(1, ...spendingRows.map(c => c.spent + c.expected));
+  const spendTotal = stats.expenses + expectedTotal;
 
   const incomeRows = (() => {
     const sums = new Map<string, number>();
@@ -138,6 +145,7 @@ export function ThisMonth(props: {
                   <span class="exp">
                     {c.spent > 0 && formatMoney(-c.spent)}
                     {c.expected > 0 && <span class="muted small"> {c.spent > 0 ? '+' : ''}{formatMoney(c.expected)} צפוי</span>}
+                    <span class="muted small"> · {pct(c.spent + c.expected, spendTotal)}</span>
                   </span>
                 </div>
                 <div class="bar split">
@@ -186,7 +194,7 @@ export function ThisMonth(props: {
                     {name(r.categoryId)}
                   </span>
                   <span class="inc">
-                    {formatMoney(r.amount, { sign: true })} <span class="muted small">· {Math.round((r.amount / Math.max(1, stats.income)) * 100)}%</span>
+                    {formatMoney(r.amount, { sign: true })} <span class="muted small">· {pct(r.amount, stats.income)}</span>
                   </span>
                 </div>
                 <div class="bar">
