@@ -18,6 +18,7 @@ export function SettingsMenu(props: {
   onOpen: (page: SettingsPage) => void;
   onOpenRecurring: () => void;
   onOpenData: () => void;
+  onOpenCheck: () => void;
   onSetOpenOnEntry: (on: boolean) => void;
   onSetMonthStartDay: (day: number) => void;
 }) {
@@ -79,6 +80,11 @@ export function SettingsMenu(props: {
       </div>
 
       <div class="card list">
+        <Item
+          title="בדיקה מול הבנק"
+          sub={data.balanceChecks[0] ? `בדיקה אחרונה: ${data.balanceChecks[0].date.split('-').reverse().join('.')}` : 'עוד לא נבדק'}
+          onClick={props.onOpenCheck}
+        />
         <Item
           title="גיבוי ונתונים"
           sub={data.lastBackupAt ? `גיבוי אחרון: ${new Date(data.lastBackupAt).toLocaleDateString('he-IL')}` : 'עדיין לא בוצע גיבוי'}

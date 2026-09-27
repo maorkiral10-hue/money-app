@@ -8,6 +8,7 @@ import { categoryColor } from '../data/colors';
 import { periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
+import { checkDue } from '../data/reconcile';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
@@ -23,6 +24,7 @@ export function Home(props: {
   onChange: () => void;
   onEdit: (tx: Transaction) => void;
   onOpenData: () => void;
+  onOpenCheck: () => void;
 }) {
   const { data } = props;
   const today = todayStr();
@@ -125,9 +127,17 @@ export function Home(props: {
         </div>
       ))}
 
-      <button class="quiet backup-line" onClick={props.onOpenData}>
-        {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
-      </button>
+      <div class="quiet-lines">
+        <button class={`quiet ${checkDue(data.checkEvery, data.balanceChecks[0]?.date, today) ? 'due' : ''}`} onClick={props.onOpenCheck}>
+          {data.balanceChecks[0]
+            ? `בדיקה מול הבנק: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')}`
+            : 'בדיקה מול הבנק'}
+          {checkDue(data.checkEvery, data.balanceChecks[0]?.date, today) && ' · הגיע הזמן'}
+        </button>
+        <button class="quiet" onClick={props.onOpenData}>
+          {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
+        </button>
+      </div>
     </>
   );
 

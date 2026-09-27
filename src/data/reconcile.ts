@@ -1,0 +1,50 @@
+import { summarize, type Ledger } from './balance';
+import { addDays } from './dates';
+import { getMeta, run, setMeta } from './db';
+import type { Account } from './types';
+
+/** One comparison of an account with what the bank (or wallet) really shows. */
+export interface BalanceCheck {
+  date: string;
+  accountId: string;
+  /** What you typed: the real balance. */
+  real: number;
+  /** What the app had. */
+  app: number;
+  /** "corrected": the app's balance was set to the real one. */
+  result: 'match' | 'gap' | 'corrected';
+}
+
+export type CheckEvery = 'never' | 'week' | 'month';
+
+const KEEP = 20;
+
+/** The account's balance in the app today. */
+export const appBalance = (ledger: Ledger, accountId: string, today: string) =>
+  summarize(ledger, today).byAccount.find(b => b.account.id === accountId)?.balance ?? 0;
+
+export async function logCheck(db: IDBDatabase, check: BalanceCheck) {
+  const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+  await setMeta(db, 'balanceChecks', [check, ...all].slice(0, KEEP));
+}
+
+/**
+ * Makes the app agree with the bank without inventing a transaction: the account's start-day balance moves
+ * by the gap, so today's balance becomes the real one and no spending or income figure changes.
+ * Done in one transaction together with its record in the check history.
+ */
+export async function correctBalance(db: IDBDatabase, account: Account, real: number, app: number, today: string) {
+  const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+  const check: BalanceCheck = { date: today, accountId: account.id, real, app, result: 'corrected' };
+  await run(db, ['accounts', 'meta'], 'readwrite', tx => {
+    tx.objectStore('accounts').put({ ...account, openingBalance: account.openingBalance + (real - app) });
+    tx.objectStore('meta').put([check, ...all].slice(0, KEEP), 'balanceChecks');
+  });
+}
+
+/** Whether the quiet reminder on the home screen is due. */
+export function checkDue(every: CheckEvery, last: string | undefined, today: string) {
+  if (every === 'never') return false;
+  if (!last) return true;
+  return addDays(last, every === 'week' ? 7 : 30) <= today;
+}

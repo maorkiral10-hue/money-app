@@ -2,6 +2,7 @@ import { deleteRecord, getAll, getMeta, putRecords, run, type RecordStore } from
 import { todayStr } from './dates';
 import { occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recurring';
 import type { Budget } from './budget';
+import type { BalanceCheck, CheckEvery } from './reconcile';
 import type { Account, Category, PaymentMethod, Recurring, Transaction } from './types';
 
 export interface AppData {
@@ -20,6 +21,10 @@ export interface AppData {
   monthStartDay: number;
   /** Set once the budget tab's questionnaire is done; until then the tab is locked. */
   budget?: Budget;
+  /** Balance checks against the bank, newest first. */
+  balanceChecks: BalanceCheck[];
+  /** The quiet reminder to check the balance. */
+  checkEvery: CheckEvery;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -38,6 +43,8 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     openOnEntry: (await getMeta<boolean>(db, 'openOnEntry')) !== false,
     monthStartDay: (await getMeta<number>(db, 'monthStartDay')) ?? 1,
     budget: await getMeta<Budget>(db, 'budget'),
+    balanceChecks: (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [],
+    checkEvery: (await getMeta<CheckEvery>(db, 'checkEvery')) ?? 'never',
   };
 }
 

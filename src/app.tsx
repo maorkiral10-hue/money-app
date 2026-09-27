@@ -12,6 +12,7 @@ import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
 import { SettingsButton } from './components/SettingsButton';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
+import { BalanceCheck } from './screens/BalanceCheck';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
@@ -27,6 +28,7 @@ type Screen =
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'budgetSetup' }
+  | { name: 'balanceCheck'; from: Place }
   | { name: 'data'; from: Place };
 
 /**
@@ -201,6 +203,7 @@ export function App() {
         onOpen={page => go({ name: 'settingsPage', page })}
         onOpenData={() => go({ name: 'data', from: 'settings' })}
         onOpenRecurring={() => go({ name: 'recurring', from: 'settings' })}
+        onOpenCheck={() => go({ name: 'balanceCheck', from: 'settings' })}
         onSetOpenOnEntry={async on => {
           await setMeta(db, 'openOnEntry', on);
           await refresh();
@@ -217,6 +220,17 @@ export function App() {
     const from = screen.from;
     content = (
       <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
+    );
+  } else if (screen.name === 'balanceCheck') {
+    const from = screen.from;
+    content = (
+      <BalanceCheck
+        db={db}
+        data={data}
+        onBack={() => go({ name: from })}
+        onChange={afterChange}
+        onAddMissing={preset => go({ name: 'entry', preset, from })}
+      />
     );
   } else if (screen.name === 'budgetSetup') {
     content = (
@@ -247,6 +261,7 @@ export function App() {
         onChange={afterChange}
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
+        onOpenCheck={() => go({ name: 'balanceCheck', from: 'home' })}
       />
     );
 
