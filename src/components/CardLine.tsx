@@ -1,15 +1,37 @@
-import type { CardUsage } from '../data/balance';
+import { useState } from 'preact/hooks';
+import type { CardUsage, Statement } from '../data/balance';
 import { dayLabel } from '../data/dates';
 import { formatMoney } from '../data/money';
+import type { AppData } from '../data/store';
+import type { Transaction } from '../data/types';
+import { StatementItems } from './StatementItems';
 
-/** One credit card: what's free on its limit, how much is used, and its next charge. */
-export function CardLine({ usage, today }: { usage: CardUsage; today: string }) {
+/**
+ * One credit card: what's free on its limit, how much is used, and its next charge. When given the card's
+ * statements, tapping it opens what the next charge is made of (and a line for the charges after it).
+ */
+export function CardLine(props: {
+  usage: CardUsage;
+  today: string;
+  statements?: Statement[];
+  data?: AppData;
+  onEdit?: (tx: Transaction) => void;
+}) {
+  const { usage, today } = props;
+  const [open, setOpen] = useState(false);
   const limit = usage.card.creditLimit;
   const share = limit ? Math.min(1, usage.used / limit) : 0;
-  return (
-    <div class="card-line">
+  const next = props.statements?.find(s => s.date > today);
+  const later = props.statements?.filter(s => next && s.date > next.date) ?? [];
+  const canOpen = !!(props.statements && props.data && props.onEdit);
+
+  const head = (
+    <>
       <div class="line">
-        <span>{usage.card.name}</span>
+        <span>
+          {usage.card.name}
+          {canOpen && <span class={`chevron small-chevron ${open ? 'open' : ''}`}> ‹</span>}
+        </span>
         <span>{limit ? `פנוי ${formatMoney(usage.available!)}` : `נוצל ${formatMoney(usage.used)}`}</span>
       </div>
       {limit ? (
@@ -23,7 +45,33 @@ export function CardLine({ usage, today }: { usage: CardUsage; today: string }) 
           </div>
         </>
       ) : (
-        <div class="muted small">לא הוגדרה מסגרת. אפשר להוסיף בהגדרות ← אמצעי תשלום וכרטיסי אשראי</div>
+        <div class="muted small">
+          {usage.nextCharge ? `חיוב ${dayLabel(usage.nextCharge.date, today)}: ${formatMoney(usage.nextCharge.amount)} · ` : ''}
+          לא הוגדרה מסגרת
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div class="card-line">
+      {canOpen ? (
+        <button class="card-line-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {head}
+        </button>
+      ) : (
+        head
+      )}
+      {open && props.data && props.onEdit && (
+        <div class="card-detail">
+          <div class="muted small">{next ? `בחיוב של ${dayLabel(next.date, today)}` : 'אין חיוב קרוב'}</div>
+          {next && <StatementItems data={props.data} items={next.items} today={today} onEdit={props.onEdit} />}
+          {later.length > 0 && (
+            <div class="muted small later">
+              ועוד {formatMoney(later.reduce((a, s) => a + s.amount, 0))} בחיובים שאחריו (תשלומים)
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -107,7 +107,7 @@ export function App() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 6000);
+    const t = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -251,12 +251,6 @@ export function App() {
       <Home
         db={db}
         data={data}
-        toast={toast}
-        onUndo={async id => {
-          await deleteRecord(db, 'transactions', id);
-          setToast({ text: 'בוטל' });
-          await refresh();
-        }}
         onChange={afterChange}
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
@@ -268,6 +262,24 @@ export function App() {
   return (
     <>
       <UpdateBanner />
+      {toast && (
+        // key: a new message restarts the bubble's appear-and-fade
+        <div key={toast.text + (toast.undoId ?? '')} class="toast-bubble" role="status">
+          <span>✓ {toast.text}</span>
+          {toast.undoId && (
+            <button
+              class="link"
+              onClick={async () => {
+                await deleteRecord(db, 'transactions', toast.undoId!);
+                setToast({ text: 'בוטל' });
+                await refresh();
+              }}
+            >
+              ביטול
+            </button>
+          )}
+        </div>
+      )}
       {tab ? (
         <>
           {/* Stays put above the sliding screens */}

@@ -1,14 +1,13 @@
 import { useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { CardLine } from '../components/CardLine';
-import { cardUsage, summarize } from '../data/balance';
+import { StatementItems } from '../components/StatementItems';
+import { cardStatements, cardUsage, summarize, type Statement } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
 import { categoryColor } from '../data/colors';
-import { periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { formatMoney } from '../data/money';
-import type { Toast } from '../app';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 
@@ -20,8 +19,6 @@ function daysAgo(iso: string) {
 export function Home(props: {
   db: IDBDatabase;
   data: AppData;
-  toast: Toast | null;
-  onUndo: (txId: string) => void;
   onChange: () => void;
   onEdit: (tx: Transaction) => void;
   onOpenData: () => void;
@@ -31,38 +28,30 @@ export function Home(props: {
   const summary = summarize(data, today);
   const cards = cardUsage(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [showFixed, setShowFixed] = useState(false);
-  const monthStart = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
-  const fixedThisMonth = data.transactions
-    .filter(t => t.recurringId && t.date >= monthStart && t.date <= today)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const [openCharge, setOpenCharge] = useState<string | null>(null);
   const pending = data.recurring
     .filter(r => r.variable)
     .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
     .filter(p => p.open.length > 0);
 
   const name = new Map<string, string>([...data.accounts, ...data.methods, ...data.categories].map(x => [x.id, x.name]));
-  // Your own entries only: what standing orders recorded is summed up in one line above them
-  const sorted = data.transactions.filter(t => !t.recurringId).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-  const groups = new Map<string, Transaction[]>();
-  for (const tx of sorted) groups.set(tx.date, [...(groups.get(tx.date) ?? []), tx]);
+  // Like an account statement: what leaves or enters your accounts and wallet. A credit card purchase
+  // (including subscriptions and standing orders on the card) isn't a line of its own: it's inside the
+  // card's charge, which appears on its charge day. Tap a card in "פירוט" to see what's building up.
+  const creditIds = new Set(data.methods.filter(m => m.kind === 'credit').map(m => m.id));
+  const statements = new Map(cards.map(u => [u.card.id, cardStatements(data, u.card.id)]));
+  const rows: Row[] = [
+    ...data.transactions.filter(t => !(t.type === 'expense' && creditIds.has(t.methodId ?? ''))).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
+    ...[...statements.values()].flat().filter(st => st.date <= today).map(st => ({ kind: 'charge' as const, date: st.date, st })),
+  ].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === 'tx' && b.kind === 'tx' ? b.tx.createdAt.localeCompare(a.tx.createdAt) : 0));
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) groups.set(r.date, [...(groups.get(r.date) ?? []), r]);
 
   return (
     <>
       <header class="top">
         <h1>הכסף שלי</h1>
       </header>
-
-      {props.toast && (
-        <div class="card toast">
-          <span>✓ {props.toast.text}</span>
-          {props.toast.undoId && (
-            <button class="link" onClick={() => props.onUndo(props.toast!.undoId!)}>
-              ביטול
-            </button>
-          )}
-        </div>
-      )}
 
       <div class="card hero">
         <div class="muted small">כסף נזיל עכשיו</div>
@@ -76,7 +65,7 @@ export function Home(props: {
             ))}
             {cards.length > 0 && <div class="muted small section-label">מסגרות אשראי</div>}
             {cards.map(u => (
-              <CardLine key={u.card.id} usage={u} today={today} />
+              <CardLine key={u.card.id} usage={u} today={today} statements={statements.get(u.card.id)} data={data} onEdit={props.onEdit} />
             ))}
           </div>
         )}
@@ -95,38 +84,8 @@ export function Home(props: {
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
       ))}
 
-      {fixedThisMonth.length > 0 && (
-        <div class="card list fixed-summary">
-          <button class="tx" onClick={() => setShowFixed(!showFixed)} aria-expanded={showFixed}>
-            <div>
-              <div>הוראות קבע החודש</div>
-              <div class="muted small">
-                {fixedThisMonth.length === 1 ? 'הוראה אחת ירדה' : `${fixedThisMonth.length} הוראות ירדו`} · יורדות לבד, לא צריך לרשום
-              </div>
-            </div>
-            <div class="amount expense">
-              {formatMoney(-fixedThisMonth.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0))}{' '}
-              <span class={`chevron ${showFixed ? 'open' : ''}`}>‹</span>
-            </div>
-          </button>
-          {showFixed &&
-            fixedThisMonth.map(tx => (
-              <button key={tx.id} class="tx" onClick={() => props.onEdit(tx)}>
-                <div>
-                  <div>
-                    <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />
-                    {tx.note ?? name.get(tx.categoryId!)}
-                  </div>
-                  <div class="muted small">{[dayLabel(tx.date, today), tx.type === 'expense' ? name.get(tx.methodId!) : name.get(tx.accountId!)].filter(Boolean).join(' · ')}</div>
-                </div>
-                <div class={`amount ${tx.type}`}>{formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}</div>
-              </button>
-            ))}
-        </div>
-      )}
-
       {groups.size === 0 && <p class="muted center">עדיין אין תנועות. לחץ על + כדי להוסיף את הראשונה.</p>}
-      {[...groups].map(([date, txs]) => (
+      {[...groups].map(([date, items]) => (
         <div key={date} class="day">
           <div class="day-label">
             {dayLabel(date, today)}
@@ -134,18 +93,45 @@ export function Home(props: {
             {date < data.startDate && <span class="tag">לפני תחילת המעקב</span>}
           </div>
           <div class="card list">
-            {txs.map(tx => (
-              <button key={tx.id} class="tx" onClick={() => props.onEdit(tx)}>
+            {items.map(row =>
+              row.kind === 'charge' ? (
+                <div key={`${row.st.methodId}${row.st.date}`}>
+                  <button class="tx" onClick={() => setOpenCharge(openCharge === row.st.methodId + row.st.date ? null : row.st.methodId + row.st.date)}>
+                    <div>
+                      <div>חיוב {name.get(row.st.methodId)}</div>
+                      <div class="muted small">
+                        {row.st.items.length === 1 ? 'פריט אחד' : `${row.st.items.length} פריטים`} · לחץ לפירוט
+                      </div>
+                    </div>
+                    <div class="amount expense">{formatMoney(-row.st.amount)}</div>
+                  </button>
+                  {openCharge === row.st.methodId + row.st.date && <StatementItems data={data} items={row.st.items} today={today} onEdit={props.onEdit} />}
+                </div>
+              ) : (
+              <TxRow key={row.tx.id} tx={row.tx} />
+              ),
+            )}
+          </div>
+        </div>
+      ))}
+
+    </>
+  );
+
+  function TxRow({ tx }: { tx: Transaction }) {
+    return (
+              <button class="tx" onClick={() => props.onEdit(tx)}>
                 <div>
                   <div>
                     {tx.type !== 'transfer' && <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />}
-                    {tx.type === 'transfer' ? `${name.get(tx.accountId!)} ← ${name.get(tx.toAccountId!)}` : name.get(tx.categoryId!)}
+                    {tx.type === 'transfer' ? `${name.get(tx.accountId!)} ← ${name.get(tx.toAccountId!)}` : tx.recurringId ? tx.note : name.get(tx.categoryId!)}
                   </div>
                   <div class="muted small">
                     {[
                       tx.type === 'expense' ? name.get(tx.methodId!) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
+                      tx.recurringId && 'הוראת קבע',
                       tx.installments && `${tx.installments} תשלומים`,
-                      tx.note,
+                      !tx.recurringId && tx.note,
                     ]
                       .filter(Boolean)
                       .join(' · ')}
@@ -155,14 +141,11 @@ export function Home(props: {
                   {formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}
                 </div>
               </button>
-            ))}
-          </div>
-        </div>
-      ))}
-
-    </>
-  );
+    );
+  }
 }
+
+type Row = { kind: 'tx'; date: string; tx: Transaction } | { kind: 'charge'; date: string; st: Statement };
 
 function Line(props: { label: string; value: number }) {
   return (

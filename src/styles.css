@@ -307,3 +307,27 @@ button.continue { margin-top: 22px; }
 .add-in-group { margin-top: 6px; font-size: 15px; }
 .add-kinds .chips { justify-content: flex-start; }
 .fixed-summary { margin-bottom: 4px; }
+
+/* home as an account statement: card charges open to their items */
+.statement { padding: 0 12px 6px; border-right: 2px solid var(--line); margin: 0 0 6px; }
+.statement .tx { padding: 8px 0; }
+.card-line-head { display: block; width: 100%; margin: 0; padding: 0; background: none; color: var(--text); font-weight: 400; text-align: start; border-radius: 0; }
+.card-detail { margin: 6px 0 4px; }
+.card-detail .later { margin-top: 4px; }
+.small-chevron { font-size: 13px; }
+
+/* "saved" bubble: floats in, stays, fades away */
+.toast-bubble {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 64px); z-index: 20;
+  display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px);
+  padding: 10px 18px; border-radius: 22px; background: var(--card); color: var(--pos); font-weight: 600;
+  box-shadow: 0 6px 22px rgba(0,0,0,.16); border: 1px solid var(--line);
+  animation: bubble 5s ease forwards;
+}
+.toast-bubble button { color: var(--text); font-weight: 500; }
+@keyframes bubble {
+  0% { opacity: 0; transform: translate(-50%, -10px) scale(.96); }
+  6% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardUsage, nextChargeDate, splitInstallments, summarize, upcomingItems, type Ledger } from './balance';
+import { cardStatements, cardUsage, nextChargeDate, splitInstallments, summarize, upcomingItems, type Ledger } from './balance';
 import { parseMoney } from './money';
 import type { Account, PaymentMethod, Transaction } from './types';
 
@@ -125,6 +125,28 @@ describe('credit limit', () => {
 
     const [afterFirstCharge] = cardUsage(l, '2026-10-10');
     expect(afterFirstCharge.used).toBe(1_100_00);
+  });
+});
+
+describe('card statements', () => {
+  it('put each purchase and installment in the charge it belongs to, matching the balance', () => {
+    const l = ledger(
+      [
+        tx({ id: 'shoes', amount: 1_200_00, methodId: 'max', installments: 12, date: '2026-09-24' }),
+        tx({ id: 'coffee', amount: 20_00, methodId: 'max', date: '2026-10-11' }),
+        tx({ id: 'cash', amount: 50_00, methodId: 'cash', date: '2026-09-25' }),
+      ],
+      { methods: methods.map(m => (m.id === 'max' ? { ...m, openingPending: 500_00 } : m)) },
+    );
+    const st = cardStatements(l, 'max');
+    expect(st[0]).toMatchObject({ date: '2026-10-10', amount: 500_00 + 100_00 });
+    expect(st[0].items.map(i => [i.tx?.id ?? 'opening', i.amount, i.installment?.n])).toEqual([['shoes', 100_00, 1], ['opening', 500_00, undefined]]);
+    expect(st[1]).toMatchObject({ date: '2026-11-10', amount: 100_00 + 20_00 });
+    expect(st).toHaveLength(12);
+    // together they are exactly what leaves the bank for this card
+    const all = st.reduce((a, s) => a + s.amount, 0);
+    expect(all).toBe(500_00 + 1_200_00 + 20_00);
+    expect(summarize(l, '2027-09-10').liquid).toBe(1_250_00 - 50_00 - all);
   });
 });
 

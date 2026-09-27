@@ -132,6 +132,49 @@ export function summarize(ledger: Ledger, today: string): Summary {
   return { liquid, byAccount, upcoming };
 }
 
+/** One line of a card's bill: a purchase (or one of its installments), or what was on the card at the start. */
+export interface StatementItem {
+  tx?: Transaction;
+  amount: number;
+  installment?: { n: number; of: number };
+  opening?: boolean;
+}
+
+/** One charge of a credit card to the bank, and what it's made of. */
+export interface Statement {
+  methodId: string;
+  date: string;
+  amount: number;
+  items: StatementItem[];
+}
+
+/**
+ * A credit card's charges, oldest first: every purchase (from the start date) lands in the charge after it
+ * was made, installments one per month - the same rule the balance uses (transactionEffects).
+ */
+export function cardStatements(ledger: Ledger, methodId: string): Statement[] {
+  const card = ledger.methods.find(m => m.id === methodId);
+  if (!card || card.kind !== 'credit' || !card.chargeDay) return [];
+  const byDate = new Map<string, Statement>();
+  const add = (date: string, item: StatementItem) => {
+    const s = byDate.get(date) ?? { methodId, date, amount: 0, items: [] };
+    s.amount += item.amount;
+    s.items.push(item);
+    byDate.set(date, s);
+  };
+  for (const tx of ledger.transactions) {
+    if (tx.type !== 'expense' || tx.methodId !== methodId || tx.date < ledger.startDate) continue;
+    const of = Math.max(1, tx.installments ?? 1);
+    const first = nextChargeDate(tx.date, card.chargeDay);
+    splitInstallments(tx.amount, of).forEach((amount, i) =>
+      add(dayInMonth(first, i, card.chargeDay!), { tx, amount, installment: of > 1 ? { n: i + 1, of } : undefined }),
+    );
+  }
+  if (card.openingPending) add(nextChargeDate(ledger.startDate, card.chargeDay), { amount: card.openingPending, opening: true });
+  for (const s of byDate.values()) s.items.sort((a, b) => (b.tx?.date ?? '').localeCompare(a.tx?.date ?? ''));
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export interface CardUsage {
   card: PaymentMethod;
   /** Everything bought on the card and not yet charged, including all future installments. */
