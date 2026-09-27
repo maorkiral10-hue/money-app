@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useRef } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 
 export type Tab = 'home' | 'month' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
@@ -47,33 +47,95 @@ export function TabBar(props: { current: Tab; onSelect: (tab: Tab) => void; onAd
 }
 
 /**
- * Wraps a main screen so a sideways swipe moves to the neighbouring tab. Swipes that start on a
- * row with its own slide (delete), a text field or a scrollable strip are left alone.
+ * The main screens, dragged sideways with the finger. The tabs sit right to left like the bar, so the
+ * next one waits on the left: dragging right pulls it in from the left, dragging left brings back the
+ * previous one from the right. The neighbour is drawn beside the current screen while dragging, and a
+ * release past a quarter of the width finishes the slide. Rows with their own slide (delete), text
+ * fields and selects are left alone.
  */
-export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; children: ComponentChildren }) {
-  const start = useRef<{ x: number; y: number } | null>(null);
+export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; render: (tab: Tab) => ComponentChildren }) {
+  const [dx, setDx] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const drag = useRef<{ x: number; y: number; horizontal: boolean | null } | null>(null);
+  const box = useRef<HTMLDivElement>(null);
   const i = TABS.indexOf(props.current);
+  // Choosing a tab from the bar slides it in from its side too (a finished drag has already slid)
+  const shownIndex = useRef(i);
+  const byDrag = useRef(false);
+  const enter = useRef('');
+  if (shownIndex.current !== i) {
+    enter.current = byDrag.current ? '' : i > shownIndex.current ? 'enter-from-left' : 'enter-from-right';
+    shownIndex.current = i;
+    byDrag.current = false;
+  }
+  const width = () => box.current?.clientWidth || window.innerWidth;
+  // Dragging right shows the tab to the left (next); dragging left shows the one to the right (previous)
+  const neighbour = dx > 0 ? TABS[i + 1] : dx < 0 ? TABS[i - 1] : undefined;
+  // The neighbour is drawn from the top of what's on screen, so it lines up once it becomes the page
+  const neighbourTop = box.current ? Math.max(0, -box.current.getBoundingClientRect().top) : 0;
+
+  const finish = (target: Tab | undefined, to: number) => {
+    setAnimating(true);
+    setDx(to);
+    setTimeout(() => {
+      if (target) {
+        byDrag.current = true;
+        props.onSelect(target);
+        scrollTo(0, 0);
+      }
+      setAnimating(false);
+      setDx(0);
+    }, 220);
+  };
 
   return (
     <div
+      ref={box}
       class="swipe-tabs"
       onTouchStart={e => {
+        if (animating) return;
         const target = e.target as HTMLElement;
-        start.current = target.closest('.swipe, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        drag.current = target.closest('.swipe, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, horizontal: null };
       }}
-      onTouchEnd={e => {
-        const s = start.current;
-        start.current = null;
-        if (!s) return;
-        const dx = e.changedTouches[0].clientX - s.x;
-        const dy = e.changedTouches[0].clientY - s.y;
-        if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-        // Tabs run right to left: a swipe to the left brings in the next one
-        const next = dx < 0 ? TABS[i + 1] : TABS[i - 1];
-        if (next) props.onSelect(next);
+      onTouchMove={e => {
+        const d = drag.current;
+        if (!d) return;
+        const mx = e.touches[0].clientX - d.x;
+        const my = e.touches[0].clientY - d.y;
+        if (d.horizontal === null) {
+          if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+          d.horizontal = Math.abs(mx) > Math.abs(my);
+        }
+        if (!d.horizontal) return;
+        e.preventDefault();
+        const hasNeighbour = mx > 0 ? !!TABS[i + 1] : !!TABS[i - 1];
+        // Past the first or last tab it only gives a little, like a rubber band
+        setDx(hasNeighbour ? mx : mx * 0.25);
+      }}
+      onTouchEnd={() => {
+        const d = drag.current;
+        drag.current = null;
+        if (!d?.horizontal) return;
+        const target = neighbour;
+        if (target && Math.abs(dx) > width() / 4) finish(target, dx > 0 ? width() : -width());
+        else finish(undefined, 0);
       }}
     >
-      {props.children}
+      <div key={props.current} class={`tab-panel ${enter.current}`} style={{ transform: `translateX(${dx}px)`, transition: animating ? 'transform .22s ease-out' : 'none' }}>
+        {props.render(props.current)}
+      </div>
+      {neighbour && (
+        <div
+          class="tab-panel neighbour"
+          style={{
+            top: `${neighbourTop}px`,
+            transform: `translateX(${dx > 0 ? dx - width() : dx + width()}px)`,
+            transition: animating ? 'transform .22s ease-out' : 'none',
+          }}
+        >
+          {props.render(neighbour)}
+        </div>
+      )}
     </div>
   );
 }

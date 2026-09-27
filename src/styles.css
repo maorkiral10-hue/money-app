@@ -269,3 +269,13 @@ button.continue { margin-top: 22px; }
 .bar.split span { border-radius: 0; }
 .bar.split span:first-child { border-radius: 0 3px 3px 0; }
 .bar.split span.expected { opacity: .35; }
+
+/* main screens slide with the finger; the settings button floats above them */
+.swipe-tabs { position: relative; touch-action: pan-y; overflow-x: clip; }
+.tab-panel { will-change: transform; }
+.tab-panel.neighbour { position: absolute; left: 0; right: 0; }
+.floating-settings { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 16px; z-index: 11; }
+.tab-panel.enter-from-left { animation: from-left .22s ease-out; }
+.tab-panel.enter-from-right { animation: from-right .22s ease-out; }
+@keyframes from-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes from-right { from { transform: translateX(100%); } to { transform: translateX(0); } }

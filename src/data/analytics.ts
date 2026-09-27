@@ -4,7 +4,7 @@ import type { MethodKind, PaymentMethod, Transaction } from './types';
 // Numbers for the dashboard's charts. All of them count by the day a transaction happened
 // (a card purchase in the month it was bought) and leave transfers between your own accounts out.
 
-export type Range = 3 | 6 | 12 | 'all';
+export type Range = 1 | 3 | 6 | 12 | 'all';
 
 /** The financial months a range covers, oldest first, never before the start date. */
 export function rangeKeys(range: Range, startDate: string, today: string, startDay: number) {

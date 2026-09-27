@@ -23,6 +23,7 @@ const txs = [
 describe('dashboard numbers', () => {
   it('picks the months of a range, never before the start', () => {
     expect(rangeKeys(3, '2026-07-01', '2026-09-20', 1)).toEqual(['2026-07', '2026-08', '2026-09']);
+    expect(rangeKeys(1, '2026-07-01', '2026-09-20', 1)).toEqual(['2026-09']);
     expect(rangeKeys(12, '2026-08-15', '2026-09-20', 1)).toEqual(['2026-08', '2026-09']);
   });
 

@@ -1,6 +1,5 @@
 import { useState } from 'preact/hooks';
 import { Segmented } from '../components/inputs';
-import { SettingsButton } from '../components/SettingsButton';
 import { Donut, IncomeExpenseBars, NetBars, OTHER_COLOR, SERIES, StackBar } from '../components/charts';
 import { categoryColor } from '../data/colors';
 import {
@@ -23,7 +22,7 @@ import type { MethodKind, Transaction } from '../data/types';
 const KIND_NAMES: Record<MethodKind, string> = { credit: 'אשראי', cash: 'מזומן', bank: 'בנק והוראות קבע', app: 'אפליקציות תשלום', other: 'אחר' };
 
 /** Charts and comparisons: where the money goes, month against month, year against year. */
-export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => void; onOpenSettings: () => void }) {
+export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => void }) {
   const { data } = props;
   const startDay = data.monthStartDay;
   const today = todayStr();
@@ -63,15 +62,15 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
     <>
       <header class="top">
         <h1>דשבורד</h1>
-        <SettingsButton onClick={props.onOpenSettings} />
       </header>
 
       <Segmented
-        value={String(range) as '3' | '6' | '12' | 'all'}
+        value={String(range) as '1' | '3' | '6' | '12' | 'all'}
         onChange={v => setRange(v === 'all' ? 'all' : (Number(v) as Range))}
         options={[
-          ['3', '3 חודשים'],
-          ['6', '6 חודשים'],
+          ['1', 'החודש'],
+          ['3', '3 ח׳'],
+          ['6', '6 ח׳'],
           ['12', 'שנה'],
           ['all', 'הכול'],
         ]}

@@ -1,7 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
-import { SettingsButton } from '../components/SettingsButton';
 import { ExpectedGroups } from '../components/ExpectedGroups';
 import { cardUsage, upcomingItems } from '../data/balance';
 import { categoryColor } from '../data/colors';
@@ -28,7 +27,6 @@ export function ThisMonth(props: {
   data: AppData;
   onEdit: (tx: Transaction) => void;
   onEditRecurring: (rec: Recurring) => void;
-  onOpenSettings: () => void;
 }) {
   const { data } = props;
   const startDay = data.monthStartDay;
@@ -76,7 +74,6 @@ export function ThisMonth(props: {
     <>
       <header class="top">
         <h1>החודש</h1>
-        <SettingsButton onClick={props.onOpenSettings} />
       </header>
 
       <div class="month-switch">

@@ -10,6 +10,7 @@ import { presetFromClipboard, presetFromParams, quickTransaction, type QuickPres
 import type { Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
+import { SettingsButton } from './components/SettingsButton';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { Dashboard } from './screens/Dashboard';
 import { ThisMonth } from './screens/ThisMonth';
@@ -242,19 +243,21 @@ export function App() {
     content = (
       <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
-  } else if (screen.name === 'month') {
-    content = (
+  } else if (!(TABS as string[]).includes(screen.name)) {
+    content = null;
+  }
+
+  /** A main screen, drawn for the current tab and, while dragging, for its neighbour. */
+  const renderTab = (t: Tab) =>
+    t === 'month' ? (
       <ThisMonth
         data={data}
         onEdit={tx => go({ name: 'entry', tx, from: 'month' })}
         onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'month' })}
-        onOpenSettings={() => go({ name: 'settings' })}
       />
-    );
-  } else if (screen.name === 'dashboard') {
-    content = <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} onOpenSettings={() => go({ name: 'settings' })} />;
-  } else {
-    content = (
+    ) : t === 'dashboard' ? (
+      <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />
+    ) : (
       <Home
         db={db}
         data={data}
@@ -266,11 +269,9 @@ export function App() {
         }}
         onChange={afterChange}
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
-        onOpenSettings={() => go({ name: 'settings' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
       />
     );
-  }
 
   // The main screens share the bottom bar and can be swiped between
   const tab = data.setupDone && (TABS as string[]).includes(screen.name) ? (screen.name as Tab) : null;
@@ -279,11 +280,11 @@ export function App() {
       <UpdateBanner />
       {tab ? (
         <>
-          <SwipeTabs current={tab} onSelect={t => go({ name: t })}>
-            <div key={tab} class="tab-screen">
-              {content}
-            </div>
-          </SwipeTabs>
+          {/* Stays put above the sliding screens */}
+          <div class="floating-settings">
+            <SettingsButton onClick={() => go({ name: 'settings' })} />
+          </div>
+          <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
           <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
         </>
       ) : (

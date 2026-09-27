@@ -2,7 +2,6 @@ import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
 import { cardUsage, summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
-import { SettingsButton } from '../components/SettingsButton';
 import { categoryColor } from '../data/colors';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
@@ -23,7 +22,6 @@ export function Home(props: {
   onUndo: (txId: string) => void;
   onChange: () => void;
   onEdit: (tx: Transaction) => void;
-  onOpenSettings: () => void;
   onOpenData: () => void;
 }) {
   const { data } = props;
@@ -45,7 +43,6 @@ export function Home(props: {
     <>
       <header class="top">
         <h1>הכסף שלי</h1>
-        <SettingsButton onClick={props.onOpenSettings} />
       </header>
 
       {props.toast && (
