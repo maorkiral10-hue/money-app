@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
 import { cardUsage, summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
+import { categoryColor } from '../data/colors';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { formatMoney } from '../data/money';
@@ -23,7 +24,6 @@ export function Home(props: {
   onEdit: (tx: Transaction) => void;
   onOpenSettings: () => void;
   onOpenData: () => void;
-  onOpenForecast: () => void;
 }) {
   const { data } = props;
   const today = todayStr();
@@ -81,9 +81,6 @@ export function Home(props: {
           <button class="secondary" onClick={() => setShowBreakdown(!showBreakdown)}>
             {showBreakdown ? 'הסתר פירוט' : 'פירוט'}
           </button>
-          <button class="secondary" onClick={props.onOpenForecast}>
-            צפי לחודש הבא
-          </button>
         </div>
       </div>
 
@@ -107,7 +104,10 @@ export function Home(props: {
             {txs.map(tx => (
               <button key={tx.id} class="tx" onClick={() => props.onEdit(tx)}>
                 <div>
-                  <div>{tx.type === 'transfer' ? `${name.get(tx.accountId!)} ← ${name.get(tx.toAccountId!)}` : name.get(tx.categoryId!)}</div>
+                  <div>
+                    {tx.type !== 'transfer' && <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />}
+                    {tx.type === 'transfer' ? `${name.get(tx.accountId!)} ← ${name.get(tx.toAccountId!)}` : name.get(tx.categoryId!)}
+                  </div>
                   <div class="muted small">
                     {[
                       tx.type === 'expense' ? name.get(tx.methodId!) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',

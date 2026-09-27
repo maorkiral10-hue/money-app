@@ -68,12 +68,12 @@ export function transactionEffects(tx: Transaction, methods: Map<string, Payment
  * Every balance change since the start date. Transactions dated before the start date are
  * left out: they are already part of the opening balances (and, for cards, of openingPending).
  */
-export function allEffects(ledger: Ledger, today?: string): Effect[] {
+export function allEffects(ledger: Ledger, today?: string, expectedUntil?: string): Effect[] {
   const methods = new Map(ledger.methods.map(m => [m.id, m]));
   // Expected recurring occurrences are always dated after today, so they only ever reach the forecast
   const expected =
     today && ledger.recurring
-      ? expectedTransactions(ledger.recurring, ledger.transactions, today, endOfNextMonth(today), ledger.startDate)
+      ? expectedTransactions(ledger.recurring, ledger.transactions, today, expectedUntil ?? endOfNextMonth(today), ledger.startDate)
       : [];
   const effects = [...ledger.transactions, ...expected]
     .filter(tx => tx.date >= ledger.startDate)
@@ -180,7 +180,7 @@ export interface UpcomingItem {
 export function upcomingItems(ledger: Ledger, today: string, until = endOfNextMonth(today)): UpcomingItem[] {
   const items: UpcomingItem[] = [];
   const charges = new Map<string, UpcomingItem>();
-  for (const e of allEffects(ledger, today)) {
+  for (const e of allEffects(ledger, today, until > endOfNextMonth(today) ? until : undefined)) {
     if (e.date <= today || e.date > until || e.kind === 'transfer') continue;
     if (e.kind !== 'credit') {
       items.push({ date: e.date, amount: e.amount, kind: e.kind, txId: e.txId, purchases: 0 });

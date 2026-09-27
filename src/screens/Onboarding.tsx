@@ -74,11 +74,11 @@ export function Onboarding(props: { db: IDBDatabase; onDone: () => void }) {
           <h1>על מה אתה מוציא?</h1>
           <p class="muted">הורד סימון ממה שלא רלוונטי, שנה שמות או הוסף משלך.</p>
           <div class="card">
-            <h2>הוצאות</h2>
+            <h2 class="exp">הוצאות</h2>
             <CategoriesEditor items={categories} kind="expense" onChange={setCategories} />
           </div>
           <div class="card">
-            <h2>הכנסות</h2>
+            <h2 class="inc">הכנסות</h2>
             <CategoriesEditor items={categories} kind="income" onChange={setCategories} />
           </div>
           <button onClick={() => setStep(3)}>המשך</button>

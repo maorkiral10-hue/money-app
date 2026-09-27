@@ -54,7 +54,7 @@ export function ExpectedList(props: {
               <div>{d.title}</div>
               <div class="muted small">{[dayLabel(item.date, today), d.sub].filter(Boolean).join(' · ')}</div>
             </div>
-            <div class={`amount ${item.kind === 'income' ? 'income' : ''}`}>{formatMoney(item.amount, { sign: item.kind === 'income' })}</div>
+            <div class={`amount ${item.kind === 'income' ? 'income' : 'expense'}`}>{formatMoney(item.amount, { sign: item.kind === 'income' })}</div>
           </>
         );
         return d.tx || d.rec ? (

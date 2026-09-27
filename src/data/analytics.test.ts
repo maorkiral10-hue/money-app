@@ -37,6 +37,13 @@ describe('dashboard numbers', () => {
     expect(slices.map(s => [s.categoryId, s.amount])).toEqual([['food', 700_00], ['other', 650_00]]);
   });
 
+  it('splits income by where it came from', () => {
+    const withSalary = [...txs, tx({ type: 'income', amount: 300_00, categoryId: 'extra', date: '2026-09-03' })];
+    const { total, slices } = categoryShares(withSalary, ['2026-09'], 1, 7, 'income');
+    expect(total).toBe(1_300_00);
+    expect(slices.map(s => s.categoryId)).toEqual(['', 'extra']);
+  });
+
   it('compares this month with the average of the months before', () => {
     const rows = categoryVsAverage(txs, '2026-09', ['2026-07', '2026-08'], 1);
     expect(rows.find(r => r.categoryId === 'food')).toEqual({ categoryId: 'food', current: 400_00, average: 150_00, change: 250_00 });

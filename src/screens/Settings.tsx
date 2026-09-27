@@ -132,11 +132,11 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
       {props.page === 'categories' && (
         <>
           <div class="card">
-            <h2>הוצאות</h2>
+            <h2 class="exp">הוצאות</h2>
             <CategoriesEditor items={data.categories} kind="expense" onChange={save('categories')} onDelete={remove('categories')} />
           </div>
           <div class="card">
-            <h2>הכנסות</h2>
+            <h2 class="inc">הכנסות</h2>
             <CategoriesEditor items={data.categories} kind="income" onChange={save('categories')} onDelete={remove('categories')} />
           </div>
         </>

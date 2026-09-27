@@ -248,3 +248,20 @@ button.continue { margin-top: 22px; }
 .neg-text { color: var(--neg); }
 .pos-text { color: var(--pos); }
 .tab { width: 72px; }
+
+/* income is green, spending is red, everywhere */
+:root { --inc-bar: #22a06b; --exp-bar: #e34948; }
+@media (prefers-color-scheme: dark) { :root { --inc-bar: #2fbf7f; --exp-bar: #e66767; } }
+.inc { color: var(--pos); }
+.exp { color: var(--neg); }
+.amount.expense { color: var(--neg); }
+.tile.expense.on { background: var(--neg); border-color: var(--neg); color: #fff; }
+.tile.income.on { background: var(--pos); border-color: var(--pos); color: #fff; }
+.expense .amount-display { color: var(--neg); }
+.income .amount-display { color: var(--pos); }
+.cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; margin-inline-end: 7px; vertical-align: middle; }
+.color-dot { width: 26px; height: 26px; border-radius: 13px; padding: 0; margin: 0; flex: none; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line); }
+.group { border-top: 1px solid var(--line); }
+.group:first-child { border-top: 0; }
+.group-head { display: flex; justify-content: space-between; width: 100%; margin: 0; padding: 10px 0; background: none; font-weight: 600; font-size: 15px; border-radius: 0; }
+.group-body { padding: 0 0 6px 0; }

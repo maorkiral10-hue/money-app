@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Segmented } from '../components/inputs';
 import { Donut, IncomeExpenseBars, NetBars, OTHER_COLOR, SERIES, StackBar } from '../components/charts';
+import { categoryColor } from '../data/colors';
 import {
   biggestExpenses,
   byMethodKind,
@@ -42,6 +43,13 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
   const catName = (id: string) => (id === OTHER ? 'אחר' : (data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה'));
 
   const shares = categoryShares(data.transactions, keys, startDay);
+  const incomeShares = categoryShares(data.transactions, keys, startDay, 7, 'income');
+  const slicesOf = (sh: typeof shares) =>
+    sh.slices.map(s => ({
+      label: catName(s.categoryId),
+      amount: s.amount,
+      color: s.categoryId === OTHER ? OTHER_COLOR : categoryColor(s.categoryId, data.categories),
+    }));
   const { best, worst } = bestAndWorst(months, today, startDay);
   const allKeys = monthsSince(data.startDate, today, startDay);
   const previous = allKeys.filter(k => k < currentKey).slice(-6);
@@ -71,25 +79,24 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
       )}
 
       <div class="stat-row four">
-        <Stat label="הכנסות" value={formatMoney(sum.income)} />
-        <Stat label="הוצאות" value={formatMoney(-sum.expenses)} />
-        <Stat label={sum.net >= 0 ? 'נשאר' : 'חסר'} value={formatMoney(sum.net, { sign: true })} />
-        <Stat label="חיסכון מההכנסה" value={sum.savingsRate === undefined ? '—' : `${Math.round(sum.savingsRate * 100)}%`} />
+        <Stat label="הכנסות" value={formatMoney(sum.income)} tone="inc" />
+        <Stat label="הוצאות" value={formatMoney(-sum.expenses)} tone="exp" />
+        <Stat label={sum.net >= 0 ? 'נשאר' : 'חסר'} value={formatMoney(sum.net, { sign: true })} tone={sum.net >= 0 ? 'inc' : 'exp'} />
+        <Stat
+          label="חיסכון מההכנסה"
+          value={sum.savingsRate === undefined ? '—' : `${Math.round(sum.savingsRate * 100)}%`}
+          tone={sum.savingsRate !== undefined && sum.savingsRate < 0 ? 'exp' : 'inc'}
+        />
       </div>
 
       <div class="card">
-        <h2>על מה הולך הכסף?</h2>
-        {shares.total === 0 ? (
-          <p class="muted small">אין הוצאות בתקופה הזו</p>
-        ) : (
-          <Donut
-            slices={shares.slices.map((s, i) => ({
-              label: catName(s.categoryId),
-              amount: s.amount,
-              color: s.categoryId === OTHER ? OTHER_COLOR : SERIES(i),
-            }))}
-          />
-        )}
+        <h2 class="exp">על מה הולך הכסף?</h2>
+        {shares.total === 0 ? <p class="muted small">אין הוצאות בתקופה הזו</p> : <Donut slices={slicesOf(shares)} />}
+      </div>
+
+      <div class="card">
+        <h2 class="inc">מאיפה מגיע הכסף?</h2>
+        {incomeShares.total === 0 ? <p class="muted small">אין הכנסות בתקופה הזו</p> : <Donut slices={slicesOf(incomeShares)} />}
       </div>
 
       <div class="card">
@@ -103,8 +110,8 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
             <thead>
               <tr>
                 <th>חודש</th>
-                <th>הכנסות</th>
-                <th>הוצאות</th>
+                <th class="inc">הכנסות</th>
+                <th class="exp">הוצאות</th>
                 <th>נשאר</th>
               </tr>
             </thead>
@@ -112,9 +119,9 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
               {[...months].reverse().map(m => (
                 <tr key={m.key}>
                   <td>{shortLabel(m.key)}</td>
-                  <td>{formatMoney(m.income)}</td>
-                  <td>{formatMoney(m.expenses)}</td>
-                  <td class={m.net < 0 ? 'neg-text' : ''}>{formatMoney(m.net, { sign: true })}</td>
+                  <td class="inc">{formatMoney(m.income)}</td>
+                  <td class="exp">{formatMoney(m.expenses)}</td>
+                  <td class={m.net < 0 ? 'exp' : 'inc'}>{formatMoney(m.net, { sign: true })}</td>
                 </tr>
               ))}
             </tbody>
@@ -146,7 +153,7 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
       </div>
 
       <div class="card">
-        <h2>איפה הוצאתי החודש יותר מהרגיל?</h2>
+        <h2 class="exp">איפה הוצאתי החודש יותר מהרגיל?</h2>
         {previous.length === 0 ? (
           <p class="muted small">צריך לפחות חודש אחד שהסתיים כדי להשוות לממוצע.</p>
         ) : (
@@ -162,7 +169,10 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
             <tbody>
               {vsAverage.map(r => (
                 <tr key={r.categoryId}>
-                  <td>{catName(r.categoryId)}</td>
+                  <td>
+                    <span class="cat-dot" style={{ background: categoryColor(r.categoryId, data.categories) }} />
+                    {catName(r.categoryId)}
+                  </td>
                   <td>{formatMoney(r.current)}</td>
                   <td>{formatMoney(r.average)}</td>
                   <td class={r.change > 0 ? 'neg-text' : r.change < 0 ? 'pos-text' : ''}>
@@ -186,14 +196,17 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
 
       {biggest.length > 0 && (
         <div class="card">
-          <h2>ההוצאות הגדולות ביותר</h2>
+          <h2 class="exp">ההוצאות הגדולות ביותר</h2>
           {biggest.map(t => (
             <button key={t.id} class="tx" onClick={() => props.onEdit(t)}>
               <div>
-                <div>{catName(t.categoryId ?? '')}</div>
+                <div>
+                  <span class="cat-dot" style={{ background: categoryColor(t.categoryId, data.categories) }} />
+                  {catName(t.categoryId ?? '')}
+                </div>
                 <div class="muted small">{[dayLabel(t.date, today), t.note].filter(Boolean).join(' · ')}</div>
               </div>
-              <div class="amount">{formatMoney(t.amount)}</div>
+              <div class="amount expense">{formatMoney(-t.amount)}</div>
             </button>
           ))}
         </div>
@@ -205,8 +218,8 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
           <thead>
             <tr>
               <th>שנה</th>
-              <th>הכנסות</th>
-              <th>הוצאות</th>
+              <th class="inc">הכנסות</th>
+              <th class="exp">הוצאות</th>
               <th>נשאר</th>
             </tr>
           </thead>
@@ -214,9 +227,9 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
             {years.map(y => (
               <tr key={y.year}>
                 <td>{y.year}</td>
-                <td>{formatMoney(y.income)}</td>
-                <td>{formatMoney(y.expenses)}</td>
-                <td class={y.net < 0 ? 'neg-text' : ''}>{formatMoney(y.net, { sign: true })}</td>
+                <td class="inc">{formatMoney(y.income)}</td>
+                <td class="exp">{formatMoney(y.expenses)}</td>
+                <td class={y.net < 0 ? 'exp' : 'inc'}>{formatMoney(y.net, { sign: true })}</td>
               </tr>
             ))}
           </tbody>
@@ -227,11 +240,11 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
   );
 }
 
-function Stat(props: { label: string; value: string }) {
+function Stat(props: { label: string; value: string; tone: 'inc' | 'exp' }) {
   return (
     <div class="stat">
-      <div class="muted small">{props.label}</div>
-      <div class="stat-value">{props.value}</div>
+      <div class={`small ${props.tone}`}>{props.label}</div>
+      <div class={`stat-value ${props.tone}`}>{props.value}</div>
     </div>
   );
 }

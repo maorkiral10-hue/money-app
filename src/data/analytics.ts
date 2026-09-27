@@ -26,12 +26,12 @@ export function totals(months: MonthStats[]) {
 
 export const OTHER = 'other';
 
-/** Spending by category over the range: the biggest `keep`, the rest folded into one "other" slice. */
-export function categoryShares(transactions: Transaction[], keys: string[], startDay: number, keep = 7) {
+/** Spending (or income) by category over the range: the biggest `keep`, the rest folded into one "other" slice. */
+export function categoryShares(transactions: Transaction[], keys: string[], startDay: number, keep = 7, type: 'expense' | 'income' = 'expense') {
   const b = rangeBounds(keys, startDay);
   const sums = new Map<string, number>();
   for (const t of transactions) {
-    if (t.type !== 'expense' || !inRange(t, b)) continue;
+    if (t.type !== type || !inRange(t, b)) continue;
     sums.set(t.categoryId ?? '', (sums.get(t.categoryId ?? '') ?? 0) + t.amount);
   }
   const sorted = [...sums].map(([categoryId, amount]) => ({ categoryId, amount })).sort((a, b) => b.amount - a.amount);

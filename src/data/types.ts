@@ -43,6 +43,8 @@ export interface Category {
   kind: 'expense' | 'income';
   order: number;
   archived?: boolean;
+  /** Chosen color; when missing, one is given by the category's place in its list (see data/colors.ts). */
+  color?: string;
 }
 
 export type TxType = 'expense' | 'income' | 'transfer';

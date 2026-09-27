@@ -92,16 +92,18 @@ export function IncomeExpenseBars(props: { months: MonthPoint[] }) {
     <div>
       <div class="chart-legend">
         <span>
-          <span class="swatch" style={{ background: SERIES(0) }} /> הכנסות
+          <span class="swatch" style={{ background: 'var(--inc-bar)' }} /> <span class="inc">הכנסות</span>
         </span>
         <span>
-          <span class="swatch" style={{ background: SERIES(1) }} /> הוצאות
+          <span class="swatch" style={{ background: 'var(--exp-bar)' }} /> <span class="exp">הוצאות</span>
         </span>
       </div>
       {s && (
         <p class="chart-readout">
-          <b>{s.label}:</b> הכנסות {formatMoney(s.income)} · הוצאות {formatMoney(s.expenses)} · {s.income - s.expenses >= 0 ? 'נשאר' : 'חסר'}{' '}
-          {formatMoney(Math.abs(s.income - s.expenses))}
+          <b>{s.label}:</b> <span class="inc">הכנסות {formatMoney(s.income)}</span> · <span class="exp">הוצאות {formatMoney(s.expenses)}</span> ·{' '}
+          <span class={s.income - s.expenses >= 0 ? 'inc' : 'exp'}>
+            {s.income - s.expenses >= 0 ? 'נשאר' : 'חסר'} {formatMoney(Math.abs(s.income - s.expenses))}
+          </span>
         </p>
       )}
       <svg viewBox={`0 0 ${W} ${H}`} class="chart" role="img" aria-label="הכנסות מול הוצאות לפי חודש">
@@ -113,8 +115,8 @@ export function IncomeExpenseBars(props: { months: MonthPoint[] }) {
           return (
             <g key={i} onClick={() => setSelected(i)} class={selected === i ? 'sel' : 'dim'}>
               <rect x={cx - slot / 2} y="0" width={slot} height={H} fill="transparent" />
-              <Bar x={cx - bw - 1} w={bw} h={hi} color={SERIES(0)} />
-              <Bar x={cx + 1} w={bw} h={he} color={SERIES(1)} />
+              <Bar x={cx - bw - 1} w={bw} h={hi} color={'var(--inc-bar)'} />
+              <Bar x={cx + 1} w={bw} h={he} color={'var(--exp-bar)'} />
               <text x={cx} y={H - 4} text-anchor="middle" class="axis-label">
                 {m.label}
               </text>
@@ -148,7 +150,10 @@ export function NetBars(props: { months: { label: string; net: number; note?: st
     <div>
       {s && (
         <p class="chart-readout">
-          <b>{s.label}:</b> {s.net >= 0 ? 'נשאר' : 'חסר'} {formatMoney(Math.abs(s.net))}
+          <b>{s.label}:</b>{' '}
+          <span class={s.net >= 0 ? 'inc' : 'exp'}>
+            {s.net >= 0 ? 'נשאר' : 'חסר'} {formatMoney(Math.abs(s.net))}
+          </span>
           {s.note && <span class="muted"> · {s.note}</span>}
         </p>
       )}
@@ -166,7 +171,7 @@ export function NetBars(props: { months: { label: string; net: number; note?: st
           return (
             <g key={i} onClick={() => setSelected(i)} class={selected === i ? 'sel' : 'dim'}>
               <rect x={cx - slot / 2} y="0" width={slot} height={H} fill="transparent" />
-              {h > 0 && <path d={d} fill={up ? 'var(--pos-bar)' : 'var(--neg-bar)'} />}
+              {h > 0 && <path d={d} fill={up ? 'var(--inc-bar)' : 'var(--exp-bar)'} />}
               <text x={cx} y={H - 4} text-anchor="middle" class="axis-label">
                 {m.label}
               </text>

@@ -13,13 +13,12 @@ import { EntryForm } from './screens/EntryForm';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { Dashboard } from './screens/Dashboard';
 import { ThisMonth } from './screens/ThisMonth';
-import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'month' | 'dashboard' | 'settings' | 'forecast';
+type Place = 'home' | 'month' | 'dashboard' | 'settings';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
@@ -215,16 +214,6 @@ export function App() {
         }}
       />
     );
-  } else if (screen.name === 'forecast') {
-    content = (
-      <Forecast
-        data={data}
-        onBack={() => go({ name: 'home' })}
-        onEdit={tx => go({ name: 'entry', tx, from: 'forecast' })}
-        onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'forecast' })}
-        onOpenRecurring={() => go({ name: 'recurring', from: 'forecast' })}
-      />
-    );
   } else if (screen.name === 'settings') {
     content = (
       <SettingsMenu
@@ -275,7 +264,6 @@ export function App() {
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenSettings={() => go({ name: 'settings' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
-        onOpenForecast={() => go({ name: 'forecast' })}
       />
     );
   }

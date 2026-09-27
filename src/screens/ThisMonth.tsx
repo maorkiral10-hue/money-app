@@ -1,9 +1,10 @@
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
-import { ExpectedList } from '../components/ExpectedList';
+import { ExpectedGroups } from '../components/ExpectedGroups';
 import { cardUsage, upcomingItems } from '../data/balance';
-import { monthsSince, monthStats, periodEnd, periodKey, periodStart, restOfMonth } from '../data/dashboard';
+import { categoryColor } from '../data/colors';
+import { addMonths, monthsSince, monthStats, periodEnd, periodKey, periodStart, restOfMonth } from '../data/dashboard';
 import { dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
@@ -35,9 +36,21 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
   const stats = monthStats(data.transactions, key, startDay);
   const isCurrent = key === currentKey;
   const rest = isCurrent ? restOfMonth(data, today, startDay) : undefined;
-  const restItems = rest ? upcomingItems(data, today, rest.end) : [];
+  // The card bills just after the month (e.g. on the 2nd) pay for this month's purchases, so they're listed here too
+  const lateEnd = rest?.lateCharges.at(-1)?.date ?? rest?.end ?? today;
+  const restItems = rest
+    ? upcomingItems(data, today, lateEnd).filter(
+        i => i.date <= rest.end || (i.kind === 'credit' && rest.lateCharges.some(c => c.methodId === i.methodId && c.date === i.date)),
+      )
+    : [];
+  const next = rest
+    ? (() => {
+        const end = periodEnd(addMonths(currentKey, 1), startDay);
+        const items = upcomingItems(data, today, end).filter(i => i.date > rest.end);
+        return { end, items, projected: rest.projectedEnd + items.reduce((a, i) => a + i.amount, 0) };
+      })()
+    : undefined;
   const cards = cardUsage(data, today);
-  const cardName = (id: string) => data.methods.find(m => m.id === id)?.name ?? 'אשראי';
   const maxCat = Math.max(1, ...stats.byCategory.map(c => c.amount));
   const name = (id: string) => data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה';
   const free = cards.filter(c => c.available !== undefined).reduce((a, c) => a + c.available!, 0);
@@ -59,9 +72,9 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
       </div>
 
       <div class="stat-row">
-        <Stat label="הכנסות" value={stats.income} />
-        <Stat label="הוצאות" value={-stats.expenses} />
-        <Stat label={stats.net >= 0 ? 'נשאר' : 'חסר'} value={stats.net} strong />
+        <Stat label="הכנסות" value={stats.income} tone="inc" />
+        <Stat label="הוצאות" value={-stats.expenses} tone="exp" />
+        <Stat label={stats.net >= 0 ? 'נשאר' : 'חסר'} value={stats.net} tone={stats.net >= 0 ? 'inc' : 'exp'} strong />
       </div>
 
       {rest && (
@@ -70,17 +83,17 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
           sub={rest.lateCharges.length ? 'אחרי חיובי האשראי' : `יתרה צפויה ב-${shortDate(rest.end)}`}
           value={formatMoney(rest.lateCharges.length ? rest.afterCards : rest.projectedEnd)}
         >
-          {restItems.length === 0 && <p class="muted small">לא צפוי לרדת או להיכנס עוד כלום עד סוף החודש.</p>}
-          <ExpectedList data={data} items={restItems} today={today} onEdit={props.onEdit} onEditRecurring={props.onEditRecurring} />
+          <ExpectedGroups data={data} items={restItems} today={today} onEdit={props.onEdit} onEditRecurring={props.onEditRecurring} />
           <div class="totals">
-            <Line label="עוד צפוי לרדת" value={formatMoney(rest.expectedOut)} />
-            <Line label="עוד צפוי להיכנס" value={formatMoney(rest.expectedIn, { sign: true })} />
             <Line label={`יתרה צפויה ב-${shortDate(rest.end)}`} value={formatMoney(rest.projectedEnd)} strong />
-            {rest.lateCharges.map(c => (
-              <Line key={c.methodId} label={`חיוב ${cardName(c.methodId)} ב-${shortDate(c.date)}`} value={formatMoney(c.amount)} />
-            ))}
             {rest.lateCharges.length > 0 && <Line label="אחרי חיובי האשראי" value={formatMoney(rest.afterCards)} strong />}
           </div>
+        </Section>
+      )}
+
+      {next && (
+        <Section title="החודש הבא" sub={`יתרה צפויה ב-${shortDate(next.end)}`} value={formatMoney(next.projected)}>
+          <ExpectedGroups data={data} items={next.items} today={today} onEdit={props.onEdit} onEditRecurring={props.onEditRecurring} />
         </Section>
       )}
 
@@ -92,18 +105,21 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
         </Section>
       )}
 
-      <Section title="על מה הלך הכסף" sub={stats.byCategory[0] ? `הכי הרבה: ${name(stats.byCategory[0].categoryId)}` : 'אין הוצאות'} value={formatMoney(stats.expenses)}>
+      <Section title="על מה הלך הכסף" sub={stats.byCategory[0] ? `הכי הרבה: ${name(stats.byCategory[0].categoryId)}` : 'אין הוצאות'} value={formatMoney(-stats.expenses)} tone="exp">
         {stats.byCategory.map(c => (
           <div key={c.categoryId}>
             <button class="bar-row" onClick={() => setOpenCategory(openCategory === c.categoryId ? null : c.categoryId)}>
               <div class="line">
-                <span>{name(c.categoryId)}</span>
+                <span>
+                  <span class="cat-dot" style={{ background: categoryColor(c.categoryId, data.categories) }} />
+                  {name(c.categoryId)}
+                </span>
                 <span>
                   {formatMoney(c.amount)} <span class="muted small">· {Math.round((c.amount / stats.expenses) * 100)}%</span>
                 </span>
               </div>
               <div class="bar">
-                <span style={{ width: `${(c.amount / maxCat) * 100}%` }} />
+                <span style={{ width: `${(c.amount / maxCat) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
               </div>
             </button>
             {openCategory === c.categoryId && (
@@ -120,7 +136,7 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
                   .map(t => (
                     <button key={t.id} class="tx" onClick={() => props.onEdit(t)}>
                       <span class="muted small">{[dayLabel(t.date, today), t.note].filter(Boolean).join(' · ')}</span>
-                      <span class="small">{formatMoney(t.amount)}</span>
+                      <span class="small exp">{formatMoney(-t.amount)}</span>
                     </button>
                   ))}
               </div>
@@ -133,7 +149,7 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
 }
 
 /** A card showing only its title and main number until tapped. */
-function Section(props: { title: string; sub: string; value: string; children: ComponentChildren }) {
+function Section(props: { title: string; sub: string; value: string; tone?: 'inc' | 'exp'; children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
   return (
     <div class="card section">
@@ -142,7 +158,7 @@ function Section(props: { title: string; sub: string; value: string; children: C
           <span class="section-title">{props.title}</span>
           <span class="muted small block">{props.sub}</span>
         </span>
-        <span class="section-value">
+        <span class={`section-value ${props.tone ?? ''}`}>
           {props.value} <span class={`chevron ${open ? 'open' : ''}`}>‹</span>
         </span>
       </button>
@@ -160,11 +176,11 @@ function Line(props: { label: string; value: string; strong?: boolean }) {
   );
 }
 
-function Stat(props: { label: string; value: number; strong?: boolean }) {
+function Stat(props: { label: string; value: number; strong?: boolean; tone: 'inc' | 'exp' }) {
   return (
     <div class={`stat ${props.strong ? 'strong' : ''}`}>
-      <div class="muted small">{props.label}</div>
-      <div class="stat-value">{formatMoney(props.value, { sign: props.strong })}</div>
+      <div class={`small ${props.tone}`}>{props.label}</div>
+      <div class={`stat-value ${props.tone}`}>{formatMoney(props.value, { sign: props.strong })}</div>
     </div>
   );
 }

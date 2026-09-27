@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { categoryColor, nextColor } from '../data/colors';
 import type { Account, Category, PaymentMethod } from '../data/types';
 import { MoneyInput } from './inputs';
 import { SwipeRow } from './SwipeRow';
@@ -154,6 +155,13 @@ export function CategoriesEditor(props: {
         .filter(c => c.kind === props.kind)
         .map(c => (
           <Row key={c.id} item={c} set={set} onDelete={props.onDelete} compact>
+            <button
+              type="button"
+              class="color-dot"
+              aria-label="החלף צבע"
+              style={{ background: categoryColor(c.id, props.items) }}
+              onClick={() => set(c.id, { color: nextColor(categoryColor(c.id, props.items)) })}
+            />
             <input type="text" value={c.name} onInput={e => set(c.id, { name: e.currentTarget.value })} />
           </Row>
         ))}

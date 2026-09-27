@@ -186,7 +186,7 @@ export function EntryForm(props: {
       {step === 'type' && (
         <div class="tiles">
           {(['expense', 'income', 'transfer'] as const).map(t => (
-            <button key={t} class={`tile ${type === t ? 'on' : ''}`} onClick={() => chooseType(t)}>
+            <button key={t} class={`tile ${t} ${type === t ? 'on' : ''}`} onClick={() => chooseType(t)}>
               {TYPE_NAMES[t]}
               {t === 'transfer' && <span class="small">בין בנק, מזומן וביט</span>}
             </button>
@@ -194,7 +194,11 @@ export function EntryForm(props: {
         </div>
       )}
 
-      {step === 'amount' && <Keypad text={amountText} onChange={setAmountText} />}
+      {step === 'amount' && (
+        <div class={type}>
+          <Keypad text={amountText} onChange={setAmountText} />
+        </div>
+      )}
 
       {step === 'category' && <Chips items={categories} value={categoryId} onChange={setCategoryId} />}
 
