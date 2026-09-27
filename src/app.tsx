@@ -10,13 +10,15 @@ import { presetFromClipboard, presetFromParams, quickTransaction, type QuickPres
 import type { Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
+import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
+import { Dashboard } from './screens/Dashboard';
 import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'settings' | 'forecast';
+type Place = 'home' | 'dashboard' | 'settings' | 'forecast';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
@@ -243,6 +245,8 @@ export function App() {
     content = (
       <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
+  } else if (screen.name === 'dashboard') {
+    content = <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />;
   } else {
     content = (
       <Home
@@ -255,7 +259,6 @@ export function App() {
           await refresh();
         }}
         onChange={afterChange}
-        onAdd={() => go({ name: 'entry', from: 'home' })}
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenSettings={() => go({ name: 'settings' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
@@ -264,10 +267,23 @@ export function App() {
     );
   }
 
+  // The main screens share the bottom bar and can be swiped between
+  const tab = data.setupDone && (TABS as string[]).includes(screen.name) ? (screen.name as Tab) : null;
   return (
     <>
       <UpdateBanner />
-      {content}
+      {tab ? (
+        <>
+          <SwipeTabs current={tab} onSelect={t => go({ name: t })}>
+            <div key={tab} class="tab-screen">
+              {content}
+            </div>
+          </SwipeTabs>
+          <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
+        </>
+      ) : (
+        content
+      )}
     </>
   );
 }

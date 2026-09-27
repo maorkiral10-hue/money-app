@@ -1,0 +1,59 @@
+import { describe, expect, it } from 'vitest';
+import type { Ledger } from './balance';
+import { bestAndWorst, monthsSince, monthStats, restOfMonth } from './dashboard';
+import type { Account, PaymentMethod, Transaction } from './types';
+
+let n = 0;
+const tx = (t: Partial<Transaction>): Transaction => ({
+  id: String(++n), type: 'expense', amount: 0, date: '2026-09-24', createdAt: '', updatedAt: '', ...t,
+});
+
+describe('month numbers', () => {
+  const txs = [
+    tx({ amount: 100_00, categoryId: 'food', date: '2026-09-02' }),
+    tx({ amount: 50_00, categoryId: 'fuel', date: '2026-09-20' }),
+    tx({ amount: 30_00, categoryId: 'food', date: '2026-09-30' }),
+    tx({ type: 'income', amount: 1_000_00, date: '2026-09-10' }),
+    tx({ type: 'transfer', amount: 999_00, date: '2026-09-11' }),
+    tx({ amount: 70_00, categoryId: 'food', date: '2026-10-01' }),
+  ];
+
+  it('adds up one calendar month, leaving transfers out', () => {
+    const s = monthStats(txs, '2026-09');
+    expect([s.income, s.expenses, s.net]).toEqual([1_000_00, 180_00, 820_00]);
+    expect(s.byCategory).toEqual([{ categoryId: 'food', amount: 130_00 }, { categoryId: 'fuel', amount: 50_00 }]);
+  });
+
+  it('lists months from the start, across a year end', () => {
+    expect(monthsSince('2026-11-15', '2027-02-01')).toEqual(['2026-11', '2026-12', '2027-01', '2027-02']);
+  });
+
+  it('compares only finished months', () => {
+    const stats = ['2026-09', '2026-10', '2026-11'].map(k => monthStats([...txs, tx({ type: 'income', amount: 500_00, date: '2026-11-05' })], k));
+    const { best, worst } = bestAndWorst(stats, '2026-11-20');
+    expect([best?.key, worst?.key]).toEqual(['2026-09', '2026-10']);
+    expect(bestAndWorst(stats.slice(0, 1), '2026-09-20')).toEqual({});
+  });
+});
+
+describe('rest of the month', () => {
+  const accounts: Account[] = [{ id: 'bank', name: 'bank', kind: 'bank', openingBalance: 2_000_00, order: 0 }];
+  const methods: PaymentMethod[] = [
+    { id: 'bankm', name: 'b', kind: 'bank', accountId: 'bank', order: 0 },
+    { id: 'max', name: 'max', kind: 'credit', accountId: 'bank', chargeDay: 10, order: 1 },
+  ];
+  it('counts what still leaves and arrives this month only, including card charges', () => {
+    const ledger: Ledger = {
+      accounts, methods, startDate: '2026-09-01',
+      transactions: [
+        tx({ amount: 300_00, methodId: 'max', date: '2026-09-01' }), // charged Sept 10
+        tx({ amount: 100_00, methodId: 'bankm', date: '2026-09-25' }), // future, this month
+        tx({ type: 'income', amount: 500_00, accountId: 'bank', date: '2026-09-28' }),
+        tx({ amount: 999_00, methodId: 'bankm', date: '2026-10-02' }), // next month: not counted
+      ],
+    };
+    const r = restOfMonth(ledger, '2026-09-05');
+    expect([r.expectedOut, r.expectedIn]).toEqual([-400_00, 500_00]);
+    expect(r.projectedEnd).toBe(2_000_00 - 400_00 + 500_00);
+  });
+});

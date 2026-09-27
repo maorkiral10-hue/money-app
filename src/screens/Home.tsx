@@ -19,7 +19,6 @@ export function Home(props: {
   toast: Toast | null;
   onUndo: (txId: string) => void;
   onChange: () => void;
-  onAdd: () => void;
   onEdit: (tx: Transaction) => void;
   onOpenSettings: () => void;
   onOpenData: () => void;
@@ -127,9 +126,6 @@ export function Home(props: {
         </div>
       ))}
 
-      <button class="fab" aria-label="תנועה חדשה" onClick={props.onAdd}>
-        +
-      </button>
     </>
   );
 }
