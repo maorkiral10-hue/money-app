@@ -331,3 +331,20 @@ button.continue { margin-top: 22px; }
   80% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -6px); }
 }
+
+/* "החודש": income and spending tiles open their breakdown underneath */
+button.stat { margin: 0; width: auto; font: inherit; color: var(--text); font-weight: 400; cursor: pointer; }
+.stat.tappable { transition: background .15s, border-color .15s; }
+:root { --inc-soft: #eaf6ef; --exp-soft: #fcecea; }
+@media (prefers-color-scheme: dark) { :root { --inc-soft: #15291f; --exp-soft: #2f1a19; } }
+.stat.on.inc-bg { background: var(--inc-soft); border-color: var(--pos); }
+.stat.on.exp-bg { background: var(--exp-soft); border-color: var(--neg); }
+.breakdown-panel { margin-top: 8px; animation: panel-in .18s ease-out; }
+.exp-panel { background: var(--exp-soft); border-color: var(--neg); }
+.inc-panel { background: var(--inc-soft); border-color: var(--pos); }
+.breakdown-panel .bar { background: rgba(127,127,127,.15); }
+@keyframes panel-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.cards-head { align-items: flex-start; }
+.cards-head-text { flex: 1; display: block; }
+.cards-used { display: block; font-size: 26px; font-weight: 700; margin: 2px 0; }
+.cards-head .meter { display: block; margin: 6px 0 4px; }
