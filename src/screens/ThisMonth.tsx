@@ -1,10 +1,11 @@
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
+import { SettingsButton } from '../components/SettingsButton';
 import { ExpectedGroups } from '../components/ExpectedGroups';
 import { cardUsage, upcomingItems } from '../data/balance';
 import { categoryColor } from '../data/colors';
-import { addMonths, monthsSince, monthStats, periodEnd, periodKey, periodStart, restOfMonth } from '../data/dashboard';
+import { addMonths, expectedExpenses, monthsSince, monthStats, periodEnd, periodKey, periodStart, restOfMonth } from '../data/dashboard';
 import { dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
@@ -23,7 +24,12 @@ export function periodTitle(key: string, startDay: number, withYear = true) {
 }
 
 /** "What's happening this month": short headings with the number that matters; tap one for the details. */
-export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => void; onEditRecurring: (rec: Recurring) => void }) {
+export function ThisMonth(props: {
+  data: AppData;
+  onEdit: (tx: Transaction) => void;
+  onEditRecurring: (rec: Recurring) => void;
+  onOpenSettings: () => void;
+}) {
   const { data } = props;
   const startDay = data.monthStartDay;
   const today = todayStr();
@@ -51,7 +57,18 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
       })()
     : undefined;
   const cards = cardUsage(data, today);
-  const maxCat = Math.max(1, ...stats.byCategory.map(c => c.amount));
+  // This month's spending by category includes the standing orders still to come before it ends
+  const expected = isCurrent ? expectedExpenses(data, today, periodEnd(key, startDay)) : [];
+  const expectedTotal = expected.reduce((a, t) => a + t.amount, 0);
+  const spendingMap = new Map(stats.byCategory.map(c => [c.categoryId, { categoryId: c.categoryId, spent: c.amount, expected: 0 }]));
+  for (const t of expected) {
+    const id = t.categoryId ?? '';
+    const row = spendingMap.get(id) ?? { categoryId: id, spent: 0, expected: 0 };
+    row.expected += t.amount;
+    spendingMap.set(id, row);
+  }
+  const spending = [...spendingMap.values()].sort((a, b) => b.spent + b.expected - (a.spent + a.expected));
+  const maxCat = Math.max(1, ...spending.map(c => c.spent + c.expected));
   const name = (id: string) => data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה';
   const free = cards.filter(c => c.available !== undefined).reduce((a, c) => a + c.available!, 0);
 
@@ -59,6 +76,7 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
     <>
       <header class="top">
         <h1>החודש</h1>
+        <SettingsButton onClick={props.onOpenSettings} />
       </header>
 
       <div class="month-switch">
@@ -105,8 +123,13 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
         </Section>
       )}
 
-      <Section title="על מה הלך הכסף" sub={stats.byCategory[0] ? `הכי הרבה: ${name(stats.byCategory[0].categoryId)}` : 'אין הוצאות'} value={formatMoney(-stats.expenses)} tone="exp">
-        {stats.byCategory.map(c => (
+      <Section
+        title="על מה הולך הכסף"
+        sub={spending[0] ? `הכי הרבה: ${name(spending[0].categoryId)}${expectedTotal ? ' · כולל קבועות שעוד ירדו' : ''}` : 'אין הוצאות'}
+        value={formatMoney(-(stats.expenses + expectedTotal))}
+        tone="exp"
+      >
+        {spending.map(c => (
           <div key={c.categoryId}>
             <button class="bar-row" onClick={() => setOpenCategory(openCategory === c.categoryId ? null : c.categoryId)}>
               <div class="line">
@@ -115,15 +138,28 @@ export function ThisMonth(props: { data: AppData; onEdit: (tx: Transaction) => v
                   {name(c.categoryId)}
                 </span>
                 <span>
-                  {formatMoney(c.amount)} <span class="muted small">· {Math.round((c.amount / stats.expenses) * 100)}%</span>
+                  {formatMoney(c.spent + c.expected)}
+                  {c.expected > 0 && <span class="muted small"> (מתוכם {formatMoney(c.expected)} צפוי)</span>}
                 </span>
               </div>
-              <div class="bar">
-                <span style={{ width: `${(c.amount / maxCat) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
+              {/* solid: already spent · light: standing orders still to come this month */}
+              <div class="bar split">
+                <span style={{ width: `${(c.spent / maxCat) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
+                <span class="expected" style={{ width: `${(c.expected / maxCat) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
               </div>
             </button>
             {openCategory === c.categoryId && (
               <div class="bar-detail">
+                {expected
+                  .filter(t => (t.categoryId ?? '') === c.categoryId)
+                  .map(t => (
+                    <div key={t.id} class="tx">
+                      <span class="muted small">
+                        {[dayLabel(t.date, today), t.note].filter(Boolean).join(' · ')} <span class="tag">צפוי</span>
+                      </span>
+                      <span class="small exp">{formatMoney(-t.amount)}</span>
+                    </div>
+                  ))}
                 {data.transactions
                   .filter(
                     t =>

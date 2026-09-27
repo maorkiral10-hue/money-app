@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Segmented } from '../components/inputs';
+import { SettingsButton } from '../components/SettingsButton';
 import { Donut, IncomeExpenseBars, NetBars, OTHER_COLOR, SERIES, StackBar } from '../components/charts';
 import { categoryColor } from '../data/colors';
 import {
@@ -22,7 +23,7 @@ import type { MethodKind, Transaction } from '../data/types';
 const KIND_NAMES: Record<MethodKind, string> = { credit: 'אשראי', cash: 'מזומן', bank: 'בנק והוראות קבע', app: 'אפליקציות תשלום', other: 'אחר' };
 
 /** Charts and comparisons: where the money goes, month against month, year against year. */
-export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => void }) {
+export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => void; onOpenSettings: () => void }) {
   const { data } = props;
   const startDay = data.monthStartDay;
   const today = todayStr();
@@ -62,6 +63,7 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
     <>
       <header class="top">
         <h1>דשבורד</h1>
+        <SettingsButton onClick={props.onOpenSettings} />
       </header>
 
       <Segmented

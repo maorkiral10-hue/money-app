@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
 import { cardUsage, summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
+import { SettingsButton } from '../components/SettingsButton';
 import { categoryColor } from '../data/colors';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
@@ -44,12 +45,7 @@ export function Home(props: {
     <>
       <header class="top">
         <h1>הכסף שלי</h1>
-        <button class="icon-btn" aria-label="הגדרות" onClick={props.onOpenSettings}>
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
-          </svg>
-        </button>
+        <SettingsButton onClick={props.onOpenSettings} />
       </header>
 
       {props.toast && (

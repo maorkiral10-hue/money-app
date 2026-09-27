@@ -66,6 +66,9 @@ export function App() {
   const hiddenAt = useRef<number | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const lastPaste = useRef<{ text: string; at: number } | null>(null);
+  // The main screen settings was opened from, to come back to it
+  const lastTab = useRef<Tab>('home');
+  if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
   const [data, setData] = useState<AppData | null>(null);
   const [copies, setCopies] = useState<SafetyCopy[]>([]);
   const [persisted, setPersisted] = useState<boolean | null>(null);
@@ -218,7 +221,7 @@ export function App() {
     content = (
       <SettingsMenu
         data={data}
-        onBack={() => go({ name: 'home' })}
+        onBack={() => go({ name: lastTab.current })}
         onOpen={page => go({ name: 'settingsPage', page })}
         onOpenData={() => go({ name: 'data', from: 'settings' })}
         onOpenRecurring={() => go({ name: 'recurring', from: 'settings' })}
@@ -245,10 +248,11 @@ export function App() {
         data={data}
         onEdit={tx => go({ name: 'entry', tx, from: 'month' })}
         onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'month' })}
+        onOpenSettings={() => go({ name: 'settings' })}
       />
     );
   } else if (screen.name === 'dashboard') {
-    content = <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />;
+    content = <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} onOpenSettings={() => go({ name: 'settings' })} />;
   } else {
     content = (
       <Home

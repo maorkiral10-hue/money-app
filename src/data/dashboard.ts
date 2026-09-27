@@ -1,5 +1,6 @@
 import { allEffects, summarize, type Ledger } from './balance';
 import { addDays, dayInMonth } from './dates';
+import { expectedTransactions } from './recurring';
 import type { Transaction } from './types';
 
 // A financial month runs from its start day (set in the questionnaire / settings; 1 = calendar month)
@@ -85,6 +86,17 @@ export function restOfMonth(ledger: Ledger, today: string, startDay = 1) {
   const projectedEnd = liquid + expectedOut + expectedIn;
   const charges = [...lateCharges].map(([methodId, c]) => ({ methodId, ...c })).sort((a, b) => a.date.localeCompare(b.date));
   return { end, expectedOut, expectedIn, projectedEnd, lateCharges: charges, afterCards: projectedEnd + charges.reduce((a, c) => a + c.amount, 0) };
+}
+
+/**
+ * Standing orders and other recurring expenses still to come from tomorrow to `end` (not yet recorded),
+ * so a month's spending by category can show them as expected alongside what already happened.
+ */
+export function expectedExpenses(ledger: Ledger, today: string, end: string): Transaction[] {
+  if (!ledger.recurring) return [];
+  return expectedTransactions(ledger.recurring, ledger.transactions, today, end, ledger.startDate).filter(
+    t => t.type === 'expense' && t.date > today && t.date <= end,
+  );
 }
 
 /** Best and worst of the financial months that are over (the current one isn't finished, so it isn't compared). */

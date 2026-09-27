@@ -265,3 +265,7 @@ button.continue { margin-top: 22px; }
 .group:first-child { border-top: 0; }
 .group-head { display: flex; justify-content: space-between; width: 100%; margin: 0; padding: 10px 0; background: none; font-weight: 600; font-size: 15px; border-radius: 0; }
 .group-body { padding: 0 0 6px 0; }
+.bar.split { display: flex; gap: 0; }
+.bar.split span { border-radius: 0; }
+.bar.split span:first-child { border-radius: 0 3px 3px 0; }
+.bar.split span.expected { opacity: .35; }

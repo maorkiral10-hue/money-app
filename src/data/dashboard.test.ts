@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
-import { bestAndWorst, monthsSince, monthStats, periodEnd, periodKey, restOfMonth } from './dashboard';
+import { bestAndWorst, expectedExpenses, monthsSince, monthStats, periodEnd, periodKey, restOfMonth } from './dashboard';
 import type { Account, PaymentMethod, Transaction } from './types';
 
 let n = 0;
@@ -47,6 +47,20 @@ describe('financial month starting on another day', () => {
   it('counts transactions by their financial month', () => {
     const txs = [tx({ amount: 1, date: '2026-09-09' }), tx({ amount: 2, date: '2026-09-10' }), tx({ amount: 4, date: '2026-10-09' })];
     expect(monthStats(txs, '2026-09', 10).expenses).toBe(6);
+  });
+});
+
+describe('standing orders still to come this month', () => {
+  it('are listed as expected spending until they are recorded', () => {
+    const ledger: Ledger = {
+      accounts: [], methods: [], transactions: [], startDate: '2026-09-01',
+      recurring: [
+        { id: 'r', name: 'ועד בית', type: 'expense', frequency: 'monthly', firstDate: '2026-09-30', variable: false, estimate: 'set', amount: 150_00, categoryId: 'home', methodId: 'b', handledThrough: '2026-09-29', createdAt: '' },
+        { id: 's', name: 'משכורת', type: 'income', frequency: 'monthly', firstDate: '2026-09-28', variable: false, estimate: 'set', amount: 1, categoryId: 'sal', accountId: 'a', handledThrough: '2026-09-27', createdAt: '' },
+      ],
+    };
+    expect(expectedExpenses(ledger, '2026-09-27', '2026-09-30').map(t => [t.categoryId, t.amount, t.date])).toEqual([['home', 150_00, '2026-09-30']]);
+    expect(expectedExpenses(ledger, '2026-09-27', '2026-09-29')).toEqual([]);
   });
 });
 
