@@ -1,4 +1,6 @@
 import { useState } from 'preact/hooks';
+import { nextChargeDate } from '../data/balance';
+import { todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { Account, MethodKind, PaymentMethod } from '../data/types';
 import { MoneyInput } from './inputs';
@@ -29,6 +31,7 @@ export function MethodsSettings(props: {
   accounts: Account[];
   onChange: (items: PaymentMethod[]) => void;
   onDelete: (id: string) => void;
+  startDate: string;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const accounts = props.accounts.filter(a => !a.archived);
@@ -124,10 +127,13 @@ export function MethodsSettings(props: {
                             <span>מסגרת האשראי</span>
                             <MoneyInput value={m.creditLimit ?? 0} onChange={v => set(m.id, { creditLimit: v || undefined })} />
                           </label>
-                          <label class="field">
-                            <span>כמה היה צבור על הכרטיס ביום תחילת המעקב</span>
-                            <MoneyInput value={m.openingPending ?? 0} onChange={v => set(m.id, { openingPending: v })} />
-                          </label>
+                          {/* Only until that first charge has gone out; after it, it's history */}
+                          {todayStr() < nextChargeDate(props.startDate, m.chargeDay ?? 1) && (
+                            <label class="field">
+                              <span>כמה היה צבור על הכרטיס ביום תחילת המעקב</span>
+                              <MoneyInput value={m.openingPending ?? 0} onChange={v => set(m.id, { openingPending: v })} />
+                            </label>
+                          )}
                         </>
                       )}
                     </div>

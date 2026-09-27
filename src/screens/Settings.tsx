@@ -1,7 +1,11 @@
 import { AccountsEditor, CategoriesEditor } from '../components/Editors';
 import { MethodsSettings } from '../components/MethodsSettings';
 import { MonthStartPicker } from '../components/MonthStartPicker';
+import { addDays, todayStr } from '../data/dates';
 import { putRecords } from '../data/db';
+
+/** How long the start-day balances stay editable in settings. */
+const FIRST_MONTH_DAYS = 31;
 import { deleteSetting, type AppData } from '../data/store';
 import { APP_VERSION } from '../version';
 
@@ -122,11 +126,16 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
 
       {props.page === 'accounts' && (
         <div class="card">
-          <AccountsEditor items={data.accounts} onChange={save('accounts')} balanceLabel="יתרה ביום ההתחלה" />
+          <AccountsEditor
+            items={data.accounts}
+            onChange={save('accounts')}
+            balanceLabel="יתרה ביום ההתחלה"
+            hideBalance={todayStr() > addDays(data.startDate, FIRST_MONTH_DAYS)}
+          />
         </div>
       )}
       {props.page === 'methods' && (
-        <MethodsSettings items={data.methods} accounts={data.accounts} onChange={save('methods')} onDelete={remove('methods')} />
+        <MethodsSettings items={data.methods} accounts={data.accounts} onChange={save('methods')} onDelete={remove('methods')} startDate={data.startDate} />
       )}
       {props.page === 'categories' && (
         <>

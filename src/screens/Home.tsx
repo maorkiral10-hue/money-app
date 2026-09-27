@@ -4,6 +4,7 @@ import { CardLine } from '../components/CardLine';
 import { cardUsage, summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
 import { categoryColor } from '../data/colors';
+import { periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { formatMoney } from '../data/money';
@@ -30,13 +31,19 @@ export function Home(props: {
   const summary = summarize(data, today);
   const cards = cardUsage(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showFixed, setShowFixed] = useState(false);
+  const monthStart = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
+  const fixedThisMonth = data.transactions
+    .filter(t => t.recurringId && t.date >= monthStart && t.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const pending = data.recurring
     .filter(r => r.variable)
     .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
     .filter(p => p.open.length > 0);
 
   const name = new Map<string, string>([...data.accounts, ...data.methods, ...data.categories].map(x => [x.id, x.name]));
-  const sorted = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  // Your own entries only: what standing orders recorded is summed up in one line above them
+  const sorted = data.transactions.filter(t => !t.recurringId).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   const groups = new Map<string, Transaction[]>();
   for (const tx of sorted) groups.set(tx.date, [...(groups.get(tx.date) ?? []), tx]);
 
@@ -87,6 +94,36 @@ export function Home(props: {
       {pending.map(({ rec, open }) => (
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
       ))}
+
+      {fixedThisMonth.length > 0 && (
+        <div class="card list fixed-summary">
+          <button class="tx" onClick={() => setShowFixed(!showFixed)} aria-expanded={showFixed}>
+            <div>
+              <div>הוראות קבע החודש</div>
+              <div class="muted small">
+                {fixedThisMonth.length === 1 ? 'הוראה אחת ירדה' : `${fixedThisMonth.length} הוראות ירדו`} · יורדות לבד, לא צריך לרשום
+              </div>
+            </div>
+            <div class="amount expense">
+              {formatMoney(-fixedThisMonth.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0))}{' '}
+              <span class={`chevron ${showFixed ? 'open' : ''}`}>‹</span>
+            </div>
+          </button>
+          {showFixed &&
+            fixedThisMonth.map(tx => (
+              <button key={tx.id} class="tx" onClick={() => props.onEdit(tx)}>
+                <div>
+                  <div>
+                    <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />
+                    {tx.note ?? name.get(tx.categoryId!)}
+                  </div>
+                  <div class="muted small">{[dayLabel(tx.date, today), tx.type === 'expense' ? name.get(tx.methodId!) : name.get(tx.accountId!)].filter(Boolean).join(' · ')}</div>
+                </div>
+                <div class={`amount ${tx.type}`}>{formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}</div>
+              </button>
+            ))}
+        </div>
+      )}
 
       {groups.size === 0 && <p class="muted center">עדיין אין תנועות. לחץ על + כדי להוסיף את הראשונה.</p>}
       {[...groups].map(([date, txs]) => (

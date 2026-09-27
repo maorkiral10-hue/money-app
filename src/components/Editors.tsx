@@ -40,7 +40,13 @@ function Row<T extends { id: string; archived?: boolean }>(props: {
 
 const visible = <T extends { archived?: boolean }>(items: T[], deleting: boolean) => (deleting ? items.filter(i => !i.archived) : items);
 
-export function AccountsEditor(props: { items: Account[]; onChange: (items: Account[]) => void; balanceLabel: string }) {
+export function AccountsEditor(props: {
+  items: Account[];
+  onChange: (items: Account[]) => void;
+  balanceLabel: string;
+  /** Settings after the first month: the start-day balance no longer means anything to change */
+  hideBalance?: boolean;
+}) {
   const set = update(props.items, props.onChange);
   return (
     <>
@@ -48,7 +54,7 @@ export function AccountsEditor(props: { items: Account[]; onChange: (items: Acco
         <Row key={a.id} item={a} set={set}>
           <div class="edit-fields">
             <input type="text" value={a.name} onInput={e => set(a.id, { name: e.currentTarget.value })} />
-            {!a.archived && (
+            {!a.archived && !props.hideBalance && (
               <label class="field">
                 <span>{props.balanceLabel}</span>
                 <MoneyInput value={a.openingBalance} onChange={v => set(a.id, { openingBalance: v })} />
