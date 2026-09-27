@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks';
 import { CardLine } from '../components/CardLine';
 import { ExpectedGroups } from '../components/ExpectedGroups';
 import { cardUsage, upcomingItems } from '../data/balance';
+import { statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
 import { addMonths, expectedExpenses, monthsSince, monthStats, periodEnd, periodKey, periodStart, restOfMonth } from '../data/dashboard';
 import { dayLabel, parseDate, todayStr } from '../data/dates';
@@ -37,7 +38,8 @@ export function ThisMonth(props: {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
 
   const index = months.indexOf(key);
-  const stats = monthStats(data.transactions, key, startDay);
+  const txs = statsTransactions(data);
+  const stats = monthStats(txs, key, startDay);
   const isCurrent = key === currentKey;
   const rest = isCurrent ? restOfMonth(data, today, startDay) : undefined;
   // The card bills just after the month (e.g. on the 2nd) pay for this month's purchases, so they're listed here too
@@ -56,7 +58,8 @@ export function ThisMonth(props: {
     : undefined;
   const cards = cardUsage(data, today);
   // This month's spending by category includes the standing orders still to come before it ends
-  const expected = isCurrent ? expectedExpenses(data, today, periodEnd(key, startDay)) : [];
+  const savingsId = data.budget?.savingsMode === 'separate' ? data.budget.savingsCategoryId : undefined;
+  const expected = isCurrent ? expectedExpenses(data, today, periodEnd(key, startDay)).filter(t => t.categoryId !== savingsId) : [];
   const expectedTotal = expected.reduce((a, t) => a + t.amount, 0);
   const spendingMap = new Map(stats.byCategory.map(c => [c.categoryId, { categoryId: c.categoryId, spent: c.amount, expected: 0 }]));
   for (const t of expected) {

@@ -1,6 +1,7 @@
 import { deleteRecord, getAll, getMeta, putRecords, run, type RecordStore } from './db';
 import { todayStr } from './dates';
 import { occurrenceTransaction, openOccurrences } from './recurring';
+import type { Budget } from './budget';
 import type { Account, Category, PaymentMethod, Recurring, Transaction } from './types';
 
 export interface AppData {
@@ -17,6 +18,8 @@ export interface AppData {
   openOnEntry: boolean;
   /** Day of the month the financial month starts on (1 = calendar month). */
   monthStartDay: number;
+  /** Set once the budget tab's questionnaire is done; until then the tab is locked. */
+  budget?: Budget;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -34,6 +37,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     lastMethodId: await getMeta<string>(db, 'lastMethodId'),
     openOnEntry: (await getMeta<boolean>(db, 'openOnEntry')) !== false,
     monthStartDay: (await getMeta<number>(db, 'monthStartDay')) ?? 1,
+    budget: await getMeta<Budget>(db, 'budget'),
   };
 }
 

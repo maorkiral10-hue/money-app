@@ -12,6 +12,7 @@ import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
 import { SettingsButton } from './components/SettingsButton';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
+import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { Dashboard } from './screens/Dashboard';
 import { ThisMonth } from './screens/ThisMonth';
 import { Home } from './screens/Home';
@@ -19,13 +20,14 @@ import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'month' | 'dashboard' | 'settings';
+type Place = 'home' | 'month' | 'budget' | 'dashboard' | 'settings';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
+  | { name: 'budgetSetup' }
   | { name: 'data'; from: Place };
 
 /**
@@ -45,7 +47,7 @@ function takeQuickAddParam(): Screen | null {
  * which the app has no other way of noticing. Screens where you are typing are never left this way.
  */
 const AWAY_FOR_NEW_ENTRY = 10_000;
-const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage'];
+const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup'];
 
 function savedText(tx: Transaction, data: AppData) {
   const label = data.categories.find(c => c.id === tx.categoryId)?.name ?? (tx.type === 'transfer' ? 'העברה' : '');
@@ -212,6 +214,18 @@ export function App() {
     content = (
       <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
+  } else if (screen.name === 'budgetSetup') {
+    content = (
+      <BudgetSetup
+        db={db}
+        data={data}
+        onDone={async () => {
+          await refresh();
+          go({ name: 'budget' });
+        }}
+        onCancel={() => go({ name: 'budget' })}
+      />
+    );
   } else if (!(TABS as string[]).includes(screen.name)) {
     content = null;
   }
@@ -224,6 +238,8 @@ export function App() {
         onEdit={tx => go({ name: 'entry', tx, from: 'month' })}
         onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'month' })}
       />
+    ) : t === 'budget' ? (
+      <BudgetTab data={data} onEdit={() => go({ name: 'budgetSetup' })} />
     ) : t === 'dashboard' ? (
       <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />
     ) : (

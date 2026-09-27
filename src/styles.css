@@ -283,3 +283,14 @@ button.continue { margin-top: 22px; }
 .tab-indicator { position: absolute; top: 6px; bottom: 6px; border-radius: 22px; background: var(--soft); z-index: 0; }
 .tab, .tab-add { position: relative; z-index: 1; }
 .tab.on { background: none; }
+
+/* budget */
+.locked { text-align: center; padding: 24px 16px; }
+.lock-icon { color: var(--muted); margin-bottom: 6px; }
+.meter { height: 10px; margin: 8px 0 4px; position: relative; overflow: visible; }
+.limit-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
+.per-day { margin-top: 10px; font-size: 14px; }
+.budget-row { padding: 8px 0; border-top: 1px solid var(--line); }
+.budget-row:first-of-type { border-top: 0; }
+.budget-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; color: var(--text); }
+.budget-field .money-input { width: 120px; flex: none; }

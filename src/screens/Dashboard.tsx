@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Segmented } from '../components/inputs';
 import { Donut, IncomeExpenseBars, NetBars, OTHER_COLOR, SERIES, StackBar } from '../components/charts';
+import { statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
 import {
   biggestExpenses,
@@ -29,8 +30,10 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
   const [range, setRange] = useState<Range>(6);
   const [showTable, setShowTable] = useState(false);
 
+  // With savings kept apart (budget questionnaire), money put into savings isn't spending here
+  const txs = statsTransactions(data);
   const keys = rangeKeys(range, data.startDate, today, startDay);
-  const months = keys.map(k => monthStats(data.transactions, k, startDay));
+  const months = keys.map(k => monthStats(txs, k, startDay));
   const sum = totals(months);
   const currentKey = periodKey(today, startDay);
   const shortLabel = (k: string) => {
@@ -42,8 +45,8 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
   };
   const catName = (id: string) => (id === OTHER ? 'אחר' : (data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה'));
 
-  const shares = categoryShares(data.transactions, keys, startDay);
-  const incomeShares = categoryShares(data.transactions, keys, startDay, 7, 'income');
+  const shares = categoryShares(txs, keys, startDay);
+  const incomeShares = categoryShares(txs, keys, startDay, 7, 'income');
   const slicesOf = (sh: typeof shares) =>
     sh.slices.map(s => ({
       label: catName(s.categoryId),
@@ -53,10 +56,10 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
   const { best, worst } = bestAndWorst(months, today, startDay);
   const allKeys = monthsSince(data.startDate, today, startDay);
   const previous = allKeys.filter(k => k < currentKey).slice(-6);
-  const vsAverage = categoryVsAverage(data.transactions, currentKey, previous, startDay).filter(r => r.current || r.average);
-  const paid = byMethodKind(data.transactions, data.methods, keys, startDay);
-  const biggest = biggestExpenses(data.transactions, keys, startDay);
-  const years = byYear(data.transactions.filter(t => t.date >= data.startDate));
+  const vsAverage = categoryVsAverage(txs, currentKey, previous, startDay).filter(r => r.current || r.average);
+  const paid = byMethodKind(txs, data.methods, keys, startDay);
+  const biggest = biggestExpenses(txs, keys, startDay);
+  const years = byYear(txs.filter(t => t.date >= data.startDate));
 
   return (
     <>
