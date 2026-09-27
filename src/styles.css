@@ -294,3 +294,5 @@ button.continue { margin-top: 22px; }
 .budget-row:first-of-type { border-top: 0; }
 .budget-field { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; color: var(--text); }
 .budget-field .money-input { width: 120px; flex: none; }
+.budget-parts { margin-top: 10px; text-align: start; font-size: 14px; }
+.section-head.flat { padding: 0; }

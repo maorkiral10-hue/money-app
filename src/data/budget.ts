@@ -1,7 +1,8 @@
-import { expectedExpenses, monthsSince, monthStats, periodEnd, periodKey, periodStart } from './dashboard';
+import { monthsSince, monthStats, periodEnd, periodKey, periodStart } from './dashboard';
+import { estimateFor, scheduleDatesIn } from './recurring';
 import { addDays } from './dates';
 import type { AppData } from './store';
-import type { Transaction } from './types';
+import type { Recurring, Transaction } from './types';
 
 /** Set in the budget tab's questionnaire; kept in meta so it travels with backups. */
 export interface Budget {
@@ -16,6 +17,11 @@ export interface Budget {
   savingsMode: 'expense' | 'separate';
   /** The expense category that stands for "moved to savings" (separate mode). */
   savingsCategoryId?: string;
+  /**
+   * Standing orders and other recurring expenses: taken out of the monthly budget up front ("included",
+   * the default), or kept beside it so the budget covers day-to-day spending only ("separate").
+   */
+  fixedMode?: 'included' | 'separate';
 }
 
 /**
@@ -38,31 +44,73 @@ export function savedIn(data: Pick<AppData, 'transactions' | 'budget'>, from: st
 
 export interface BudgetLine {
   limit: number;
-  /** Already spent this month. */
+  /** Day-to-day spending so far this month (everything not from a standing order or other recurring item). */
   spent: number;
-  /** Standing orders and other recurring expenses still due before the month ends. */
-  expected: number;
+  /** This month's standing orders and other recurring expenses, whole month (counted when "included"). */
+  fixed: number;
+}
+
+/** One standing order (or other recurring expense) this month. */
+export interface Commitment {
+  rec: Recurring;
+  dates: string[];
+  /** For the month: the recorded amount where there is one, else what's expected. */
+  amount: number;
+  /** The part whose date has already come. */
+  paid: number;
 }
 
 export interface BudgetStatus {
   end: string;
   /** Days left in the month including today. */
   daysLeft: number;
+  /** Standing orders taken out of the budget up front ("included"), or shown beside it ("separate"). */
+  fixedMode: 'included' | 'separate';
+  commitments: Commitment[];
   overall?: BudgetLine & { remaining: number; perDay: number };
   categories: (BudgetLine & { categoryId: string })[];
   saved: number;
 }
 
-/** Where this financial month stands against the budget, counting what's still expected as already committed. */
+/**
+ * This financial month's standing orders and other recurring expenses, each for the whole month by its
+ * schedule - including dates before it was added to the app, which went out all the same.
+ * Money moved to savings (when kept apart) isn't one.
+ */
+export function monthCommitments(data: AppData, from: string, to: string, today: string): Commitment[] {
+  const b = data.budget;
+  return data.recurring
+    .filter(r => r.type === 'expense' && !(b?.savingsMode === 'separate' && r.categoryId === b.savingsCategoryId))
+    .map(rec => {
+      const dates = scheduleDatesIn(rec, from, to);
+      const estimate = estimateFor(rec, data.transactions);
+      let amount = 0;
+      let paid = 0;
+      for (const d of dates) {
+        const recorded = data.transactions.find(t => t.recurringId === rec.id && t.occurrence === d);
+        const value = recorded?.amount ?? estimate;
+        amount += value;
+        if (d <= today) paid += value;
+      }
+      return { rec, dates, amount, paid };
+    })
+    .filter(c => c.dates.length > 0);
+}
+
+/** Where this financial month stands against the budget. */
 export function budgetStatus(data: AppData, today: string): BudgetStatus | undefined {
   const b = data.budget;
   if (!b) return undefined;
+  const fixedMode = b.fixedMode ?? 'included';
   const key = periodKey(today, data.monthStartDay);
+  const start = periodStart(key, data.monthStartDay);
   const end = periodEnd(key, data.monthStartDay);
-  const txs = statsTransactions(data);
-  const stats = monthStats(txs, key, data.monthStartDay);
-  const expected = expectedExpenses(data, today, end).filter(t => !(b.savingsMode === 'separate' && t.categoryId === b.savingsCategoryId));
-  const expectedIn = (id?: string) => expected.filter(t => id === undefined || t.categoryId === id).reduce((a, t) => a + t.amount, 0);
+  // Day-to-day spending leaves out what the recurring items recorded: those are counted as commitments
+  const dayToDay = statsTransactions(data).filter(t => !t.recurringId);
+  const stats = monthStats(dayToDay, key, data.monthStartDay);
+  const commitments = monthCommitments(data, start, end, today);
+  const fixedIn = (id?: string) =>
+    fixedMode === 'included' ? commitments.filter(c => id === undefined || c.rec.categoryId === id).reduce((acc, c) => acc + c.amount, 0) : 0;
   const spentIn = (id: string) => stats.byCategory.find(c => c.categoryId === id)?.amount ?? 0;
   let daysLeft = 0;
   for (let d = today; d <= end; d = addDays(d, 1)) daysLeft++;
@@ -70,16 +118,17 @@ export function budgetStatus(data: AppData, today: string): BudgetStatus | undef
   const overall =
     b.overall !== undefined
       ? (() => {
-          const line = { limit: b.overall, spent: stats.expenses, expected: expectedIn() };
-          const remaining = line.limit - line.spent - line.expected;
-          return { ...line, remaining, perDay: Math.max(0, Math.floor(remaining / Math.max(1, daysLeft))) };
+          const line = { limit: b.overall, spent: stats.expenses, fixed: fixedIn() };
+          const remaining = line.limit - line.spent - line.fixed;
+          // Per day in whole shekels, rounded down so it never promises more than is left
+          return { ...line, remaining, perDay: Math.max(0, Math.floor(remaining / Math.max(1, daysLeft) / 100) * 100) };
         })()
       : undefined;
   const categories = Object.entries(b.categories)
     .filter(([, limit]) => limit > 0)
-    .map(([categoryId, limit]) => ({ categoryId, limit, spent: spentIn(categoryId), expected: expectedIn(categoryId) }))
-    .sort((x, y) => (y.spent + y.expected) / y.limit - (x.spent + x.expected) / x.limit);
-  return { end, daysLeft, overall, categories, saved: savedIn(data, periodStart(key, data.monthStartDay), end) };
+    .map(([categoryId, limit]) => ({ categoryId, limit, spent: spentIn(categoryId), fixed: fixedIn(categoryId) }))
+    .sort((x, y) => (y.spent + y.fixed) / y.limit - (x.spent + x.fixed) / x.limit);
+  return { end, daysLeft, fixedMode, commitments, overall, categories, saved: savedIn(data, start, end) };
 }
 
 /**

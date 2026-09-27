@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { summarize, upcomingItems, type Ledger } from './balance';
 import { getAll, openDb, putRecords, setMeta } from './db';
-import { estimateFor, occurrencesBetween, openOccurrences } from './recurring';
+import { estimateFor, occurrencesBetween, openOccurrences, scheduleDatesIn } from './recurring';
 import { deleteSetting, recordDueRecurring, resolveOccurrence } from './store';
 import type { Account, PaymentMethod, Recurring, Transaction } from './types';
 
@@ -32,6 +32,25 @@ describe('schedule', () => {
   });
   it('never goes back before the start date', () => {
     expect(openOccurrences(rec({ firstDate: '2026-08-01', handledThrough: '2026-07-31' }), '2026-10-05', '2026-09-24')).toEqual(['2026-10-01']);
+  });
+});
+
+describe('dates in a month by the schedule', () => {
+  it('includes the date in this month even when the item was added after it', () => {
+    // added on the 27th with its next date on Oct 5: September 5 went out too
+    expect(scheduleDatesIn(rec({ firstDate: '2026-10-05' }), '2026-09-01', '2026-09-30')).toEqual(['2026-09-05']);
+    expect(scheduleDatesIn(rec({ firstDate: '2026-10-31' }), '2026-09-01', '2026-09-30')).toEqual(['2026-09-30']);
+  });
+  it('weekly, daily and yearly', () => {
+    expect(scheduleDatesIn(rec({ frequency: 'weekly', firstDate: '2026-10-02' }), '2026-09-01', '2026-09-30')).toEqual(['2026-09-04', '2026-09-11', '2026-09-18', '2026-09-25']);
+    expect(scheduleDatesIn(rec({ frequency: 'daily', firstDate: '2026-09-29' }), '2026-09-28', '2026-09-30')).toEqual(['2026-09-28', '2026-09-29', '2026-09-30']);
+    expect(scheduleDatesIn(rec({ frequency: 'yearly', firstDate: '2027-03-15' }), '2026-03-01', '2026-03-31')).toEqual(['2026-03-15']);
+    expect(scheduleDatesIn(rec({ frequency: 'yearly', firstDate: '2028-03-15' }), '2026-03-01', '2026-03-31')).toEqual([]);
+    expect(scheduleDatesIn(rec({ frequency: 'yearly', firstDate: '2026-09-15' }), '2026-09-01', '2026-09-30')).toEqual(['2026-09-15']);
+  });
+  it('not before it starts, not after it ends', () => {
+    expect(scheduleDatesIn(rec({ firstDate: '2026-12-01' }), '2026-09-01', '2026-09-30')).toEqual([]);
+    expect(scheduleDatesIn(rec({ firstDate: '2026-07-10', endDate: '2026-09-01' }), '2026-09-01', '2026-09-30')).toEqual([]);
   });
 });
 

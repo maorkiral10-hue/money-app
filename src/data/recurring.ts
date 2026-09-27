@@ -69,6 +69,38 @@ export function expectedTransactions(recurring: Recurring[], transactions: Trans
   });
 }
 
+const CYCLE_DAYS: Record<Recurring['frequency'], number> = { daily: 1, weekly: 7, monthly: 31, yearly: 366 };
+
+/**
+ * The item's dates within [from, to] by its schedule, including ones before its first date: a standing
+ * order added mid-month usually already went out that month. An item whose first date is more than one
+ * cycle after `to` hasn't started yet and has none; an ended one has none after its end.
+ */
+export function scheduleDatesIn(rec: Recurring, from: string, to: string): string[] {
+  if (rec.firstDate > addDays(to, CYCLE_DAYS[rec.frequency])) return [];
+  const last = rec.endDate && rec.endDate < to ? rec.endDate : to;
+  const { m0, d } = parseDate(rec.firstDate);
+  const dates: string[] = [];
+  if (rec.frequency === 'daily') {
+    for (let x = from; x <= last; x = addDays(x, 1)) dates.push(x);
+  } else if (rec.frequency === 'weekly') {
+    const weekday = new Date(`${rec.firstDate}T12:00:00`).getDay();
+    let x = from;
+    while (new Date(`${x}T12:00:00`).getDay() !== weekday) x = addDays(x, 1);
+    for (; x <= last; x = addDays(x, 7)) dates.push(x);
+  } else {
+    const step = rec.frequency === 'yearly' ? 12 : 1;
+    // Walk month by month (or year by year) from a month before `from` to past `to`
+    const startMonth = rec.frequency === 'yearly' ? `${from.slice(0, 4)}-${String(m0 + 1).padStart(2, '0')}-01` : `${from.slice(0, 7)}-01`;
+    for (let i = -1; ; i++) {
+      const x = dayInMonth(startMonth, i * step, d);
+      if (x > last) break;
+      if (x >= from) dates.push(x);
+    }
+  }
+  return dates;
+}
+
 /** The next occurrence not yet recorded: today's counts until it has been. */
 export function nextOccurrence(rec: Recurring, today: string) {
   const yesterday = addDays(today, -1);

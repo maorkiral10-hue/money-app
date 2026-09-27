@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { MoneyInput, Segmented } from '../components/inputs';
-import { budgetStatus, usualSpending, type Budget, type BudgetLine } from '../data/budget';
+import { budgetStatus, monthCommitments, usualSpending, type Budget, type BudgetLine } from '../data/budget';
+import { periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { categoryColor } from '../data/colors';
 import { putRecords, setMeta } from '../data/db';
 import { dayLabel, todayStr } from '../data/dates';
@@ -12,6 +13,7 @@ import type { Category } from '../data/types';
 export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
   const { data } = props;
   const today = todayStr();
+  const [showFixed, setShowFixed] = useState(false);
 
   if (!data.budget) {
     return (
@@ -35,6 +37,8 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
   }
 
   const status = budgetStatus(data, today)!;
+  const fixedTotal = status.commitments.reduce((a, c) => a + c.amount, 0);
+  const paid = status.commitments.reduce((a, c) => a + c.paid, 0);
   const name = (id: string) => data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה';
 
   return (
@@ -48,9 +52,21 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
           <div class={`small ${status.overall.remaining >= 0 ? 'inc' : 'exp'}`}>{status.overall.remaining >= 0 ? 'נשאר להוציא החודש' : 'חריגה מהתקציב'}</div>
           <div class={`big-number ${status.overall.remaining >= 0 ? 'inc' : 'exp'}`}>{formatMoney(Math.abs(status.overall.remaining))}</div>
           <Meter line={status.overall} color={status.overall.remaining >= 0 ? 'var(--inc-bar)' : 'var(--exp-bar)'} />
-          <div class="muted small">
-            הוצאת {formatMoney(status.overall.spent)}
-            {status.overall.expected > 0 && ` · עוד ${formatMoney(status.overall.expected)} קבועות צפויות`} · מתוך {formatMoney(status.overall.limit)}
+          <div class="budget-parts">
+            {status.fixedMode === 'included' && (
+              <div class="line">
+                <span>הוראות קבע וקבועות</span>
+                <span class="exp">{formatMoney(-status.overall.fixed)}</span>
+              </div>
+            )}
+            <div class="line">
+              <span>הוצאות יומיומיות</span>
+              <span class="exp">{formatMoney(-status.overall.spent)}</span>
+            </div>
+            <div class="line muted">
+              <span>מתוך תקציב של</span>
+              <span>{formatMoney(status.overall.limit)}</span>
+            </div>
           </div>
           {status.overall.remaining > 0 && (
             <div class="per-day">
@@ -60,11 +76,42 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
         </div>
       )}
 
+      {status.commitments.length > 0 && (
+        <div class="card">
+          <button class="section-head flat" onClick={() => setShowFixed(!showFixed)} aria-expanded={showFixed}>
+            <span>
+              <span class="section-title">הוראות קבע החודש</span>
+              <span class="muted small block">
+                {status.fixedMode === 'included' ? 'כבר ירדו מהתקציב' : 'בנפרד מהתקציב'} · ירד כבר {formatMoney(paid)}
+              </span>
+            </span>
+            <span class="section-value exp">
+              {formatMoney(-fixedTotal)} <span class={`chevron ${showFixed ? 'open' : ''}`}>‹</span>
+            </span>
+          </button>
+          {showFixed &&
+            status.commitments.map(c => (
+              <div key={c.rec.id} class="tx">
+                <div>
+                  <div>
+                    <span class="cat-dot" style={{ background: categoryColor(c.rec.categoryId, data.categories) }} />
+                    {c.rec.name}
+                  </div>
+                  <div class="muted small">
+                    {c.dates.map(d => dayLabel(d, today)).join(', ')} · {c.paid >= c.amount ? 'ירד' : c.paid > 0 ? 'ירד בחלקו' : 'עוד ירד'}
+                  </div>
+                </div>
+                <div class="amount expense">{formatMoney(-c.amount)}</div>
+              </div>
+            ))}
+        </div>
+      )}
+
       {status.categories.length > 0 && (
         <div class="card">
           <h2>לפי קטגוריה</h2>
           {status.categories.map(c => {
-            const used = c.spent + c.expected;
+            const used = c.spent + c.fixed;
             const left = c.limit - used;
             return (
               <div key={c.categoryId} class="budget-row">
@@ -80,7 +127,7 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
                 <Meter line={c} color={left >= 0 ? categoryColor(c.categoryId, data.categories) : 'var(--exp-bar)'} />
                 <div class="muted small">
                   {formatMoney(used)} מתוך {formatMoney(c.limit)}
-                  {c.expected > 0 && ` (כולל ${formatMoney(c.expected)} צפוי)`}
+                  {c.fixed > 0 && ` (כולל ${formatMoney(c.fixed)} הוראות קבע)`}
                 </div>
               </div>
             );
@@ -105,15 +152,15 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
   );
 }
 
-/** Spent (solid) and still expected (light) out of a limit. */
+/** Standing orders (light) and day-to-day spending (solid) out of a limit. */
 function Meter(props: { line: BudgetLine; color: string }) {
-  const { limit, spent, expected } = props.line;
-  const whole = Math.max(limit, spent + expected, 1);
+  const { limit, spent, fixed } = props.line;
+  const whole = Math.max(limit, spent + fixed, 1);
   return (
     <div class="bar split meter">
+      <span class="expected" style={{ width: `${(fixed / whole) * 100}%`, background: props.color }} />
       <span style={{ width: `${(spent / whole) * 100}%`, background: props.color }} />
-      <span class="expected" style={{ width: `${(expected / whole) * 100}%`, background: props.color }} />
-      {spent + expected > limit && <i class="limit-mark" style={{ right: `${(limit / whole) * 100}%` }} />}
+      {spent + fixed > limit && <i class="limit-mark" style={{ right: `${(limit / whole) * 100}%` }} />}
     </div>
   );
 }
@@ -128,6 +175,11 @@ export function BudgetSetup(props: { db: IDBDatabase; data: AppData; onDone: () 
   const [step, setStep] = useState(0);
   const [overall, setOverall] = useState(existing?.overall ?? 0);
   const [limits, setLimits] = useState<Record<string, number>>(existing?.categories ?? {});
+  const [fixedMode, setFixedMode] = useState<NonNullable<Budget['fixedMode']>>(existing?.fixedMode ?? 'included');
+  const monthFixed = (() => {
+    const key = periodKey(today, data.monthStartDay);
+    return monthCommitments(data, periodStart(key, data.monthStartDay), periodEnd(key, data.monthStartDay), today).reduce((a, c) => a + c.amount, 0);
+  })();
   const [savingsMode, setSavingsMode] = useState<Budget['savingsMode']>(existing?.savingsMode ?? 'separate');
   const [savingsCategoryId, setSavingsCategoryId] = useState(existing?.savingsCategoryId ?? expenseCats.find(c => c.name.includes('חיסכון'))?.id ?? '');
   const [saving, setSaving] = useState(false);
@@ -147,6 +199,7 @@ export function BudgetSetup(props: { db: IDBDatabase; data: AppData; onDone: () 
       categories: Object.fromEntries(Object.entries(limits).filter(([, v]) => v > 0)),
       savingsMode,
       savingsCategoryId: savingsMode === 'separate' ? catId : undefined,
+      fixedMode,
     };
     await setMeta(props.db, 'budget', budget);
     props.onDone();
@@ -158,13 +211,13 @@ export function BudgetSetup(props: { db: IDBDatabase; data: AppData; onDone: () 
         <button class="link" onClick={step === 0 ? props.onCancel : () => setStep(step - 1)}>
           {step === 0 ? 'ביטול' : '→ חזרה'}
         </button>
-        <span class="muted small">שאלה {step + 1} מתוך 3</span>
+        <span class="muted small">שאלה {step + 1} מתוך 4</span>
       </header>
 
       {step === 0 && (
         <>
           <h1>כמה אתה רוצה להוציא בחודש?</h1>
-          <p class="muted">סכום כולל לכל ההוצאות, כולל הוראות קבע. אפשר להשאיר ריק אם אתה רוצה רק תקרות לקטגוריות.</p>
+          <p class="muted">סכום כולל להוצאות החודש. בשאלה הבאה תחליט אם הוראות הקבע בתוכו. אפשר להשאיר ריק אם אתה רוצה רק תקרות לקטגוריות.</p>
           <div class="card">
             <MoneyInput value={overall} onChange={setOverall} />
             {usual.overall > 0 && <p class="muted small">{usualText(usual.overall)}</p>}
@@ -174,6 +227,29 @@ export function BudgetSetup(props: { db: IDBDatabase; data: AppData; onDone: () 
       )}
 
       {step === 1 && (
+        <>
+          <h1>הוראות קבע והוצאות קבועות</h1>
+          <p class="muted">שכר דירה, ועד בית, טלפון, מנויים… {monthFixed > 0 && <>החודש הן מסתכמות ב-<b>{formatMoney(monthFixed)}</b>.</>}</p>
+          <div class="card">
+            <Segmented
+              value={fixedMode}
+              onChange={setFixedMode}
+              options={[
+                ['included', 'חלק מהתקציב'],
+                ['separate', 'בנפרד'],
+              ]}
+            />
+            <p class="muted small">
+              {fixedMode === 'included'
+                ? 'הן יורדות מהתקציב כבר בתחילת החודש, ותראה כמה נשאר אחריהן להוצאות היומיומיות.'
+                : 'התקציב רק להוצאות היומיומיות. הוראות הקבע יוצגו לידו, בלי להיספר בו.'}
+            </p>
+          </div>
+          <button onClick={() => setStep(2)}>המשך</button>
+        </>
+      )}
+
+      {step === 2 && (
         <>
           <h1>תקרה לקטגוריות</h1>
           <p class="muted">מלא רק בקטגוריות שחשוב לך לשמור עליהן, למשל אוכל בחוץ או קניות. השאר ריק בשאר.</p>
@@ -191,11 +267,11 @@ export function BudgetSetup(props: { db: IDBDatabase; data: AppData; onDone: () 
                 </label>
               ))}
           </div>
-          <button onClick={() => setStep(2)}>המשך</button>
+          <button onClick={() => setStep(3)}>המשך</button>
         </>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <>
           <h1>כסף שעובר לחיסכון</h1>
           <p class="muted">
