@@ -296,3 +296,13 @@ button.continue { margin-top: 22px; }
 .budget-field .money-input { width: 120px; flex: none; }
 .budget-parts { margin-top: 10px; text-align: start; font-size: 14px; }
 .section-head.flat { padding: 0; }
+
+/* payment methods in settings: grouped, one line each, tap to edit */
+.method-group h2 { margin-bottom: 2px; }
+.method-group > p { margin-bottom: 6px; }
+.method { border-top: 1px solid var(--line); }
+.method-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 11px 0; background: none; color: var(--text); font-weight: 400; text-align: start; border-radius: 0; }
+.method-name { font-weight: 600; }
+.method-body { padding: 0 0 12px; }
+.add-in-group { margin-top: 6px; font-size: 15px; }
+.add-kinds .chips { justify-content: flex-start; }

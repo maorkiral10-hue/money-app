@@ -1,14 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { categoryColor, nextColor } from '../data/colors';
-import type { Account, Category, MethodKind, PaymentMethod } from '../data/types';
-
-const METHOD_KIND_NAMES: [MethodKind, string][] = [
-  ['credit', 'כרטיס אשראי'],
-  ['bank', 'העברה / הוראת קבע מהבנק'],
-  ['cash', 'מזומן'],
-  ['app', 'אפליקציית תשלום'],
-  ['other', 'אחר'],
-];
+import type { Account, Category, PaymentMethod } from '../data/types';
 import { MoneyInput } from './inputs';
 import { SwipeRow } from './SwipeRow';
 
@@ -103,25 +95,6 @@ export function MethodsEditor(props: {
             <input type="text" value={m.name} placeholder={m.kind === 'credit' ? 'שם הכרטיס, למשל מקס' : 'שם'} onInput={e => set(m.id, { name: e.currentTarget.value })} />
             {!m.archived && (
               <>
-                {props.onDelete && (
-                  // Settings only: a method added as "other" can be turned into a credit card (and back)
-                  <label class="field">
-                    <span>סוג</span>
-                    <select
-                      value={m.kind}
-                      onChange={e => {
-                        const kind = e.currentTarget.value as MethodKind;
-                        set(m.id, kind === 'credit' ? { kind, chargeDay: m.chargeDay ?? 10, accountId: banks[0]?.id ?? m.accountId } : { kind });
-                      }}
-                    >
-                      {METHOD_KIND_NAMES.map(([k, label]) => (
-                        <option key={k} value={k}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 <label class="field">
                   <span>{m.kind === 'credit' ? 'מחויב מ' : 'הכסף יוצא מ'}</span>
                   <select value={m.accountId} onChange={e => set(m.id, { accountId: e.currentTarget.value })}>

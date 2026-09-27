@@ -1,4 +1,5 @@
-import { AccountsEditor, CategoriesEditor, MethodsEditor } from '../components/Editors';
+import { AccountsEditor, CategoriesEditor } from '../components/Editors';
+import { MethodsSettings } from '../components/MethodsSettings';
 import { MonthStartPicker } from '../components/MonthStartPicker';
 import { putRecords } from '../data/db';
 import { deleteSetting, type AppData } from '../data/store';
@@ -125,9 +126,7 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
         </div>
       )}
       {props.page === 'methods' && (
-        <div class="card">
-          <MethodsEditor items={data.methods} accounts={data.accounts} onChange={save('methods')} onDelete={remove('methods')} />
-        </div>
+        <MethodsSettings items={data.methods} accounts={data.accounts} onChange={save('methods')} onDelete={remove('methods')} />
       )}
       {props.page === 'categories' && (
         <>
