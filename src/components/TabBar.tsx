@@ -1,12 +1,18 @@
 import type { ComponentChildren } from 'preact';
 import { useRef } from 'preact/hooks';
 
-export type Tab = 'home' | 'dashboard';
+export type Tab = 'home' | 'month' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
-export const TABS: Tab[] = ['home', 'dashboard'];
+export const TABS: Tab[] = ['home', 'month', 'dashboard'];
 
 const ICONS: Record<Tab, ComponentChildren> = {
   home: <path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />,
+  month: (
+    <>
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M4 10h16M9 3v4M15 3v4" />
+    </>
+  ),
   dashboard: (
     <>
       <path d="M5 20V11" />
@@ -15,11 +21,12 @@ const ICONS: Record<Tab, ComponentChildren> = {
     </>
   ),
 };
-const LABELS: Record<Tab, string> = { home: 'בית', dashboard: 'תמונת מצב' };
+const LABELS: Record<Tab, string> = { home: 'בית', month: 'החודש', dashboard: 'דשבורד' };
 
 /** The floating bar at the bottom: the main screens, with "+" (new entry) in the middle. */
 export function TabBar(props: { current: Tab; onSelect: (tab: Tab) => void; onAdd: () => void }) {
-  const [first, ...rest] = TABS;
+  // "+" sits in the middle of the bar
+  const half = Math.ceil(TABS.length / 2);
   const item = (tab: Tab) => (
     <button key={tab} class={`tab ${props.current === tab ? 'on' : ''}`} onClick={() => props.onSelect(tab)}>
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -30,11 +37,11 @@ export function TabBar(props: { current: Tab; onSelect: (tab: Tab) => void; onAd
   );
   return (
     <nav class="tabbar">
-      {item(first)}
+      {TABS.slice(0, half).map(item)}
       <button class="tab-add" aria-label="תנועה חדשה" onClick={props.onAdd}>
         +
       </button>
-      {rest.map(item)}
+      {TABS.slice(half).map(item)}
     </nav>
   );
 }

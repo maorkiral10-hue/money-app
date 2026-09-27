@@ -12,13 +12,14 @@ import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { Dashboard } from './screens/Dashboard';
+import { ThisMonth } from './screens/ThisMonth';
 import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'dashboard' | 'settings' | 'forecast';
+type Place = 'home' | 'month' | 'dashboard' | 'settings' | 'forecast';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
@@ -249,14 +250,16 @@ export function App() {
     content = (
       <DataScreen db={db} copies={copies} lastBackupAt={data.lastBackupAt} persisted={persisted} onChange={afterChange} onBack={() => go({ name: from })} />
     );
-  } else if (screen.name === 'dashboard') {
+  } else if (screen.name === 'month') {
     content = (
-      <Dashboard
+      <ThisMonth
         data={data}
-        onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })}
-        onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'dashboard' })}
+        onEdit={tx => go({ name: 'entry', tx, from: 'month' })}
+        onEditRecurring={rec => go({ name: 'recurringForm', rec, from: 'month' })}
       />
     );
+  } else if (screen.name === 'dashboard') {
+    content = <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />;
   } else {
     content = (
       <Home
