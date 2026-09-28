@@ -400,7 +400,16 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
 .side-menu-bar { display: flex; align-items: center; margin-bottom: 12px; min-height: 36px; }
 .side-menu-bar .link { padding: 4px 0; }
 .side-menu-bar button.side-menu-close { margin-inline-start: auto; font-size: 20px; padding: 4px 8px; color: var(--muted); }
-.side-menu-title { font-size: 15px; color: var(--muted); margin: 0 4px 4px; }
+/* a heading's sub-topics slide open underneath it */
+.side-sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease; }
+.side-sub.open { grid-template-rows: 1fr; }
+.side-sub > div { overflow: hidden; }
+.side-sub-item {
+  display: block; width: 100%; margin: 0; padding: 11px 18px 11px 4px; text-align: start;
+  background: none; color: var(--text); font-size: 16px; font-weight: 500; border-radius: 0;
+}
+.side-sub.open > div { border-bottom: 1px solid var(--line); padding: 4px 0; }
+@media (prefers-reduced-motion: reduce) { .side-sub { transition: none; } }
 .side-menu-item {
   display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; margin: 0; padding: 16px 4px; text-align: start;
   background: none; color: var(--text); font-size: 20px; font-weight: 700; border-radius: 0;

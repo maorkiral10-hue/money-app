@@ -22,12 +22,13 @@ const MONEY_SETTINGS: [MenuTarget, string][] = [
   ['preferences', 'העדפות'],
 ];
 
-/** Which list the side menu shows: its main headings, or the sub-topics of one of them. */
+/** Which heading of the side menu has its sub-topics showing ('main': none). */
 export type MenuSection = 'main' | 'money';
 
 /**
  * The side menu: slides in from the right over the current screen, big headings only. A heading with
- * sub-topics swaps the menu for their list; a sub-topic (or a plain heading) opens its own full screen.
+ * sub-topics slides them open underneath it (the other headings stay); a sub-topic (or a plain heading)
+ * opens its own full screen.
  */
 export function SideMenu(props: {
   open: boolean;
@@ -37,37 +38,32 @@ export function SideMenu(props: {
   onSection: (section: MenuSection) => void;
   onOpen: (target: MenuTarget) => void;
 }) {
-  const item = (title: string, onClick: () => void, more?: boolean) => (
-    <button key={title} class="side-menu-item" onClick={onClick}>
-      {title}
-      {more && <span class="muted">‹</span>}
-    </button>
-  );
+  const moneyOpen = props.section === 'money';
   return (
     <div class={`side-menu ${props.open ? 'open' : ''}`} aria-hidden={!props.open}>
       <div class="side-menu-backdrop" onClick={props.onClose} />
       <nav class="side-menu-panel">
         <div class="side-menu-bar">
-          {props.section !== 'main' && (
-            <button class="link" onClick={() => props.onSection('main')}>
-              → תפריט
-            </button>
-          )}
           <button class="link side-menu-close" aria-label="סגירה" onClick={props.onClose}>
             ✕
           </button>
         </div>
-        {props.section === 'main' ? (
-          <>
-            {item('הכסף שלי - הגדרות', () => props.onSection('money'), true)}
-            {item('גיבוי ונתונים', () => props.onOpen('data'))}
-          </>
-        ) : (
-          <>
-            <h2 class="side-menu-title">הכסף שלי - הגדרות</h2>
-            {MONEY_SETTINGS.map(([target, title]) => item(title, () => props.onOpen(target)))}
-          </>
-        )}
+        <button class="side-menu-item" aria-expanded={moneyOpen} onClick={() => props.onSection(moneyOpen ? 'main' : 'money')}>
+          הכסף שלי - הגדרות
+          <span class={`chevron ${moneyOpen ? 'open' : ''}`}>‹</span>
+        </button>
+        <div class={`side-sub ${moneyOpen ? 'open' : ''}`}>
+          <div>
+            {MONEY_SETTINGS.map(([target, title]) => (
+              <button key={target} class="side-sub-item" tabIndex={moneyOpen ? 0 : -1} onClick={() => props.onOpen(target)}>
+                {title}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button class="side-menu-item" onClick={() => props.onOpen('data')}>
+          גיבוי ונתונים
+        </button>
         <p class="muted small side-menu-foot">
           תחילת המעקב: {props.data.startDate.split('-').reverse().join('.')} · גרסה {APP_VERSION}
         </p>
