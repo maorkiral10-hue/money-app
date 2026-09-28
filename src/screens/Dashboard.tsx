@@ -84,10 +84,9 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
         <p class="muted small center">יש נתונים מ-{data.startDate.split('-').slice(1).reverse().map(Number).join('.')} בלבד, אז מוצגים {keys.length === 1 ? 'חודש אחד' : `${keys.length} חודשים`}.</p>
       )}
 
-      <div class="stat-row four">
+      <div class="stat-row">
         <Stat label="הכנסות" value={<AnimatedMoney value={sum.income} />} tone="inc" />
         <Stat label="הוצאות" value={<AnimatedMoney value={-sum.expenses} />} tone="exp" />
-        <Stat label={sum.net >= 0 ? 'נשאר' : 'חסר'} value={<AnimatedMoney value={sum.net} sign />} tone={sum.net >= 0 ? 'inc' : 'exp'} />
         <Stat
           label="חיסכון מההכנסה"
           value={sum.savingsRate === undefined ? '—' : `${Math.round(sum.savingsRate * 100)}%`}
@@ -118,7 +117,6 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
                 <th>חודש</th>
                 <th class="inc">הכנסות</th>
                 <th class="exp">הוצאות</th>
-                <th>נשאר</th>
               </tr>
             </thead>
             <tbody>
@@ -127,7 +125,6 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
                   <td>{shortLabel(m.key)}</td>
                   <td class="inc">{formatMoney(m.income)}</td>
                   <td class="exp">{formatMoney(m.expenses)}</td>
-                  <td class={m.net < 0 ? 'exp' : 'inc'}>{formatMoney(m.net, { sign: true })}</td>
                 </tr>
               ))}
             </tbody>
@@ -226,7 +223,6 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
               <th>שנה</th>
               <th class="inc">הכנסות</th>
               <th class="exp">הוצאות</th>
-              <th>נשאר</th>
             </tr>
           </thead>
           <tbody>
@@ -235,7 +231,6 @@ export function Dashboard(props: { data: AppData; onEdit: (tx: Transaction) => v
                 <td>{y.year}</td>
                 <td class="inc">{formatMoney(y.income)}</td>
                 <td class="exp">{formatMoney(y.expenses)}</td>
-                <td class={y.net < 0 ? 'exp' : 'inc'}>{formatMoney(y.net, { sign: true })}</td>
               </tr>
             ))}
           </tbody>
