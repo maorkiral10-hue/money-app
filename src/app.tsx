@@ -18,7 +18,7 @@ import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
-import { MenuButton, SideMenu, SettingsPageScreen, type MenuTarget, type SettingsPage } from './screens/Settings';
+import { MenuButton, SideMenu, SettingsPageScreen, type MenuSection, type MenuTarget, type SettingsPage } from './screens/Settings';
 
 type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings';
 type Screen =
@@ -75,6 +75,7 @@ export function App() {
   const lastTab = useRef<Tab>('home');
   if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuSection, setMenuSection] = useState<MenuSection>('main');
   // Leaving the main screens (a new entry on opening the app, say) closes the menu
   useEffect(() => {
     if (!(TABS as string[]).includes(screen.name)) setMenuOpen(false);
@@ -326,11 +327,23 @@ export function App() {
         <>
           {/* Stays put above the sliding screens */}
           <div class="floating-settings">
-            <MenuButton onClick={() => setMenuOpen(true)} />
+            <MenuButton
+              onClick={() => {
+                setMenuSection('main');
+                setMenuOpen(true);
+              }}
+            />
           </div>
           <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
           <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
-          <SideMenu open={menuOpen} data={data} onClose={() => setMenuOpen(false)} onOpen={openFromMenu} />
+          <SideMenu
+            open={menuOpen}
+            section={menuSection}
+            data={data}
+            onClose={() => setMenuOpen(false)}
+            onSection={setMenuSection}
+            onOpen={openFromMenu}
+          />
         </>
       ) : (
         content
