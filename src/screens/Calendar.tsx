@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
-import { addDays, dayLabel, parseDate, todayStr, ymd } from '../data/dates';
+import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
 import { statsTransactions } from '../data/budget';
@@ -49,10 +49,17 @@ export function CalendarScreen(props: {
   onBack: () => void;
   onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
   onEditTx: (tx: Transaction) => void;
+  /**
+   * On the home screen: a week (or, pinched out, a month) with the chosen day's events and money
+   * listed below it; no header, no hour grid. Always opens on this week.
+   */
+  compact?: boolean;
 }) {
   const today = todayStr();
-  const [zoom, setZoom] = useState<Zoom>(lastView?.zoom ?? 'month');
-  const [selected, setSelected] = useState(lastView?.selected ?? today);
+  const compact = !!props.compact;
+  const zoomList: Zoom[] = compact ? ['month', 'week'] : ZOOMS;
+  const [zoom, setZoom] = useState<Zoom>(compact ? 'week' : (lastView?.zoom ?? 'month'));
+  const [selected, setSelected] = useState(compact ? today : (lastView?.selected ?? today));
   const [pinch, setPinch] = useState(1);
   // A one-finger drag sideways: how far it's gone, and which way the new period slides in
   const [dragX, setDragX] = useState(0);
@@ -60,7 +67,7 @@ export function CalendarScreen(props: {
   // Changing between year, month and week zooms from the point between the fingers (or the chosen day)
   const [zoomAnim, setZoomAnim] = useState<'in' | 'out' | null>(null);
   const [origin, setOrigin] = useState('50% 40%');
-  lastView = { zoom, selected };
+  if (!compact) lastView = { zoom, selected };
   const area = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
@@ -70,8 +77,8 @@ export function CalendarScreen(props: {
     setSelected(sel => shiftPeriod(zoomRef.current, sel, by));
   };
   const changeZoom = (next: Zoom) => {
-    const from = ZOOMS.indexOf(zoomRef.current);
-    const to = ZOOMS.indexOf(next);
+    const from = zoomList.indexOf(zoomRef.current);
+    const to = zoomList.indexOf(next);
     if (from === to) return;
     setSlide(null);
     setZoomAnim(to > from ? 'in' : 'out');
@@ -143,7 +150,7 @@ export function CalendarScreen(props: {
       start = 0;
       setPinch(1);
       if (ratio > 1.2 || ratio < 0.83) {
-        const next = ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, ZOOMS.indexOf(zoomRef.current) + (ratio > 1 ? 1 : -1)))];
+        const next = zoomList[Math.max(0, Math.min(zoomList.length - 1, zoomList.indexOf(zoomRef.current) + (ratio > 1 ? 1 : -1)))];
         if (anchor && next !== zoomRef.current) setSelected(anchor);
         changeZoom(next);
       }
@@ -194,6 +201,92 @@ export function CalendarScreen(props: {
       <span key={`blank${i}`} />
     );
 
+  const calendarGrid = (
+    <>
+      <div class="month-switch">
+        <button class="link" aria-label="קודם" onClick={() => go(-1)}>
+          ›
+        </button>
+        {compact ? (
+          <button class="link cal-title" onClick={() => changeZoom(zoom === 'week' ? 'month' : 'week')}>
+            {title} <span class="muted small">{zoom === 'week' ? '· חודש' : '· שבוע'}</span>
+          </button>
+        ) : (
+          <span>{title}</span>
+        )}
+        <button class="link" aria-label="הבא" onClick={() => go(1)}>
+          ‹
+        </button>
+      </div>
+      <div
+        key={`${zoom}|${from}`}
+        class={
+          slide === 'next' ? 'enter-from-left' : slide === 'prev' ? 'enter-from-right' : zoomAnim === 'in' ? 'zoom-enter-in' : zoomAnim === 'out' ? 'zoom-enter-out' : ''
+        }
+        onAnimationEnd={() => {
+          setSlide(null);
+          setZoomAnim(null);
+        }}
+        style={{
+          transform: `translateX(${dragX}px) scale(${pinch})`,
+          transformOrigin: origin,
+          // Fades a little the further the pinch goes, and springs back smoothly when let go early
+          opacity: pinch === 1 ? 1 : Math.max(0.45, 1 - Math.abs(Math.log(pinch)) * 0.9),
+          transition: pinch === 1 && dragX === 0 ? 'transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s' : 'none',
+        }}
+      >
+        {zoom === 'year' && (
+          <div class="cal-year">
+            {MONTH_NAMES.map((name, i) => {
+              const first = ymd(y, i, 1);
+              return (
+                <button
+                  key={name}
+                  data-date={first}
+                  class={`cal-mini ${i === m0 ? 'on' : ''}`}
+                  onClick={() => {
+                    setSelected(monthStart(first) === monthStart(today) ? today : first);
+                    setZoom('month');
+                  }}
+                >
+                  <span class="cal-mini-name">{name}</span>
+                  <span class="cal-mini-grid">
+                    {monthGrid(first).map((d, j) =>
+                      d ? <span key={d} class={`cal-mini-day ${byDate.has(d) ? dotClass(byDate.get(d)![0]) : ''} ${d === today ? 'today' : ''}`} /> : <span key={`b${j}`} />,
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {zoom !== 'year' && (
+          <>
+            <div class="cal-grid cal-head">
+              {WEEKDAYS.map(w => (
+                <span key={w}>{w}</span>
+              ))}
+            </div>
+            <div class={`cal-grid ${zoom === 'week' && !compact ? 'week' : ''}`}>
+              {(zoom === 'month' ? monthGrid(selected) : Array.from({ length: 7 }, (_, i) => addDays(weekStart(selected), i))).map(dayCell)}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div class="home-cal">
+        <div class="card cal-area" ref={area}>
+          {calendarGrid}
+        </div>
+        <DayAgenda data={props.data} date={selected} today={today} events={dayEvents} txs={txByDate.get(selected) ?? []} onEdit={props.onEdit} onEditTx={props.onEditTx} />
+      </div>
+    );
+  }
+
   return (
     <>
       <header class="top">
@@ -212,72 +305,8 @@ export function CalendarScreen(props: {
           changeZoom(z);
         }} options={ZOOMS.map(z => [z, ZOOM_NAMES[z]] as [Zoom, string])} />
 
-      <div class="month-switch">
-        <button class="link" aria-label="קודם" onClick={() => go(-1)}>
-          ›
-        </button>
-        <span>{title}</span>
-        <button class="link" aria-label="הבא" onClick={() => go(1)}>
-          ‹
-        </button>
-      </div>
-
       <div class="card cal-area" ref={area}>
-        <div
-          key={`${zoom}|${from}`}
-          class={
-            slide === 'next' ? 'enter-from-left' : slide === 'prev' ? 'enter-from-right' : zoomAnim === 'in' ? 'zoom-enter-in' : zoomAnim === 'out' ? 'zoom-enter-out' : ''
-          }
-          onAnimationEnd={() => {
-            setSlide(null);
-            setZoomAnim(null);
-          }}
-          style={{
-            transform: `translateX(${dragX}px) scale(${pinch})`,
-            transformOrigin: origin,
-            // Fades a little the further the pinch goes, and springs back smoothly when let go early
-            opacity: pinch === 1 ? 1 : Math.max(0.45, 1 - Math.abs(Math.log(pinch)) * 0.9),
-            transition: pinch === 1 && dragX === 0 ? 'transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s' : 'none',
-          }}
-        >
-          {zoom === 'year' && (
-            <div class="cal-year">
-              {MONTH_NAMES.map((name, i) => {
-                const first = ymd(y, i, 1);
-                return (
-                  <button
-                    key={name}
-                    data-date={first}
-                    class={`cal-mini ${i === m0 ? 'on' : ''}`}
-                    onClick={() => {
-                      setSelected(monthStart(first) === monthStart(today) ? today : first);
-                      setZoom('month');
-                    }}
-                  >
-                    <span class="cal-mini-name">{name}</span>
-                    <span class="cal-mini-grid">
-                      {monthGrid(first).map((d, j) =>
-                        d ? <span key={d} class={`cal-mini-day ${byDate.has(d) ? dotClass(byDate.get(d)![0]) : ''} ${d === today ? 'today' : ''}`} /> : <span key={`b${j}`} />,
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {zoom !== 'year' && (
-            <>
-              <div class="cal-grid cal-head">
-                {WEEKDAYS.map(w => (
-                  <span key={w}>{w}</span>
-                ))}
-              </div>
-              <div class={`cal-grid ${zoom === 'week' ? 'week' : ''}`}>
-                {(zoom === 'month' ? monthGrid(selected) : Array.from({ length: 7 }, (_, i) => addDays(weekStart(selected), i))).map(dayCell)}
-              </div>
-            </>
-          )}
-        </div>
+        {calendarGrid}
         <p class="muted small center cal-hint">גרירה ימינה או שמאלה: {ZOOM_NAMES[zoom]} הבא או הקודם · צביטה: פנימה לשבוע, החוצה לשנה</p>
       </div>
 
@@ -329,6 +358,70 @@ const plusHour = (t: string) => {
   const [h, m] = t.split(':').map(Number);
   return h >= 23 ? '23:59' : timeLabel((h + 1) * 60 + m);
 };
+
+/**
+ * The chosen day on the home screen, as one short list: its events (all-day first, then by time) and
+ * the money recorded that day, in the order it happened (by when it was written down).
+ */
+function DayAgenda(props: {
+  data: AppData;
+  date: string;
+  today: string;
+  events: CalendarEvent[];
+  txs: Transaction[];
+  onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
+  onEditTx: (tx: Transaction) => void;
+}) {
+  const names = new Map([...props.data.categories, ...props.data.methods].map(x => [x.id, x.name]));
+  const localTime = (iso: string) => {
+    const d = new Date(iso);
+    return toDateStr(d) === props.date ? timeLabel(d.getHours() * 60 + d.getMinutes()) : '99:99';
+  };
+  const rows = [
+    ...props.events.map(e => ({ key: `e${e.id}`, at: e.startTime ?? '', event: e, tx: undefined as Transaction | undefined })),
+    ...props.txs.map(t => ({ key: `t${t.id}`, at: localTime(t.createdAt), event: undefined as CalendarEvent | undefined, tx: t })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+
+  return (
+    <div class="card list home-day">
+      <div class="home-day-head">
+        <h2 class="list-title">{dayLabel(props.date, props.today)}</h2>
+        <button class="link small" onClick={() => props.onEdit(undefined, props.date)}>
+          + אירוע
+        </button>
+      </div>
+      {rows.length === 0 && <p class="muted small">אין אירועים או פעולות ביום הזה</p>}
+      {rows.map(r =>
+        r.event ? (
+          <button key={r.key} class="tx agenda-event" onClick={() => props.onEdit(r.event)}>
+            <div>
+              <div>
+                <span class={`cal-dot ${dotClass(r.event)}`} /> {r.event.title}
+              </div>
+              <div class="muted small agenda-time">{r.event.startTime ? `${r.event.startTime}${r.event.endTime ? `–${r.event.endTime}` : ''}` : 'כל היום'}</div>
+            </div>
+            <EventMoney data={props.data} event={r.event} />
+          </button>
+        ) : (
+          <button key={r.key} class="tx" onClick={() => props.onEditTx(r.tx!)}>
+            <div>
+              <div>
+                <span class="cat-dot" style={{ background: categoryColor(r.tx!.categoryId, props.data.categories) }} />
+                {names.get(r.tx!.categoryId ?? '') ?? ''}
+              </div>
+              <div class="muted small">
+                {[r.tx!.methodId ? names.get(r.tx!.methodId) : r.tx!.type === 'income' ? props.data.accounts.find(a => a.id === r.tx!.accountId)?.name : undefined, r.tx!.note]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+            </div>
+            <div class={r.tx!.type === 'income' ? 'inc' : 'exp'}>{formatMoney(r.tx!.type === 'income' ? r.tx!.amount : -r.tx!.amount, { sign: true })}</div>
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
 
 /** Height of one hour on the day's timeline, in pixels. */
 const HOUR_HEIGHT = 48;

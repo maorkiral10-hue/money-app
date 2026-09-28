@@ -11,7 +11,8 @@ import { openOccurrences } from '../data/recurring';
 import { checkDue } from '../data/reconcile';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
-import type { Transaction } from '../data/types';
+import type { CalendarEvent, Transaction } from '../data/types';
+import { CalendarScreen } from './Calendar';
 
 function daysAgo(iso: string) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -26,6 +27,7 @@ export function Home(props: {
   onOpenData: () => void;
   onOpenCheck: () => void;
   onOpenGoals: () => void;
+  onEditEvent: (event?: CalendarEvent, date?: string, time?: string) => void;
 }) {
   const { data } = props;
   const today = todayStr();
@@ -93,6 +95,8 @@ export function Home(props: {
           </button>
         </div>
       </div>
+
+      <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit} />
 
       <MonthSummary data={data} onEdit={props.onEdit} />
 

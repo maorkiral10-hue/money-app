@@ -33,7 +33,7 @@ type Screen =
   | { name: 'budgetSetup' }
   | { name: 'goal'; id: string }
   | { name: 'goalForm'; goal?: Account }
-  | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string }
+  | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string; from?: Place }
   | { name: 'balanceCheck'; from: Place }
   | { name: 'data'; from: Place };
 
@@ -279,6 +279,7 @@ export function App() {
         onEditTx={tx => go({ name: 'entry', tx, from: 'calendar' })}
       />;
   } else if (screen.name === 'eventForm') {
+    const back = screen.from ?? 'calendar';
     content = (
       <EventForm
         db={db}
@@ -288,9 +289,9 @@ export function App() {
         time={screen.time}
         onDone={async () => {
           await refresh();
-          go({ name: 'calendar' });
+          go({ name: back });
         }}
-        onCancel={() => go({ name: 'calendar' })}
+        onCancel={() => go({ name: back })}
       />
     );
   } else if (screen.name === 'goal') {
@@ -340,6 +341,7 @@ export function App() {
         onOpenData={() => go({ name: 'data', from: 'home' })}
         onOpenCheck={() => go({ name: 'balanceCheck', from: 'home' })}
         onOpenGoals={() => go({ name: 'goals' })}
+        onEditEvent={(event, date, time) => go({ name: 'eventForm', event, date, time, from: 'home' })}
       />
     );
 

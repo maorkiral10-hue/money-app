@@ -513,3 +513,11 @@ button.cal-add { margin: 0 0 10px; }
 .cal-day-txs .tx { padding: 8px 0; }
 .scope-buttons { display: flex; flex-direction: column; gap: 8px; }
 .scope-buttons button { margin: 0; }
+
+/* the calendar on the home screen */
+.home-cal .cal-area { padding-top: 8px; padding-bottom: 8px; }
+.home-cal .month-switch { margin: 0 0 6px; }
+button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); padding: 4px 8px; }
+.home-day-head { display: flex; justify-content: space-between; align-items: center; }
+.home-day .tx { padding: 9px 0; }
+.agenda-time { direction: ltr; text-align: right; }

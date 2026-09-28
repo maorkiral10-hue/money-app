@@ -147,7 +147,7 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
       onTouchStart={e => {
         if (animating) return;
         const target = e.target as HTMLElement;
-        drag.current = target.closest('.swipe, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, horizontal: null };
+        drag.current = target.closest('.swipe, .cal-area, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, horizontal: null };
       }}
       onTouchMove={e => {
         const d = drag.current;
