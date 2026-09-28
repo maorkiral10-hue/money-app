@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, withAnswer, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -88,5 +88,15 @@ describe('calendar', () => {
     const answered = withAnswer(gym, '2026-09-26', { at: '' });
     expect(awaitingActual([answered], new Date(2026, 8, 28, 12, 0)).map(e => e.date)).toEqual(['2026-09-27']);
     expect(expandEvents([answered], '2026-09-26', '2026-09-27').map(e => [e.id, e.date, !!e.settled])).toEqual([['gym', '2026-09-26', true], ['gym', '2026-09-27', false]]);
+  });
+
+  it('repeats on chosen weekdays, and a single day can be taken out', () => {
+    // 27 September 2026 is a Sunday
+    const work = { ...ev('2026-09-27', 'none', 0), repeat: 'days' as const, repeatDays: WORK_DAYS };
+    expect(occurrencesIn(work, '2026-09-25', '2026-10-06')).toEqual(['2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-04', '2026-10-05', '2026-10-06']);
+    const sick = skipDay(work, '2026-09-29');
+    expect(occurrencesIn(sick, '2026-09-27', '2026-10-01')).toEqual(['2026-09-27', '2026-09-28', '2026-09-30', '2026-10-01']);
+    const gym = { ...ev('2026-09-01', 'none', 0), repeat: 'weekly' as const, skipDates: ['2026-09-08'] };
+    expect(occurrencesIn(gym, '2026-09-01', '2026-09-15')).toEqual(['2026-09-01', '2026-09-15']);
   });
 });

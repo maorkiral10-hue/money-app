@@ -160,9 +160,19 @@ export function eventBalance(events: CalendarEvent[], transactions: Transaction[
 /** The days a (possibly repeating) event falls on between two days, inclusive. */
 export function occurrencesIn(e: CalendarEvent, from: string, to: string): string[] {
   if (!e.repeat) return e.date >= from && e.date <= to ? [e.date] : [];
+  const skip = new Set(e.skipDates ?? []);
+  return repeatDates(e, from, to).filter(d => !skip.has(d));
+}
+
+function repeatDates(e: CalendarEvent, from: string, to: string): string[] {
   const last = e.repeatUntil && e.repeatUntil < to ? e.repeatUntil : to;
   const out: string[] = [];
   const { y, m0, d } = parseDate(e.date);
+  if (e.repeat === 'days') {
+    const days = new Set(e.repeatDays ?? []);
+    for (let day = from > e.date ? from : e.date; day <= last; day = addDays(day, 1)) if (days.has(weekday(day))) out.push(day);
+    return out;
+  }
   if (e.repeat === 'daily' || e.repeat === 'weekly') {
     const step = e.repeat === 'daily' ? 1 : 7;
     // Jump straight to the first repeat on or after `from`
@@ -203,3 +213,9 @@ export const withAnswer = (e: CalendarEvent, date: string, answer: EventAnswer):
  */
 export const expandEvents = (events: CalendarEvent[], from: string, to: string): CalendarEvent[] =>
   events.flatMap(e => occurrencesIn(e, from, to).map(date => (e.repeat ? { ...e, date, settled: answerFor(e, date) } : e)));
+
+/** Sunday to Thursday. */
+export const WORK_DAYS = [0, 1, 2, 3, 4];
+
+/** The series with one of its days taken out. */
+export const skipDay = (e: CalendarEvent, date: string): CalendarEvent => ({ ...e, skipDates: [...new Set([...(e.skipDates ?? []), date])].sort() });

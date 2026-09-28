@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
-import { dayHours, eventBalance, expandEvents, layoutDay, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -299,13 +299,18 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
 }
 
 type Repeat = NonNullable<CalendarEvent['repeat']> | 'none';
-const REPEATS: { id: Repeat; name: string }[] = [
+/** The repeat choices on the form; "ימי חול" and "ימים מסוימים" are both saved as chosen weekdays. */
+type RepeatChoice = Exclude<Repeat, 'days'> | 'workdays' | 'days';
+const REPEATS: { id: RepeatChoice; name: string }[] = [
   { id: 'none', name: 'לא חוזר' },
   { id: 'daily', name: 'כל יום' },
+  { id: 'workdays', name: 'ימי חול (א׳–ה׳)' },
+  { id: 'days', name: 'ימים מסוימים' },
   { id: 'weekly', name: 'כל שבוע' },
   { id: 'monthly', name: 'כל חודש' },
   { id: 'yearly', name: 'כל שנה' },
 ];
+const sameDays = (a: number[] = [], b: number[]) => a.length === b.length && b.every(d => a.includes(d));
 
 /** An hour after 'HH:MM' (stopping at 23:59). */
 const plusHour = (t: string) => {
@@ -402,14 +407,34 @@ function DayView(props: {
 }
 
 /** A new calendar event, or editing one. */
-export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?: string; time?: string; onDone: (date: string) => void; onCancel: () => void }) {
+export function EventForm(props: {
+  db: IDBDatabase;
+  event?: CalendarEvent;
+  /** A repeating event opened from one of its days: that day, which can be taken out on its own. */
+  occurrence?: string;
+  date?: string;
+  time?: string;
+  onDone: (date: string) => void;
+  onCancel: () => void;
+}) {
   const e = props.event;
   const [title, setTitle] = useState(e?.title ?? '');
   const [date, setDate] = useState(e?.date ?? props.date ?? todayStr());
   const [type, setType] = useState<CalendarEvent['type']>(e?.type ?? 'expense');
   const [amount, setAmount] = useState(e?.amount ?? 0);
   const [note, setNote] = useState(e?.note ?? '');
-  const [repeat, setRepeat] = useState<Repeat>(e?.repeat ?? 'none');
+  const [choice, setChoice] = useState<RepeatChoice>(
+    e?.repeat === 'days' ? (sameDays(e.repeatDays, WORK_DAYS) ? 'workdays' : 'days') : (e?.repeat ?? 'none'),
+  );
+  const [days, setDays] = useState<number[]>(e?.repeatDays ?? []);
+  const repeat: Repeat = choice === 'workdays' ? 'days' : choice;
+  const repeatDays = choice === 'workdays' ? WORK_DAYS : [...days].sort();
+  const pickChoice = (c: RepeatChoice) => {
+    setChoice(c);
+    // Choosing days starts from the event's own weekday
+    if (c === 'days' && !days.length) setDays([weekday(date)]);
+  };
+  const toggleDay = (d: number) => setDays(ds => (ds.includes(d) ? ds.filter(x => x !== d) : [...ds, d]));
   const [repeatUntil, setRepeatUntil] = useState(e?.repeatUntil ?? '');
   // A new event is at set hours unless changed: the hour tapped on the day, or the next whole hour
   const nextHour = Math.min(22, new Date().getHours() + 1) * 60;
@@ -423,7 +448,8 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
   };
   const badTimes = !allDay && (!startTime || !endTime || endTime <= startTime);
   const badUntil = repeat !== 'none' && !!repeatUntil && repeatUntil < date;
-  const valid = title.trim() && date && !badTimes && !badUntil;
+  const noDays = choice === 'days' && days.length === 0;
+  const valid = title.trim() && date && !badTimes && !badUntil && !noDays;
 
   const save = async () => {
     if (!valid) return;
@@ -439,6 +465,8 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       settled: repeat === 'none' ? e?.settled : undefined,
       repeat: repeat === 'none' ? undefined : repeat,
       repeatUntil: repeat !== 'none' && repeatUntil ? repeatUntil : undefined,
+      repeatDays: repeat === 'days' ? repeatDays : undefined,
+      skipDates: repeat === 'none' ? undefined : e?.skipDates,
       settledDates: repeat === 'none' ? undefined : e?.settledDates,
       createdAt: e?.createdAt ?? new Date().toISOString(),
     };
@@ -446,6 +474,12 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
     // Back on the calendar, a one-off event's day is the one showing
     if (repeat === 'none' || !e) lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
     props.onDone(date);
+  };
+  // Only this time: the day comes out of the series, the rest stays
+  const removeOne = async () => {
+    if (!e || !props.occurrence) return;
+    await putRecords(props.db, 'events', [skipDay(e, props.occurrence)]);
+    props.onDone(props.occurrence);
   };
   const remove = async () => {
     if (!e || !confirm(e.repeat ? `למחוק את "${e.title}" על כל החזרות שלו?` : `למחוק את "${e.title}"?`)) return;
@@ -499,7 +533,17 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
 
       <section>
         <h2>חוזר?</h2>
-        <Chips items={REPEATS} value={repeat} onChange={id => setRepeat(id as Repeat)} />
+        <Chips items={REPEATS} value={choice} onChange={id => pickChoice(id as RepeatChoice)} />
+        {choice === 'days' && (
+          <div class="cal-weekdays">
+            {WEEKDAYS.map((name, d) => (
+              <button key={name} type="button" class={`cal-weekday ${days.includes(d) ? 'on' : ''}`} aria-pressed={days.includes(d)} onClick={() => toggleDay(d)}>
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+        {noDays && <p class="small warn">בחר לפחות יום אחד</p>}
         {repeat !== 'none' && (
           <label class="field">
             <span>עד תאריך (לא חובה)</span>
@@ -539,9 +583,14 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       <button disabled={!valid} onClick={save}>
         שמור
       </button>
+      {e && e.repeat && props.occurrence && (
+        <button class="danger" onClick={removeOne}>
+          מחיקת הפעם הזו בלבד ({dayLabel(props.occurrence, todayStr())})
+        </button>
+      )}
       {e && (
         <button class="danger" onClick={remove}>
-          מחיקת האירוע
+          {e.repeat ? 'מחיקת כל החזרות' : 'מחיקת האירוע'}
         </button>
       )}
     </div>

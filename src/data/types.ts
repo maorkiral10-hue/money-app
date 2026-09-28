@@ -126,8 +126,15 @@ export interface CalendarEvent {
   endTime?: string;
   /** Once it's over: the user said what it came to (the transaction recorded), or that there was nothing. */
   settled?: EventAnswer;
-  /** Repeats from `date` on: every day, week (same weekday), month (same day) or year. */
-  repeat?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  /**
+   * Repeats from `date` on: every day, on chosen weekdays (`repeatDays`), every week (same weekday),
+   * month (same day) or year.
+   */
+  repeat?: 'daily' | 'days' | 'weekly' | 'monthly' | 'yearly';
+  /** Repeat on these weekdays: 0 = Sunday … 6 = Saturday (Sunday to Thursday for a working week). */
+  repeatDays?: number[];
+  /** Repeating events: single days taken out of the series (cancelled that time only). */
+  skipDates?: string[];
   /** Repeating events: no repeats after this day. */
   repeatUntil?: string;
   /** Repeating events: the answer for each date it came round on (`settled` is for one-off events). */

@@ -279,6 +279,7 @@ export function App() {
       <EventForm
         db={db}
         event={screen.event && (data.events.find(e => e.id === screen.event!.id) ?? screen.event)}
+        occurrence={screen.event?.repeat ? screen.event.date : undefined}
         date={screen.date}
         time={screen.time}
         onDone={async () => {
