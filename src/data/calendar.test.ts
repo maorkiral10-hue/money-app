@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventTotals, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { awaitingActual, dayHours, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -38,5 +38,25 @@ describe('calendar', () => {
     const out = migrateSnapshot(snap);
     expect(out.stores.events).toEqual([]);
     expect(out.dataVersion).toBe(4);
+  });
+
+  it('knows when an event is over, and asks about the ones with money once they are', () => {
+    const allDay = ev('2026-10-15', 'expense', 1_200_00);
+    const timed = { ...ev('2026-10-16', 'income', 500_00), startTime: '18:00', endTime: '23:30' };
+    const startOnly = { ...ev('2026-10-17', 'expense', 100_00), startTime: '09:00' };
+    expect(eventEnd(allDay)).toEqual(new Date(2026, 9, 16));
+    expect(eventEnd(timed)).toEqual(new Date(2026, 9, 16, 23, 30));
+    expect(eventEnd(startOnly)).toEqual(new Date(2026, 9, 17, 10, 0));
+    const events = [startOnly, timed, allDay, ev('2026-10-10', 'none', 0), { ...ev('2026-10-11', 'expense', 50_00), settled: { at: '' } }];
+    expect(awaitingActual(events, new Date(2026, 9, 16, 23, 0)).map(e => e.date)).toEqual(['2026-10-15']);
+    expect(awaitingActual(events, new Date(2026, 9, 17, 10, 0)).map(e => e.date)).toEqual(['2026-10-15', '2026-10-16', '2026-10-17']);
+  });
+
+  it('places overlapping events side by side on the day', () => {
+    const at = (id: string, startTime: string, endTime: string) => ({ ...ev('2026-10-15', 'none', 0), id, startTime, endTime });
+    const laid = layoutDay([at('a', '09:00', '11:00'), at('b', '10:00', '12:00'), at('c', '13:00', '14:00'), ev('2026-10-15', 'none', 0)]);
+    expect(laid.map(l => [l.event.id, l.column, l.columns])).toEqual([['a', 0, 2], ['b', 1, 2], ['c', 0, 1]]);
+    expect(dayHours(laid)).toEqual([8, 21]);
+    expect(dayHours(layoutDay([at('late', '06:30', '23:15')]))).toEqual([6, 24]);
   });
 });

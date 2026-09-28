@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
 import { todayStr } from './data/dates';
-import { deleteRecord, getMeta, openDb, setMeta } from './data/db';
+import { deleteRecord, getMeta, openDb, putRecords, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, relinkEditedRecurring, type AppData } from './data/store';
@@ -24,7 +24,7 @@ import { MenuButton, SideMenu, SettingsPageScreen, type MenuSection, type MenuTa
 type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings';
 type Screen =
   | { name: Place }
-  | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
+  | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place; eventId?: string }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
@@ -32,7 +32,7 @@ type Screen =
   | { name: 'goal'; id: string }
   | { name: 'goalForm'; goal?: Account }
   | { name: 'calendar' }
-  | { name: 'eventForm'; event?: CalendarEvent; date?: string }
+  | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string }
   | { name: 'balanceCheck'; from: Place }
   | { name: 'data'; from: Place };
 
@@ -191,6 +191,12 @@ export function App() {
         launch={entry.launch}
         onClose={back}
         onSaved={async saved => {
+          // What a calendar event came to: the event is answered, tied to the transaction
+          const event = entry.eventId && saved ? data.events.find(e => e.id === entry.eventId) : undefined;
+          if (event && saved) {
+            const settled: CalendarEvent = { ...event, settled: { at: new Date().toISOString(), txId: saved.id } };
+            await putRecords(db, 'events', [settled]);
+          }
           const loaded = await refresh();
           if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
           back();
@@ -256,13 +262,14 @@ export function App() {
       />
     );
   } else if (screen.name === 'calendar') {
-    content = <CalendarScreen data={data} onBack={() => go({ name: 'settings' })} onEdit={(event, date) => go({ name: 'eventForm', event, date })} />;
+    content = <CalendarScreen data={data} onBack={() => go({ name: 'settings' })} onEdit={(event, date, time) => go({ name: 'eventForm', event, date, time })} />;
   } else if (screen.name === 'eventForm') {
     content = (
       <EventForm
         db={db}
         event={screen.event}
         date={screen.date}
+        time={screen.time}
         onDone={async () => {
           await refresh();
           go({ name: 'calendar' });
@@ -317,6 +324,14 @@ export function App() {
         onOpenData={() => go({ name: 'data', from: 'home' })}
         onOpenCheck={() => go({ name: 'balanceCheck', from: 'home' })}
         onOpenGoals={() => go({ name: 'goals' })}
+        onRecordEvent={(event, amount) =>
+          go({
+            name: 'entry',
+            from: 'home',
+            eventId: event.id,
+            preset: { type: event.type === 'income' ? 'income' : 'expense', amount, date: event.date, note: event.title },
+          })
+        }
       />
     );
 

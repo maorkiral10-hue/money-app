@@ -54,3 +54,72 @@ export function eventTotals(events: CalendarEvent[], from: string, to: string) {
   }
   return { income, expense };
 }
+
+const toMinutes = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+export const timeLabel = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/** Start and end of a timed event, in minutes from midnight. With no end time it's taken as an hour long. */
+export function eventSpan(e: CalendarEvent): [number, number] | null {
+  if (!e.startTime) return null;
+  const start = toMinutes(e.startTime);
+  const end = e.endTime ? toMinutes(e.endTime) : start + 60;
+  return [start, Math.max(end, start + 15)];
+}
+
+/** When an event is over: its end time, an hour after its start, or (all day) the end of its day. */
+export function eventEnd(e: CalendarEvent): Date {
+  const { y, m0, d } = parseDate(e.date);
+  const span = eventSpan(e);
+  return span ? new Date(y, m0, d, 0, span[1]) : new Date(y, m0, d + 1);
+}
+
+/** Events with an expected amount that are over and still wait for "how much was it in the end?", oldest first. */
+export const awaitingActual = (events: CalendarEvent[], now: Date) =>
+  events.filter(e => e.type !== 'none' && !e.settled && eventEnd(e) <= now).sort((a, b) => eventEnd(a).getTime() - eventEnd(b).getTime());
+
+export interface TimedEvent {
+  event: CalendarEvent;
+  start: number;
+  end: number;
+  /** Events that overlap share the width: this one's column, out of `columns`. */
+  column: number;
+  columns: number;
+}
+
+/** A day's timed events placed on the hour grid, overlapping ones side by side. */
+export function layoutDay(events: CalendarEvent[]): TimedEvent[] {
+  const timed = events
+    .map(event => ({ event, span: eventSpan(event) }))
+    .filter((t): t is { event: CalendarEvent; span: [number, number] } => !!t.span)
+    .sort((a, b) => a.span[0] - b.span[0] || b.span[1] - a.span[1]);
+  const out: TimedEvent[] = [];
+  // Groups of events that overlap one another, directly or through a chain
+  let group: TimedEvent[] = [];
+  let groupEnd = -1;
+  const close = () => {
+    const columns = Math.max(1, ...group.map(g => g.column + 1));
+    for (const g of group) g.columns = columns;
+    out.push(...group);
+    group = [];
+  };
+  for (const { event, span } of timed) {
+    if (span[0] >= groupEnd) close();
+    const taken = new Set(group.filter(g => g.end > span[0]).map(g => g.column));
+    let column = 0;
+    while (taken.has(column)) column++;
+    group.push({ event, start: span[0], end: span[1], column, columns: 1 });
+    groupEnd = Math.max(groupEnd, span[1]);
+  }
+  close();
+  return out;
+}
+
+/** Hours to draw for a day: 8:00 to 21:00, stretched to fit any earlier or later event. */
+export function dayHours(timed: TimedEvent[]): [number, number] {
+  const first = Math.min(8, ...timed.map(t => Math.floor(t.start / 60)));
+  const last = Math.max(21, ...timed.map(t => Math.ceil(t.end / 60)));
+  return [first, Math.min(24, last)];
+}

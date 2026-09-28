@@ -120,5 +120,11 @@ export interface CalendarEvent {
   /** Expected amount; 0 when there isn't one. */
   amount: number;
   note?: string;
+  /** 'HH:MM'; missing for an all-day event. */
+  startTime?: string;
+  /** 'HH:MM'; missing when only the start is known. */
+  endTime?: string;
+  /** Once it's over: the user said what it came to (the transaction recorded), or that there was nothing. */
+  settled?: { at: string; txId?: string };
   createdAt: string;
 }

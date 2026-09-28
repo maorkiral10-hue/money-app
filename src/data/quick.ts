@@ -9,6 +9,9 @@ export interface QuickPreset {
   category?: string;
   /** Expenses: payment method. Income: the account it went into. */
   method?: string;
+  /** Recording what a calendar event came to: its day and its title. */
+  date?: string;
+  note?: string;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { MoneyInput, Segmented } from '../components/inputs';
-import { eventTotals, monthGrid, monthStart, periodRange, shiftPeriod, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { dayHours, eventTotals, layoutDay, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -37,7 +37,7 @@ function Dots(props: { events: CalendarEvent[] }) {
  * buttons) to change how much shows. Below it, the chosen day's events. Events are for planning only:
  * nothing here touches the balance, the budget or the statement.
  */
-export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdit: (event?: CalendarEvent, date?: string) => void }) {
+export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdit: (event?: CalendarEvent, date?: string, time?: string) => void }) {
   const today = todayStr();
   const [zoom, setZoom] = useState<Zoom>(lastView?.zoom ?? 'month');
   const [selected, setSelected] = useState(lastView?.selected ?? today);
@@ -192,41 +192,119 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       )}
 
       {zoom !== 'year' && (
-        <div class="card list">
-          <h2 class="list-title">{dayLabel(selected, today)}</h2>
-          {dayEvents.length === 0 && <p class="muted small">אין אירועים ביום הזה</p>}
-          {dayEvents.map(e => (
-            <button key={e.id} class="tx" onClick={() => props.onEdit(e)}>
-              <div>
-                <div>
-                  <span class={`cal-dot ${dotClass(e)}`} /> {e.title}
-                </div>
-                {e.note && <div class="muted small">{e.note}</div>}
-              </div>
-              {e.type !== 'none' && e.amount > 0 && (
-                <div class={e.type === 'income' ? 'inc' : 'exp'}>{formatMoney(e.type === 'income' ? e.amount : -e.amount, { sign: true })}</div>
-              )}
-            </button>
-          ))}
-          <button class="secondary" onClick={() => props.onEdit(undefined, selected)}>
-            + אירוע ב-{shortDate(selected)}
-          </button>
-        </div>
+        <DayView data={props.data} date={selected} today={today} events={dayEvents} onEdit={props.onEdit} />
       )}
       <p class="muted small center">הסכומים כאן לתכנון בלבד. הם לא משנים את היתרה, התקציב או עובר ושב.</p>
     </>
   );
 }
 
+/** Height of one hour on the day's timeline, in pixels. */
+const HOUR_HEIGHT = 48;
+
+/** What an event is expected to bring in or cost, and once it's over, what it actually came to. */
+function EventMoney(props: { data: AppData; event: CalendarEvent }) {
+  const e = props.event;
+  if (e.type === 'none') return null;
+  const tx = e.settled?.txId ? props.data.transactions.find(t => t.id === e.settled!.txId) : undefined;
+  const sign = e.type === 'income' ? 1 : -1;
+  return (
+    <span class="cal-money">
+      {e.amount > 0 && <span class={e.type === 'income' ? 'inc' : 'exp'}>צפי {formatMoney(sign * e.amount, { sign: true })}</span>}
+      {e.settled && <span class="muted"> · ✓ {tx ? `בפועל ${formatMoney(sign * tx.amount, { sign: true })}` : 'בלי כסף'}</span>}
+    </span>
+  );
+}
+
+/**
+ * One day: events with no time at the top, then the day hour by hour, each timed event as a block as long
+ * as it lasts (overlapping ones side by side). Tapping an empty hour starts a new event at that hour.
+ */
+function DayView(props: {
+  data: AppData;
+  date: string;
+  today: string;
+  events: CalendarEvent[];
+  onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
+}) {
+  const allDay = props.events.filter(e => !e.startTime);
+  const timed = layoutDay(props.events);
+  const [first, last] = dayHours(timed);
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const showNow = props.date === props.today && nowMinutes >= first * 60 && nowMinutes <= last * 60;
+  const y = (minutes: number) => ((minutes - first * 60) / 60) * HOUR_HEIGHT;
+  const hours = Array.from({ length: last - first }, (_, i) => first + i);
+
+  return (
+    <div class="card">
+      <h2 class="list-title">{dayLabel(props.date, props.today)}</h2>
+      {allDay.length > 0 && (
+        <div class="cal-allday">
+          <div class="muted small">כל היום</div>
+          {allDay.map(e => (
+            <button key={e.id} class={`cal-event flat ${dotClass(e)}`} onClick={() => props.onEdit(e)}>
+              <span class="cal-event-title">{e.title}</span>
+              <EventMoney data={props.data} event={e} />
+            </button>
+          ))}
+        </div>
+      )}
+      <div class="cal-hours" style={{ height: `${(last - first) * HOUR_HEIGHT}px` }}>
+        {hours.map(h => (
+          <button
+            key={h}
+            class="cal-hour"
+            style={{ top: `${(h - first) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+            aria-label={`אירוע חדש ב-${timeLabel(h * 60)}`}
+            onClick={() => props.onEdit(undefined, props.date, timeLabel(h * 60))}
+          >
+            <span class="cal-hour-label">{timeLabel(h * 60)}</span>
+          </button>
+        ))}
+        {showNow && <div class="cal-now" style={{ top: `${y(nowMinutes)}px` }} />}
+        {timed.map(t => (
+          <button
+            key={t.event.id}
+            class={`cal-event ${dotClass(t.event)}`}
+            style={{
+              top: `${y(t.start) + 1}px`,
+              height: `${Math.max(22, y(t.end) - y(t.start) - 2)}px`,
+              right: `calc(50px + (100% - 50px) * ${t.column / t.columns})`,
+              width: `calc((100% - 50px) / ${t.columns} - 3px)`,
+            }}
+            onClick={() => props.onEdit(t.event)}
+          >
+            <span class="cal-event-title">{t.event.title}</span>
+            <span class="cal-event-time">
+              {timeLabel(t.start)}–{timeLabel(t.end % (24 * 60))}
+            </span>
+            <EventMoney data={props.data} event={t.event} />
+          </button>
+        ))}
+      </div>
+      <button class="secondary" onClick={() => props.onEdit(undefined, props.date)}>
+        + אירוע ב-{shortDate(props.date)}
+      </button>
+    </div>
+  );
+}
+
 /** A new calendar event, or editing one. */
-export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?: string; onDone: (date: string) => void; onCancel: () => void }) {
+export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?: string; time?: string; onDone: (date: string) => void; onCancel: () => void }) {
   const e = props.event;
   const [title, setTitle] = useState(e?.title ?? '');
   const [date, setDate] = useState(e?.date ?? props.date ?? todayStr());
   const [type, setType] = useState<CalendarEvent['type']>(e?.type ?? 'expense');
   const [amount, setAmount] = useState(e?.amount ?? 0);
   const [note, setNote] = useState(e?.note ?? '');
-  const valid = title.trim() && date;
+  const initialStart = e ? e.startTime : props.time;
+  const [allDay, setAllDay] = useState(!initialStart);
+  const [startTime, setStartTime] = useState(initialStart ?? '09:00');
+  // A new event at a set hour lasts an hour unless changed
+  const [endTime, setEndTime] = useState(e?.endTime ?? (initialStart && !e ? timeLabel((Number(initialStart.slice(0, 2)) + 1) % 24 * 60) : ''));
+  const badTimes = !allDay && !!endTime && endTime <= startTime;
+  const valid = title.trim() && date && !badTimes;
 
   const save = async () => {
     if (!valid) return;
@@ -237,6 +315,9 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       type,
       amount: type === 'none' ? 0 : amount,
       note: note.trim() || undefined,
+      startTime: allDay ? undefined : startTime,
+      endTime: allDay || !endTime ? undefined : endTime,
+      settled: e?.settled,
       createdAt: e?.createdAt ?? new Date().toISOString(),
     };
     await putRecords(props.db, 'events', [event]);
@@ -268,6 +349,23 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       <section>
         <h2>מתי</h2>
         <input type="date" value={date} onChange={ev => setDate(ev.currentTarget.value)} />
+        <label class="toggle-row cal-allday-toggle">
+          <span>כל היום</span>
+          <input type="checkbox" checked={allDay} onChange={ev => setAllDay(ev.currentTarget.checked)} />
+        </label>
+        {!allDay && (
+          <div class="cal-times">
+            <label class="field">
+              <span>משעה</span>
+              <input type="time" value={startTime} onChange={ev => setStartTime(ev.currentTarget.value)} />
+            </label>
+            <label class="field">
+              <span>עד שעה (לא חובה)</span>
+              <input type="time" value={endTime} onChange={ev => setEndTime(ev.currentTarget.value)} />
+            </label>
+          </div>
+        )}
+        {badTimes && <p class="small warn">שעת הסיום צריכה להיות אחרי שעת ההתחלה</p>}
       </section>
 
       <section>
@@ -286,6 +384,9 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
             <span>בערך כמה</span>
             <MoneyInput value={amount} onChange={setAmount} />
           </label>
+        )}
+        {type !== 'none' && (
+          <p class="muted small">לא נכנס לתקציב וליתרה. כשהאירוע ייגמר, תופיע בבית שאלה כמה זה עלה (או הכניס) בפועל, ותוכל לרשום את זה.</p>
         )}
       </section>
 

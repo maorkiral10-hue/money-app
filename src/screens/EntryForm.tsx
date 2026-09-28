@@ -72,9 +72,9 @@ export function EntryForm(props: {
   const [methodId, setMethodId] = useState(tx?.methodId ?? (tx?.type === 'expense' ? tx.accountId : undefined) ?? presetMethod?.id ?? defaultMethod?.id);
   const [accountId, setAccountId] = useState(tx?.accountId ?? presetAccount?.id);
   const [toAccountId, setToAccountId] = useState(tx?.toAccountId);
-  const [date, setDate] = useState(tx?.date ?? today);
+  const [date, setDate] = useState(tx?.date ?? preset?.date ?? today);
   const [installments, setInstallments] = useState(tx?.installments ?? 1);
-  const [note, setNote] = useState(tx?.note ?? '');
+  const [note, setNote] = useState(tx?.note ?? preset?.note ?? '');
   const [step, setStep] = useState<Step>(() => {
     if (tx) return 'review';
     if (!preset?.type) return 'type';
