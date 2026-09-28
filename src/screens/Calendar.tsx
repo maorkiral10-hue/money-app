@@ -45,13 +45,25 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
   // A one-finger drag sideways: how far it's gone, and which way the new period slides in
   const [dragX, setDragX] = useState(0);
   const [slide, setSlide] = useState<'next' | 'prev' | null>(null);
+  // Changing between year, month and week zooms from the point between the fingers (or the chosen day)
+  const [zoomAnim, setZoomAnim] = useState<'in' | 'out' | null>(null);
+  const [origin, setOrigin] = useState('50% 40%');
   lastView = { zoom, selected };
   const area = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
   const go = (by: number) => {
+    setZoomAnim(null);
     setSlide(by > 0 ? 'next' : 'prev');
     setSelected(sel => shiftPeriod(zoomRef.current, sel, by));
+  };
+  const changeZoom = (next: Zoom) => {
+    const from = ZOOMS.indexOf(zoomRef.current);
+    const to = ZOOMS.indexOf(next);
+    if (from === to) return;
+    setSlide(null);
+    setZoomAnim(to > from ? 'in' : 'out');
+    setZoom(next);
   };
 
   const byDate = new Map<string, CalendarEvent[]>();
@@ -80,6 +92,8 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       anchor = (document.elementFromPoint(x, y)?.closest('[data-date]') as HTMLElement | null)?.dataset.date;
+      const box = el.getBoundingClientRect();
+      setOrigin(`${Math.round(x - box.left)}px ${Math.round(y - box.top)}px`);
     };
     const onMove = (e: TouchEvent) => {
       if (swipe && e.touches.length === 1) {
@@ -98,7 +112,7 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       // Keep the phone from zooming the whole page
       e.preventDefault();
       last = dist(e.touches);
-      setPinch(Math.min(1.3, Math.max(0.75, last / start)));
+      setPinch(Math.min(1.8, Math.max(0.55, last / start)));
     };
     const onEnd = (e: TouchEvent) => {
       if (swipe) {
@@ -113,8 +127,9 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       start = 0;
       setPinch(1);
       if (ratio > 1.2 || ratio < 0.83) {
-        if (anchor) setSelected(anchor);
-        setZoom(z => ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, ZOOMS.indexOf(z) + (ratio > 1 ? 1 : -1)))]);
+        const next = ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, ZOOMS.indexOf(zoomRef.current) + (ratio > 1 ? 1 : -1)))];
+        if (anchor && next !== zoomRef.current) setSelected(anchor);
+        changeZoom(next);
       }
     };
     const stop = (e: Event) => e.preventDefault();
@@ -167,7 +182,10 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
         + אירוע חדש
       </button>
 
-      <Segmented value={zoom} onChange={setZoom} options={ZOOMS.map(z => [z, ZOOM_NAMES[z]] as [Zoom, string])} />
+      <Segmented value={zoom} onChange={z => {
+          setOrigin('50% 40%');
+          changeZoom(z);
+        }} options={ZOOMS.map(z => [z, ZOOM_NAMES[z]] as [Zoom, string])} />
 
       <div class="month-switch">
         <button class="link" aria-label="קודם" onClick={() => go(-1)}>
@@ -182,11 +200,19 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       <div class="card cal-area" ref={area}>
         <div
           key={`${zoom}|${from}`}
-          class={slide === 'next' ? 'enter-from-left' : slide === 'prev' ? 'enter-from-right' : ''}
-          onAnimationEnd={() => setSlide(null)}
+          class={
+            slide === 'next' ? 'enter-from-left' : slide === 'prev' ? 'enter-from-right' : zoomAnim === 'in' ? 'zoom-enter-in' : zoomAnim === 'out' ? 'zoom-enter-out' : ''
+          }
+          onAnimationEnd={() => {
+            setSlide(null);
+            setZoomAnim(null);
+          }}
           style={{
             transform: `translateX(${dragX}px) scale(${pinch})`,
-            transition: pinch === 1 && dragX === 0 ? 'transform .15s' : 'none',
+            transformOrigin: origin,
+            // Fades a little the further the pinch goes, and springs back smoothly when let go early
+            opacity: pinch === 1 ? 1 : Math.max(0.45, 1 - Math.abs(Math.log(pinch)) * 0.9),
+            transition: pinch === 1 && dragX === 0 ? 'transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s' : 'none',
           }}
         >
           {zoom === 'year' && (
@@ -267,6 +293,12 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
     </>
   );
 }
+
+/** An hour after 'HH:MM' (stopping at 23:59). */
+const plusHour = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h >= 23 ? '23:59' : timeLabel((h + 1) * 60 + m);
+};
 
 /** Height of one hour on the day's timeline, in pixels. */
 const HOUR_HEIGHT = 48;
@@ -367,12 +399,17 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
   const [type, setType] = useState<CalendarEvent['type']>(e?.type ?? 'expense');
   const [amount, setAmount] = useState(e?.amount ?? 0);
   const [note, setNote] = useState(e?.note ?? '');
-  const initialStart = e ? e.startTime : props.time;
-  const [allDay, setAllDay] = useState(!initialStart);
-  const [startTime, setStartTime] = useState(initialStart ?? '09:00');
-  // A new event at a set hour lasts an hour unless changed
-  const [endTime, setEndTime] = useState(e?.endTime ?? (initialStart && !e ? timeLabel((Number(initialStart.slice(0, 2)) + 1) % 24 * 60) : ''));
-  const badTimes = !allDay && !!endTime && endTime <= startTime;
+  // A new event is at set hours unless changed: the hour tapped on the day, or the next whole hour
+  const nextHour = Math.min(22, new Date().getHours() + 1) * 60;
+  const [allDay, setAllDay] = useState(e ? !e.startTime : false);
+  const [startTime, setStartTime] = useState(e?.startTime ?? props.time ?? timeLabel(nextHour));
+  const [endTime, setEndTime] = useState(e?.endTime ?? plusHour(e?.startTime ?? props.time ?? timeLabel(nextHour)));
+  // Moving the start keeps the end after it
+  const changeStart = (t: string) => {
+    setStartTime(t);
+    if (t && endTime <= t) setEndTime(plusHour(t));
+  };
+  const badTimes = !allDay && (!startTime || !endTime || endTime <= startTime);
   const valid = title.trim() && date && !badTimes;
 
   const save = async () => {
@@ -385,7 +422,7 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       amount: type === 'none' ? 0 : amount,
       note: note.trim() || undefined,
       startTime: allDay ? undefined : startTime,
-      endTime: allDay || !endTime ? undefined : endTime,
+      endTime: allDay ? undefined : endTime,
       settled: e?.settled,
       createdAt: e?.createdAt ?? new Date().toISOString(),
     };
@@ -418,18 +455,24 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       <section>
         <h2>מתי</h2>
         <input type="date" value={date} onChange={ev => setDate(ev.currentTarget.value)} />
-        <label class="toggle-row cal-allday-toggle">
-          <span>כל היום</span>
-          <input type="checkbox" checked={allDay} onChange={ev => setAllDay(ev.currentTarget.checked)} />
-        </label>
+        <div class="cal-allday-toggle">
+          <Segmented
+            value={allDay ? 'allDay' : 'hours'}
+            onChange={v => setAllDay(v === 'allDay')}
+            options={[
+              ['hours', 'בשעות'],
+              ['allDay', 'כל היום'],
+            ]}
+          />
+        </div>
         {!allDay && (
           <div class="cal-times">
             <label class="field">
               <span>משעה</span>
-              <input type="time" value={startTime} onChange={ev => setStartTime(ev.currentTarget.value)} />
+              <input type="time" value={startTime} onChange={ev => changeStart(ev.currentTarget.value)} />
             </label>
             <label class="field">
-              <span>עד שעה (לא חובה)</span>
+              <span>עד שעה</span>
               <input type="time" value={endTime} onChange={ev => setEndTime(ev.currentTarget.value)} />
             </label>
           </div>
@@ -455,7 +498,7 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
           </label>
         )}
         {type !== 'none' && (
-          <p class="muted small">לא נכנס לתקציב וליתרה. כשהאירוע ייגמר, תופיע בבית שאלה כמה זה עלה (או הכניס) בפועל, ותוכל לרשום את זה.</p>
+          <p class="muted small">לא נכנס לתקציב וליתרה. כשהאירוע ייגמר, תקפוץ שאלה כמה זה עלה (או הכניס) בפועל, ותוכל לרשום את זה.</p>
         )}
       </section>
 

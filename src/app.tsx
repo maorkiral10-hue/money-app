@@ -15,6 +15,8 @@ import { BalanceCheck } from './screens/BalanceCheck';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { GoalDetail, GoalForm, GoalsTab } from './screens/Goals';
 import { CalendarScreen, EventForm } from './screens/Calendar';
+import { EventDoneCard } from './components/EventDoneCard';
+import { awaitingActual } from './data/calendar';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -78,6 +80,14 @@ export function App() {
   const lastTab = useRef<Tab>('home');
   if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
   const [menuOpen, setMenuOpen] = useState(false);
+  // Calendar events asked about: checked every half minute, so one ending while the app is open pops up too
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  // "Later" on an event's question: not asked again until the app is next opened
+  const [laterIds, setLaterIds] = useState<string[]>([]);
   const [menuSection, setMenuSection] = useState<MenuSection>('main');
   // Leaving the main screens (a new entry on opening the app, say) closes the menu
   useEffect(() => {
@@ -132,6 +142,8 @@ export function App() {
       }
       if (!db) return;
       const awayLong = hiddenAt.current !== null && Date.now() - hiddenAt.current > AWAY_FOR_NEW_ENTRY;
+      setNow(new Date());
+      if (awayLong) setLaterIds([]);
       hiddenAt.current = null;
       const quick = takeQuickAddParam();
       refresh(db).then(loaded => {
@@ -324,19 +336,13 @@ export function App() {
         onOpenData={() => go({ name: 'data', from: 'home' })}
         onOpenCheck={() => go({ name: 'balanceCheck', from: 'home' })}
         onOpenGoals={() => go({ name: 'goals' })}
-        onRecordEvent={(event, amount) =>
-          go({
-            name: 'entry',
-            from: 'home',
-            eventId: event.id,
-            preset: { type: event.type === 'income' ? 'income' : 'expense', amount, date: event.date, note: event.title },
-          })
-        }
       />
     );
 
   // The main screens share the bottom bar and can be swiped between
   const tab = data.setupDone && (TABS as string[]).includes(screen.name) ? (screen.name as Tab) : null;
+  const awaiting = awaitingActual(data.events, now).filter(e => !laterIds.includes(e.id));
+  const askEvent = awaiting[0];
   return (
     <>
       <UpdateBanner />
@@ -371,6 +377,24 @@ export function App() {
           </div>
           <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
           <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
+          {askEvent && !menuOpen && (
+            <EventDoneCard
+              key={askEvent.id}
+              db={db}
+              event={askEvent}
+              more={awaiting.length - 1}
+              onLater={() => setLaterIds(ids => [...ids, askEvent.id])}
+              onDone={afterChange}
+              onRecord={(event, amount) =>
+                go({
+                  name: 'entry',
+                  from: tab,
+                  eventId: event.id,
+                  preset: { type: event.type === 'income' ? 'income' : 'expense', amount, date: event.date, note: event.title },
+                })
+              }
+            />
+          )}
           <SideMenu
             open={menuOpen}
             section={menuSection}

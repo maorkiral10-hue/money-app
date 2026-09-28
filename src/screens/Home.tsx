@@ -4,8 +4,6 @@ import { MonthSummary } from '../components/MonthSummary';
 import { StatementItems } from '../components/StatementItems';
 import { cardStatements, cardUsage, summarize, type Statement } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
-import { EventDoneCard } from '../components/EventDoneCard';
-import { awaitingActual } from '../data/calendar';
 import { categoryColor } from '../data/colors';
 import { periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, todayStr } from '../data/dates';
@@ -13,7 +11,7 @@ import { openOccurrences } from '../data/recurring';
 import { checkDue } from '../data/reconcile';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
-import type { CalendarEvent, Transaction } from '../data/types';
+import type { Transaction } from '../data/types';
 
 function daysAgo(iso: string) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -28,7 +26,6 @@ export function Home(props: {
   onOpenData: () => void;
   onOpenCheck: () => void;
   onOpenGoals: () => void;
-  onRecordEvent: (event: CalendarEvent, amount: number) => void;
 }) {
   const { data } = props;
   const today = todayStr();
@@ -37,8 +34,6 @@ export function Home(props: {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [openCharge, setOpenCharge] = useState<string | null>(null);
   const [showLedger, setShowLedger] = useState(false);
-  // Calendar events with an expected amount that are over: ask what they came to
-  const awaiting = awaitingActual(data.events, new Date());
   const pending = data.recurring
     .filter(r => r.variable)
     .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
@@ -100,10 +95,6 @@ export function Home(props: {
       </div>
 
       <MonthSummary data={data} onEdit={props.onEdit} />
-
-      {awaiting[0] && (
-        <EventDoneCard key={awaiting[0].id} db={props.db} event={awaiting[0]} more={awaiting.length - 1} onRecord={props.onRecordEvent} onDone={props.onChange} />
-      )}
 
       {pending.map(({ rec, open }) => (
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
