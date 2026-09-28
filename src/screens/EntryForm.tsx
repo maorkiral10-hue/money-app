@@ -37,10 +37,24 @@ export function EntryForm(props: {
   const { data, tx } = props;
   const today = todayStr();
   // Hidden items stay available only for the transaction that already uses them
-  // Goals are moved from their own tab; a transfer that already involves one keeps it
-  const accounts = data.accounts.filter(
-    a => a.name.trim() && ((!a.archived && a.kind !== 'goal') || a.id === tx?.accountId || a.id === tx?.toAccountId),
-  );
+  const accounts = data.accounts.filter(a => a.name.trim() && (!a.archived || a.id === tx?.accountId || a.id === tx?.toAccountId));
+  // Savings goals only take part in transfers: money moved into one leaves the liquid total
+  const liquidAccounts = accounts.filter(a => a.kind !== 'goal');
+  const goalAccounts = accounts.filter(a => a.kind === 'goal');
+  const transferChips = (value: string | undefined, onChange: (id: string) => void, except?: string) => {
+    const goals = goalAccounts.filter(a => a.id !== except);
+    return (
+      <>
+        <Chips items={liquidAccounts.filter(a => a.id !== except)} value={value} onChange={onChange} />
+        {goals.length > 0 && (
+          <>
+            <p class="field-label">יעדי חיסכון</p>
+            <Chips items={goals} value={value} onChange={onChange} />
+          </>
+        )}
+      </>
+    );
+  };
   const methods = data.methods.filter(m => m.name.trim() && (!m.archived || m.id === tx?.methodId));
   const defaultMethod = methods.find(m => m.id === data.lastMethodId && !m.archived);
 
@@ -193,7 +207,7 @@ export function EntryForm(props: {
           {(['expense', 'income', 'transfer'] as const).map(t => (
             <button key={t} class={`tile ${t} ${type === t ? 'on' : ''}`} onClick={() => chooseType(t)}>
               {TYPE_NAMES[t]}
-              {t === 'transfer' && <span class="small">בין בנק, מזומן וביט</span>}
+              {t === 'transfer' && <span class="small">{goalAccounts.length ? 'בין בנק, מזומן, ביט ויעדים' : 'בין בנק, מזומן וביט'}</span>}
             </button>
           ))}
         </div>
@@ -209,16 +223,16 @@ export function EntryForm(props: {
 
       {step === 'method' && <Chips items={methods} value={methodId} onChange={setMethodId} />}
 
-      {step === 'account' && <Chips items={accounts} value={accountId} onChange={setAccountId} />}
+      {step === 'account' && <Chips items={liquidAccounts} value={accountId} onChange={setAccountId} />}
 
       {step === 'from' && (
         <>
-          <Chips items={accounts} value={accountId} onChange={setAccountId} />
-          <p class="muted small">למשל משיכת מזומן מהכספומט, או העברה מביט לבנק. זה לא הוצאה, הכסף רק עובר ממקום למקום.</p>
+          {transferChips(accountId, setAccountId)}
+          <p class="muted small">למשל משיכת מזומן מהכספומט, העברה מביט לבנק, או הפקדה ליעד חיסכון. זה לא הוצאה, הכסף רק עובר ממקום למקום.</p>
         </>
       )}
 
-      {step === 'to' && <Chips items={accounts.filter(a => a.id !== accountId)} value={toAccountId} onChange={setToAccountId} />}
+      {step === 'to' && transferChips(toAccountId, setToAccountId, accountId)}
 
       {step !== 'review' && (
         <button class="continue" disabled={!canContinue[step]} onClick={next}>
