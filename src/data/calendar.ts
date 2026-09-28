@@ -1,5 +1,5 @@
 import { addDays, daysInMonth, parseDate, ymd } from './dates';
-import type { CalendarEvent } from './types';
+import type { CalendarEvent, Transaction } from './types';
 
 /** How much of the calendar shows at once; pinching moves between them. */
 export type Zoom = 'year' | 'month' | 'week';
@@ -122,4 +122,31 @@ export function dayHours(timed: TimedEvent[]): [number, number] {
   const first = Math.min(8, ...timed.map(t => Math.floor(t.start / 60)));
   const last = Math.max(21, ...timed.map(t => Math.ceil(t.end / 60)));
   return [first, Math.min(24, last)];
+}
+
+/**
+ * The events' balance for a period, expected against actual (income +, spending −). Only events that were
+ * answered after they ended ("how much in the end?") are compared; the rest are still expected.
+ */
+export function eventBalance(events: CalendarEvent[], transactions: Transaction[], from: string, to: string) {
+  const txs = new Map(transactions.map(t => [t.id, t]));
+  const signed = (e: CalendarEvent, amount: number) => (e.type === 'income' ? amount : -amount);
+  let expected = 0;
+  let actual = 0;
+  let answered = 0;
+  let open = 0;
+  let openCount = 0;
+  for (const e of events) {
+    if (e.type === 'none' || e.date < from || e.date > to) continue;
+    if (e.settled) {
+      answered++;
+      expected += signed(e, e.amount);
+      const tx = e.settled.txId ? txs.get(e.settled.txId) : undefined;
+      actual += tx ? signed(e, tx.amount) : 0;
+    } else {
+      openCount++;
+      open += signed(e, e.amount);
+    }
+  }
+  return { expected, actual, answered, open, openCount };
 }

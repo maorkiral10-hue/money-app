@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awaitingActual, dayHours, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { awaitingActual, dayHours, eventBalance, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -58,5 +58,17 @@ describe('calendar', () => {
     expect(laid.map(l => [l.event.id, l.column, l.columns])).toEqual([['a', 0, 2], ['b', 1, 2], ['c', 0, 1]]);
     expect(dayHours(laid)).toEqual([8, 21]);
     expect(dayHours(layoutDay([at('late', '06:30', '23:15')]))).toEqual([6, 24]);
+  });
+
+  it('compares what answered events were expected to cost with what they did', () => {
+    const tx = { id: 't', type: 'expense' as const, amount: 1_150_00, date: '2026-09-10', createdAt: '', updatedAt: '' };
+    const events = [
+      { ...ev('2026-09-10', 'expense', 1_200_00), settled: { at: '', txId: 't' } },
+      { ...ev('2026-09-12', 'expense', 200_00), settled: { at: '' } },
+      ev('2026-09-25', 'income', 500_00),
+      ev('2026-09-26', 'none', 0),
+      { ...ev('2026-10-01', 'expense', 90_00), settled: { at: '' } },
+    ];
+    expect(eventBalance(events, [tx], '2026-09-01', '2026-09-30')).toEqual({ expected: -1_400_00, actual: -1_150_00, answered: 2, open: 500_00, openCount: 1 });
   });
 });

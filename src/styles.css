@@ -448,6 +448,14 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
 .cal-mini-day.none { background: var(--muted); }
 .cal-mini-day.today { outline: 1.5px solid var(--accent); }
 .cal-hint { margin: 8px 0 0; }
+.cal-area > div { will-change: transform; }
+.cal-area .enter-from-left { animation: from-left .22s ease-out; }
+.cal-area .enter-from-right { animation: from-right .22s ease-out; }
+button.cal-add { margin: 0 0 10px; }
+.cal-balance h2 { font-size: 16px; }
+.cal-balance .line { font-size: 15px; }
+.cal-balance-diff { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-weight: 700; }
+.cal-balance .muted { margin-top: 6px; }
 .cal-totals { display: flex; justify-content: center; gap: 12px; font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 
 /* calendar: the day hour by hour */

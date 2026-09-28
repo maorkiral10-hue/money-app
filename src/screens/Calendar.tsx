@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { MoneyInput, Segmented } from '../components/inputs';
-import { dayHours, eventTotals, layoutDay, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { dayHours, eventBalance, layoutDay, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -42,8 +42,17 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
   const [zoom, setZoom] = useState<Zoom>(lastView?.zoom ?? 'month');
   const [selected, setSelected] = useState(lastView?.selected ?? today);
   const [pinch, setPinch] = useState(1);
+  // A one-finger drag sideways: how far it's gone, and which way the new period slides in
+  const [dragX, setDragX] = useState(0);
+  const [slide, setSlide] = useState<'next' | 'prev' | null>(null);
   lastView = { zoom, selected };
   const area = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const go = (by: number) => {
+    setSlide(by > 0 ? 'next' : 'prev');
+    setSelected(sel => shiftPeriod(zoomRef.current, sel, by));
+  };
 
   const byDate = new Map<string, CalendarEvent[]>();
   for (const e of props.data.events) byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
@@ -56,8 +65,16 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
     let start = 0;
     let last = 0;
     let anchor: string | undefined;
+    // One finger: dragging right brings the next period, left the previous one
+    let swipe: { x: number; y: number; dx: number; sideways?: boolean } | null = null;
     const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0 };
+        return;
+      }
+      swipe = null;
+      setDragX(0);
       if (e.touches.length !== 2) return;
       start = last = dist(e.touches);
       const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -65,6 +82,18 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       anchor = (document.elementFromPoint(x, y)?.closest('[data-date]') as HTMLElement | null)?.dataset.date;
     };
     const onMove = (e: TouchEvent) => {
+      if (swipe && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - swipe.x;
+        const dy = e.touches[0].clientY - swipe.y;
+        // Decide once whether this is a sideways drag or ordinary scrolling
+        if (swipe.sideways === undefined && Math.hypot(dx, dy) > 10) swipe.sideways = Math.abs(dx) > Math.abs(dy);
+        if (swipe.sideways) {
+          e.preventDefault();
+          swipe.dx = dx;
+          setDragX(dx);
+        }
+        return;
+      }
       if (!start || e.touches.length !== 2) return;
       // Keep the phone from zooming the whole page
       e.preventDefault();
@@ -72,6 +101,13 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
       setPinch(Math.min(1.3, Math.max(0.75, last / start)));
     };
     const onEnd = (e: TouchEvent) => {
+      if (swipe) {
+        const { dx, sideways } = swipe;
+        swipe = null;
+        setDragX(0);
+        if (sideways && Math.abs(dx) > 50) go(dx > 0 ? 1 : -1);
+        return;
+      }
       if (!start || e.touches.length >= 2) return;
       const ratio = last / start;
       start = 0;
@@ -97,7 +133,8 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
   }, []);
 
   const [from, to] = periodRange(zoom, selected);
-  const totals = eventTotals(props.data.events, from, to);
+  const balance = eventBalance(props.data.events, props.data.transactions, from, to);
+  const diff = balance.actual - balance.expected;
   const { y, m0 } = parseDate(selected);
   const title = zoom === 'year' ? String(y) : zoom === 'month' ? `${MONTH_NAMES[m0]} ${y}` : `${shortDate(from)} – ${shortDate(to)}`;
   const dayEvents = byDate.get(selected) ?? [];
@@ -126,20 +163,32 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
         </button>
       </header>
 
+      <button class="secondary cal-add" onClick={() => props.onEdit(undefined, selected)}>
+        + אירוע חדש
+      </button>
+
       <Segmented value={zoom} onChange={setZoom} options={ZOOMS.map(z => [z, ZOOM_NAMES[z]] as [Zoom, string])} />
 
       <div class="month-switch">
-        <button class="link" aria-label="קודם" onClick={() => setSelected(shiftPeriod(zoom, selected, -1))}>
+        <button class="link" aria-label="קודם" onClick={() => go(-1)}>
           ›
         </button>
         <span>{title}</span>
-        <button class="link" aria-label="הבא" onClick={() => setSelected(shiftPeriod(zoom, selected, 1))}>
+        <button class="link" aria-label="הבא" onClick={() => go(1)}>
           ‹
         </button>
       </div>
 
       <div class="card cal-area" ref={area}>
-        <div style={{ transform: `scale(${pinch})`, transition: pinch === 1 ? 'transform .15s' : 'none' }}>
+        <div
+          key={`${zoom}|${from}`}
+          class={slide === 'next' ? 'enter-from-left' : slide === 'prev' ? 'enter-from-right' : ''}
+          onAnimationEnd={() => setSlide(null)}
+          style={{
+            transform: `translateX(${dragX}px) scale(${pinch})`,
+            transition: pinch === 1 && dragX === 0 ? 'transform .15s' : 'none',
+          }}
+        >
           {zoom === 'year' && (
             <div class="cal-year">
               {MONTH_NAMES.map((name, i) => {
@@ -178,16 +227,36 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
             </>
           )}
         </div>
-        <p class="muted small center cal-hint">צביטה עם שתי אצבעות: פנימה לשבוע, החוצה לשנה</p>
+        <p class="muted small center cal-hint">גרירה ימינה או שמאלה: {ZOOM_NAMES[zoom]} הבא או הקודם · צביטה: פנימה לשבוע, החוצה לשנה</p>
       </div>
 
-      {(totals.income > 0 || totals.expense > 0) && (
-        <div class="cal-totals">
-          <span>
-            צפוי ב{ZOOM_NAMES[zoom]}:
-          </span>
-          {totals.income > 0 && <span class="inc">+{formatMoney(totals.income)}</span>}
-          {totals.expense > 0 && <span class="exp">−{formatMoney(totals.expense)}</span>}
+      {(balance.answered > 0 || balance.openCount > 0) && (
+        // The events' own balance: what they were expected to cost or bring in against what they did
+        <div class="card cal-balance">
+          <h2>מאזן אירועים ב{ZOOM_NAMES[zoom]}</h2>
+          {balance.answered > 0 && (
+            <>
+              <div class="line">
+                <span>צפי</span>
+                <span class={balance.expected < 0 ? 'exp' : 'inc'}>{formatMoney(balance.expected, { sign: true })}</span>
+              </div>
+              <div class="line">
+                <span>בפועל</span>
+                <span class={balance.actual < 0 ? 'exp' : 'inc'}>{formatMoney(balance.actual, { sign: true })}</span>
+              </div>
+              <div class="line cal-balance-diff">
+                <span>{diff > 0 ? 'יצא טוב מהצפי ב־' : diff < 0 ? 'חריגה מהצפי ב־' : 'בדיוק לפי הצפי'}</span>
+                {diff !== 0 && <span class={diff > 0 ? 'inc' : 'exp'}>{formatMoney(Math.abs(diff))}</span>}
+              </div>
+            </>
+          )}
+          {balance.openCount > 0 && (
+            <div class="muted small">
+              {balance.answered > 0 ? 'ועוד צפוי: ' : 'צפוי: '}
+              <span class={balance.open < 0 ? 'exp' : 'inc'}>{formatMoney(balance.open, { sign: true })}</span>
+              {' '}({balance.openCount === 1 ? 'אירוע אחד' : `${balance.openCount} אירועים`} {balance.openCount === 1 ? 'שעוד לא נגמר או לא עודכן' : 'שעוד לא נגמרו או לא עודכנו'})
+            </div>
+          )}
         </div>
       )}
 
