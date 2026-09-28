@@ -21,7 +21,7 @@ export function BalanceCheck(props: {
 }) {
   const { data } = props;
   const today = todayStr();
-  const accounts = data.accounts.filter(a => !a.archived && a.name.trim());
+  const accounts = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal');
   const [accountId, setAccountId] = useState(accounts.find(a => a.kind === 'bank')?.id ?? accounts[0]?.id);
   const [real, setReal] = useState(0);
   const [typed, setTyped] = useState(false);

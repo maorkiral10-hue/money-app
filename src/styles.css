@@ -247,7 +247,7 @@ button.continue { margin-top: 22px; }
 .table td { padding: 6px 2px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .neg-text { color: var(--neg); }
 .pos-text { color: var(--pos); }
-.tab { width: 72px; }
+.tab { width: 64px; }
 
 /* income is green, spending is red, everywhere */
 :root { --inc-bar: #22a06b; --exp-bar: #e34948; }
@@ -375,3 +375,10 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
   94% { transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) { .check-due { animation: none; } }
+
+/* goals */
+.goal-card { display: block; width: 100%; text-align: start; color: var(--text); font-weight: 400; background: var(--card); }
+.goal-name { font-weight: 700; font-size: 16px; }
+.goal-bar { height: 10px; border-radius: 5px; margin: 8px 0 6px; }
+.goal-bar span { background: var(--pos); border-radius: 5px; }
+.goal-bar.done span { background: var(--series-4); }

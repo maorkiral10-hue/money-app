@@ -7,20 +7,21 @@ import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, relinkEditedRecurring, type AppData } from './data/store';
 import { formatMoney } from './data/money';
 import { presetFromParams, type QuickPreset } from './data/quick';
-import type { Recurring, Transaction } from './data/types';
+import type { Account, Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
 import { SettingsButton } from './components/SettingsButton';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { BalanceCheck } from './screens/BalanceCheck';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
+import { GoalDetail, GoalForm, GoalsTab } from './screens/Goals';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'budget' | 'dashboard' | 'settings';
+type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place }
@@ -28,6 +29,8 @@ type Screen =
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'budgetSetup' }
+  | { name: 'goal'; id: string }
+  | { name: 'goalForm'; goal?: Account }
   | { name: 'balanceCheck'; from: Place }
   | { name: 'data'; from: Place };
 
@@ -48,7 +51,7 @@ function takeQuickAddParam(): Screen | null {
  * which the app has no other way of noticing. Screens where you are typing are never left this way.
  */
 const AWAY_FOR_NEW_ENTRY = 10_000;
-const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup'];
+const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup', 'goal', 'goalForm'];
 
 function savedText(tx: Transaction, data: AppData) {
   const label = data.categories.find(c => c.id === tx.categoryId)?.name ?? (tx.type === 'transfer' ? 'העברה' : '');
@@ -244,6 +247,32 @@ export function App() {
         onCancel={() => go({ name: 'budget' })}
       />
     );
+  } else if (screen.name === 'goal') {
+    content = (
+      <GoalDetail
+        key={screen.id}
+        db={db}
+        data={data}
+        goalId={screen.id}
+        onBack={() => go({ name: 'goals' })}
+        onEdit={() => go({ name: 'goalForm', goal: data.accounts.find(a => a.id === (screen as { id: string }).id) })}
+        onChange={afterChange}
+      />
+    );
+  } else if (screen.name === 'goalForm') {
+    const editing = screen.goal;
+    content = (
+      <GoalForm
+        db={db}
+        data={data}
+        goal={editing}
+        onDone={async goal => {
+          await refresh();
+          go(goal ? { name: 'goal', id: goal.id } : { name: 'goals' });
+        }}
+        onCancel={() => go(editing ? { name: 'goal', id: editing.id } : { name: 'goals' })}
+      />
+    );
   } else if (!(TABS as string[]).includes(screen.name)) {
     content = null;
   }
@@ -252,6 +281,8 @@ export function App() {
   const renderTab = (t: Tab) =>
     t === 'budget' ? (
       <BudgetTab data={data} onEdit={() => go({ name: 'budgetSetup' })} />
+    ) : t === 'goals' ? (
+      <GoalsTab data={data} onOpen={g => go({ name: 'goal', id: g.id })} onNew={() => go({ name: 'goalForm' })} />
     ) : t === 'dashboard' ? (
       <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />
     ) : (
@@ -262,6 +293,7 @@ export function App() {
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
         onOpenCheck={() => go({ name: 'balanceCheck', from: 'home' })}
+        onOpenGoals={() => go({ name: 'goals' })}
       />
     );
 

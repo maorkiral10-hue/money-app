@@ -1,9 +1,9 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-export type Tab = 'home' | 'budget' | 'dashboard';
+export type Tab = 'home' | 'budget' | 'goals' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
-export const TABS: Tab[] = ['home', 'budget', 'dashboard'];
+export const TABS: Tab[] = ['home', 'budget', 'goals', 'dashboard'];
 
 const ICONS: Record<Tab, ComponentChildren> = {
   home: <path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />,
@@ -14,6 +14,13 @@ const ICONS: Record<Tab, ComponentChildren> = {
       <circle cx="16" cy="13.5" r="1.2" />
     </>
   ),
+  goals: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1.2" />
+    </>
+  ),
   dashboard: (
     <>
       <path d="M5 20V11" />
@@ -22,7 +29,7 @@ const ICONS: Record<Tab, ComponentChildren> = {
     </>
   ),
 };
-const LABELS: Record<Tab, string> = { home: 'בית', budget: 'תקציב', dashboard: 'דשבורד' };
+const LABELS: Record<Tab, string> = { home: 'בית', budget: 'תקציב', goals: 'יעדים', dashboard: 'דשבורד' };
 
 /** The floating bar at the bottom: the main screens, with "+" (new entry) in the middle. */
 /** How far a drag between screens has gone, so the bar's highlight can follow the finger. */

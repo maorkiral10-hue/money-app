@@ -34,7 +34,7 @@ export function MethodsSettings(props: {
   startDate: string;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  const accounts = props.accounts.filter(a => !a.archived);
+  const accounts = props.accounts.filter(a => !a.archived && a.kind !== 'goal');
   const banks = accounts.filter(a => a.kind === 'bank');
   const visible = props.items.filter(m => !m.archived);
   const accountName = (id: string) => props.accounts.find(a => a.id === id)?.name ?? '';

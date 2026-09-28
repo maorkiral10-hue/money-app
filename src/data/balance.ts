@@ -1,6 +1,6 @@
 import { dayInMonth, endOfNextMonth } from './dates';
 import { expectedTransactions } from './recurring';
-import type { Account, PaymentMethod, Recurring, Transaction } from './types';
+import { isGoal, type Account, type PaymentMethod, type Recurring, type Transaction } from './types';
 
 /** One change to one account's balance on one day. */
 export interface Effect {
@@ -93,9 +93,11 @@ export function allEffects(ledger: Ledger, today?: string, expectedUntil?: strin
 }
 
 export interface Summary {
-  /** All money available right now, across every account. */
+  /** All money available right now, across every account (savings goals aren't available, so not counted). */
   liquid: number;
   byAccount: { account: Account; balance: number }[];
+  /** Savings goals, each with what's in it. */
+  goals: { account: Account; balance: number }[];
   upcoming: {
     until: string;
     credit: number;
@@ -124,12 +126,17 @@ export function summarize(ledger: Ledger, today: string): Summary {
     }
   }
 
-  const byAccount = ledger.accounts
+  const shown = ledger.accounts
     .filter(a => !a.archived || balances.get(a.id))
     .map(account => ({ account, balance: balances.get(account.id) ?? 0 }));
-  const liquid = [...balances.values()].reduce((a, b) => a + b, 0);
-  upcoming.projected = liquid + future;
-  return { liquid, byAccount, upcoming };
+  const byAccount = shown.filter(b => !isGoal(b.account));
+  const goals = shown.filter(b => isGoal(b.account));
+  const liquid = byAccount.reduce((a, b) => a + b.balance, 0);
+  // Moving money into or out of a goal is a transfer: it changes what's liquid, not the future
+  const goalIds = new Set(goals.map(g => g.account.id));
+  const futureGoalMoves = effects.filter(e => e.date > today && e.date <= until && goalIds.has(e.accountId)).reduce((a, e) => a + e.amount, 0);
+  upcoming.projected = liquid + future - futureGoalMoves;
+  return { liquid, byAccount, goals, upcoming };
 }
 
 /** One line of a card's bill: a purchase (or one of its installments), or what was on the card at the start. */

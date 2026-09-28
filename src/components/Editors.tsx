@@ -85,7 +85,7 @@ export function MethodsEditor(props: {
   onDelete?: (id: string) => void;
 }) {
   const set = update(props.items, props.onChange);
-  const accounts = props.accounts.filter(a => !a.archived);
+  const accounts = props.accounts.filter(a => !a.archived && a.kind !== 'goal');
   const banks = accounts.filter(a => a.kind === 'bank');
   const add = (m: Partial<PaymentMethod>) =>
     props.onChange([

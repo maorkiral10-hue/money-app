@@ -8,17 +8,29 @@ export interface Note {
   appVersion: number;
 }
 
-/** A place money sits: bank account, cash, a payment app's balance. Together they make up the liquid total. */
-export type AccountKind = 'bank' | 'cash' | 'app' | 'other';
+/**
+ * A place money sits: bank account, cash, a payment app's balance. Together they make up the liquid total.
+ * A savings goal is kept as an account of its own kind ("goal"): money moved into it leaves the liquid
+ * total (by an ordinary transfer), and can be moved back the same way.
+ */
+export type AccountKind = 'bank' | 'cash' | 'app' | 'other' | 'goal';
 export interface Account {
   id: string;
   name: string;
   kind: AccountKind;
-  /** Balance on the start date, as the user typed it. */
+  /** Balance on the start date, as the user typed it. For a goal: what was already saved for it. */
   openingBalance: number;
   order: number;
   archived?: boolean;
+  /** Goals: the amount to reach (with or without a date). */
+  goalTarget?: number;
+  /** Goals: when to reach it by. */
+  goalDate?: string;
+  /** Goals without a target: a fixed amount to put aside every month. */
+  goalMonthly?: number;
 }
+
+export const isGoal = (a: Pick<Account, 'kind'>) => a.kind === 'goal';
 
 /** How an expense is paid, and which account the money eventually leaves. */
 export type MethodKind = 'cash' | 'credit' | 'bank' | 'app' | 'other';

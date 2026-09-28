@@ -37,7 +37,10 @@ export function EntryForm(props: {
   const { data, tx } = props;
   const today = todayStr();
   // Hidden items stay available only for the transaction that already uses them
-  const accounts = data.accounts.filter(a => a.name.trim() && (!a.archived || a.id === tx?.accountId || a.id === tx?.toAccountId));
+  // Goals are moved from their own tab; a transfer that already involves one keeps it
+  const accounts = data.accounts.filter(
+    a => a.name.trim() && ((!a.archived && a.kind !== 'goal') || a.id === tx?.accountId || a.id === tx?.toAccountId),
+  );
   const methods = data.methods.filter(m => m.name.trim() && (!m.archived || m.id === tx?.methodId));
   const defaultMethod = methods.find(m => m.id === data.lastMethodId && !m.archived);
 

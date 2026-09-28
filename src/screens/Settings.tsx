@@ -47,7 +47,7 @@ export function SettingsMenu(props: {
       </header>
 
       <div class="card list">
-        <Item title="איפה הכסף נמצא" sub={active(data.accounts).map(a => a.name).join(', ')} onClick={() => props.onOpen('accounts')} />
+        <Item title="איפה הכסף נמצא" sub={active(data.accounts.filter(a => a.kind !== 'goal')).map(a => a.name).join(', ')} onClick={() => props.onOpen('accounts')} />
         <Item
           title="אמצעי תשלום וכרטיסי אשראי"
           sub={`${active(data.methods).length} אמצעים${cards === 1 ? ', מתוכם כרטיס אשראי אחד' : cards ? `, מתוכם ${cards} כרטיסי אשראי` : ''}`}
@@ -133,7 +133,7 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
       {props.page === 'accounts' && (
         <div class="card">
           <AccountsEditor
-            items={data.accounts}
+            items={data.accounts.filter(a => a.kind !== 'goal')}
             onChange={save('accounts')}
             balanceLabel="יתרה ביום ההתחלה"
             hideBalance={todayStr() > addDays(data.startDate, FIRST_MONTH_DAYS)}

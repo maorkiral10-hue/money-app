@@ -113,7 +113,7 @@ export function RecurringForm(props: { db: IDBDatabase; data: AppData; rec?: Rec
 
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === rec?.categoryId));
   const methods = data.methods.filter(m => m.name.trim() && (!m.archived || m.id === rec?.methodId));
-  const accounts = data.accounts.filter(a => a.name.trim() && (!a.archived || a.id === rec?.accountId));
+  const accounts = data.accounts.filter(a => a.name.trim() && a.kind !== 'goal' && (!a.archived || a.id === rec?.accountId));
   const valid = name.trim() && amount > 0 && categoryId && (type === 'expense' ? methodId : accountId) && nextDate;
 
   // Paid by credit card: no date to ask, the bank pays it on the card's charge day

@@ -25,6 +25,7 @@ export function Home(props: {
   onEdit: (tx: Transaction) => void;
   onOpenData: () => void;
   onOpenCheck: () => void;
+  onOpenGoals: () => void;
 }) {
   const { data } = props;
   const today = todayStr();
@@ -74,6 +75,11 @@ export function Home(props: {
         <div class="big-number">
           <AnimatedMoney value={summary.liquid} />
         </div>
+        {summary.goals.some(g => g.balance) && (
+          <button class="link small" onClick={props.onOpenGoals}>
+            ועוד {formatMoney(summary.goals.reduce((a, g) => a + g.balance, 0))} ביעדי חיסכון ‹
+          </button>
+        )}
         {showBreakdown && (
           <div class="upcoming">
             {summary.byAccount.map(({ account, balance }) => (
