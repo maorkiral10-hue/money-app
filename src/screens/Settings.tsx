@@ -2,100 +2,56 @@ import { AccountsEditor, CategoriesEditor } from '../components/Editors';
 import { MethodsSettings } from '../components/MethodsSettings';
 import { MonthStartPicker } from '../components/MonthStartPicker';
 import { addDays, todayStr } from '../data/dates';
-import { putRecords } from '../data/db';
+import { putRecords, setMeta } from '../data/db';
 
 /** How long the start-day balances stay editable in settings. */
 const FIRST_MONTH_DAYS = 31;
 import { deleteSetting, type AppData } from '../data/store';
 import { APP_VERSION } from '../version';
 
-export type SettingsPage = 'accounts' | 'methods' | 'categories';
+export type SettingsPage = 'accounts' | 'methods' | 'categories' | 'preferences';
+export type MenuTarget = SettingsPage | 'recurring' | 'check' | 'data';
 
-/** The settings menu: one line per topic, each opening its own screen. */
-export function SettingsMenu(props: {
-  data: AppData;
-  onBack: () => void;
-  onOpen: (page: SettingsPage) => void;
-  onOpenRecurring: () => void;
-  onOpenData: () => void;
-  onOpenCheck: () => void;
-  onSetOpenOnEntry: (on: boolean) => void;
-  onSetMonthStartDay: (day: number) => void;
-}) {
-  const { data } = props;
-  const active = <T extends { archived?: boolean; name: string }>(items: T[]) => items.filter(i => !i.archived && i.name.trim());
-  const cards = active(data.methods).filter(m => m.kind === 'credit').length;
-  const categories = active(data.categories);
+const MENU: [MenuTarget, string][] = [
+  ['accounts', 'איפה הכסף נמצא'],
+  ['methods', 'אמצעי תשלום וכרטיסי אשראי'],
+  ['categories', 'קטגוריות'],
+  ['recurring', 'הכנסות והוצאות קבועות'],
+  ['check', 'בדיקה מול הבנק'],
+  ['data', 'גיבוי ונתונים'],
+  ['preferences', 'העדפות'],
+];
 
-  const Item = (p: { title: string; sub: string; onClick: () => void }) => (
-    <button class="tx menu-item" onClick={p.onClick}>
-      <div>
-        <div>{p.title}</div>
-        <div class="muted small">{p.sub}</div>
-      </div>
-      <span class="muted">‹</span>
-    </button>
-  );
-
+/** The side menu: slides in from the right over the current screen, big headings only; each opens its own full screen. */
+export function SideMenu(props: { open: boolean; data: AppData; onClose: () => void; onOpen: (target: MenuTarget) => void }) {
   return (
-    <>
-      <header class="top">
-        <h1>הגדרות</h1>
-        <button class="link" onClick={props.onBack}>
-          חזרה
+    <div class={`side-menu ${props.open ? 'open' : ''}`} aria-hidden={!props.open}>
+      <div class="side-menu-backdrop" onClick={props.onClose} />
+      <nav class="side-menu-panel">
+        <button class="link side-menu-close" aria-label="סגירה" onClick={props.onClose}>
+          ✕
         </button>
-      </header>
+        {MENU.map(([target, title]) => (
+          <button key={target} class="side-menu-item" onClick={() => props.onOpen(target)}>
+            {title}
+          </button>
+        ))}
+        <p class="muted small side-menu-foot">
+          תחילת המעקב: {props.data.startDate.split('-').reverse().join('.')} · גרסה {APP_VERSION}
+        </p>
+      </nav>
+    </div>
+  );
+}
 
-      <div class="card list">
-        <Item title="איפה הכסף נמצא" sub={active(data.accounts.filter(a => a.kind !== 'goal')).map(a => a.name).join(', ')} onClick={() => props.onOpen('accounts')} />
-        <Item
-          title="אמצעי תשלום וכרטיסי אשראי"
-          sub={`${active(data.methods).length} אמצעים${cards === 1 ? ', מתוכם כרטיס אשראי אחד' : cards ? `, מתוכם ${cards} כרטיסי אשראי` : ''}`}
-          onClick={() => props.onOpen('methods')}
-        />
-        <Item
-          title="קטגוריות"
-          sub={`${categories.filter(c => c.kind === 'expense').length} הוצאה · ${categories.filter(c => c.kind === 'income').length} הכנסה`}
-          onClick={() => props.onOpen('categories')}
-        />
-      </div>
-
-      <div class="card">
-        <h2>מתי מתחיל החודש הכספי</h2>
-        <MonthStartPicker value={data.monthStartDay} onChange={props.onSetMonthStartDay} />
-      </div>
-
-      <div class="card">
-        <label class="toggle-row">
-          <span>
-            פתיחה ישר על הזנה חדשה
-            <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי 10 שניות ומעלה (לא באמצע הקלדה)</span>
-          </span>
-          <input type="checkbox" checked={data.openOnEntry} onChange={e => props.onSetOpenOnEntry(e.currentTarget.checked)} />
-        </label>
-      </div>
-
-      <div class="card list">
-        <Item title="הכנסות והוצאות קבועות" sub={`${data.recurring.filter(r => !r.endDate).length} פעילות`} onClick={props.onOpenRecurring} />
-      </div>
-
-      <div class="card list">
-        <Item
-          title="בדיקה מול הבנק"
-          sub={data.balanceChecks[0] ? `בדיקה אחרונה: ${data.balanceChecks[0].date.split('-').reverse().join('.')}` : 'עוד לא נבדק'}
-          onClick={props.onOpenCheck}
-        />
-        <Item
-          title="גיבוי ונתונים"
-          sub={data.lastBackupAt ? `גיבוי אחרון: ${new Date(data.lastBackupAt).toLocaleDateString('he-IL')}` : 'עדיין לא בוצע גיבוי'}
-          onClick={props.onOpenData}
-        />
-      </div>
-
-      <p class="muted small center">
-        תחילת המעקב: {data.startDate.split('-').reverse().join('.')} · גרסה {APP_VERSION}
-      </p>
-    </>
+/** The three-line button at the top of every main screen, opening the side menu. */
+export function MenuButton(props: { onClick: () => void }) {
+  return (
+    <button class="icon-btn" aria-label="תפריט" onClick={props.onClick}>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 7h16M4 12h16M4 17h16" />
+      </svg>
+    </button>
   );
 }
 
@@ -103,16 +59,21 @@ const TITLES: Record<SettingsPage, string> = {
   accounts: 'איפה הכסף נמצא',
   methods: 'אמצעי תשלום וכרטיסי אשראי',
   categories: 'קטגוריות',
+  preferences: 'העדפות',
 };
 
 export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page: SettingsPage; onChange: () => void; onBack: () => void }) {
   const { db, data } = props;
-  const save = (store: SettingsPage) => async (items: { id: string }[]) => {
+  const save = (store: 'accounts' | 'methods' | 'categories') => async (items: { id: string }[]) => {
     await putRecords(db, store, items);
     props.onChange();
   };
   const remove = (store: 'categories' | 'methods') => async (id: string) => {
     await deleteSetting(db, data, store, id);
+    props.onChange();
+  };
+  const setting = (key: string) => async (value: unknown) => {
+    await setMeta(db, key, value);
     props.onChange();
   };
 
@@ -124,11 +85,13 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
           חזרה
         </button>
       </header>
-      <p class="muted small">
-        {props.page === 'accounts'
-          ? 'שינויים נשמרים מיד. ביטול סימון מסתיר מהטופס, אבל תנועות קודמות נשארות כמו שהן.'
-          : 'שינויים נשמרים מיד. כדי למחוק, החלק שורה שמאלה. תנועות שכבר נרשמו נשארות כמו שהן.'}
-      </p>
+      {props.page !== 'preferences' && (
+        <p class="muted small">
+          {props.page === 'accounts'
+            ? 'שינויים נשמרים מיד. ביטול סימון מסתיר מהטופס, אבל תנועות קודמות נשארות כמו שהן.'
+            : 'שינויים נשמרים מיד. כדי למחוק, החלק שורה שמאלה. תנועות שכבר נרשמו נשארות כמו שהן.'}
+        </p>
+      )}
 
       {props.page === 'accounts' && (
         <div class="card">
@@ -152,6 +115,23 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
           <div class="card">
             <h2 class="inc">הכנסות</h2>
             <CategoriesEditor items={data.categories} kind="income" onChange={save('categories')} onDelete={remove('categories')} />
+          </div>
+        </>
+      )}
+      {props.page === 'preferences' && (
+        <>
+          <div class="card">
+            <h2>מתי מתחיל החודש הכספי</h2>
+            <MonthStartPicker value={data.monthStartDay} onChange={setting('monthStartDay')} />
+          </div>
+          <div class="card">
+            <label class="toggle-row">
+              <span>
+                פתיחה ישר על הזנה חדשה
+                <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי 10 שניות ומעלה (לא באמצע הקלדה)</span>
+              </span>
+              <input type="checkbox" checked={data.openOnEntry} onChange={e => setting('openOnEntry')(e.currentTarget.checked)} />
+            </label>
           </div>
         </>
       )}

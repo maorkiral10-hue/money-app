@@ -10,7 +10,6 @@ import { presetFromParams, type QuickPreset } from './data/quick';
 import type { Account, Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
-import { SettingsButton } from './components/SettingsButton';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { BalanceCheck } from './screens/BalanceCheck';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
@@ -19,7 +18,7 @@ import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
-import { SettingsMenu, SettingsPageScreen, type SettingsPage } from './screens/Settings';
+import { MenuButton, SideMenu, SettingsPageScreen, type MenuTarget, type SettingsPage } from './screens/Settings';
 
 type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings';
 type Screen =
@@ -75,6 +74,11 @@ export function App() {
   // The main screen settings was opened from, to come back to it
   const lastTab = useRef<Tab>('home');
   if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Leaving the main screens (a new entry on opening the app, say) closes the menu
+  useEffect(() => {
+    if (!(TABS as string[]).includes(screen.name)) setMenuOpen(false);
+  }, [screen.name]);
   const [data, setData] = useState<AppData | null>(null);
   const [copies, setCopies] = useState<SafetyCopy[]>([]);
   const [persisted, setPersisted] = useState<boolean | null>(null);
@@ -142,9 +146,26 @@ export function App() {
   if (!db || !data) return null;
 
   const go = (s: Screen) => {
+    // Pages opened from the side menu come back to it, open over the screen it was opened from
+    if (s.name === 'settings') {
+      setScreen({ name: lastTab.current });
+      setMenuOpen(true);
+      return;
+    }
+    setMenuOpen(false);
     setScreen(s);
     scrollTo(0, 0);
   };
+  const openFromMenu = (target: MenuTarget) =>
+    go(
+      target === 'recurring'
+        ? { name: 'recurring', from: 'settings' }
+        : target === 'check'
+          ? { name: 'balanceCheck', from: 'settings' }
+          : target === 'data'
+            ? { name: 'data', from: 'settings' }
+            : { name: 'settingsPage', page: target },
+    );
 
   const afterChange = () => refresh();
 
@@ -195,25 +216,6 @@ export function App() {
         onDone={async () => {
           await refresh();
           go({ name: 'recurring', from });
-        }}
-      />
-    );
-  } else if (screen.name === 'settings') {
-    content = (
-      <SettingsMenu
-        data={data}
-        onBack={() => go({ name: lastTab.current })}
-        onOpen={page => go({ name: 'settingsPage', page })}
-        onOpenData={() => go({ name: 'data', from: 'settings' })}
-        onOpenRecurring={() => go({ name: 'recurring', from: 'settings' })}
-        onOpenCheck={() => go({ name: 'balanceCheck', from: 'settings' })}
-        onSetOpenOnEntry={async on => {
-          await setMeta(db, 'openOnEntry', on);
-          await refresh();
-        }}
-        onSetMonthStartDay={async day => {
-          await setMeta(db, 'monthStartDay', day);
-          await refresh();
         }}
       />
     );
@@ -324,10 +326,11 @@ export function App() {
         <>
           {/* Stays put above the sliding screens */}
           <div class="floating-settings">
-            <SettingsButton onClick={() => go({ name: 'settings' })} />
+            <MenuButton onClick={() => setMenuOpen(true)} />
           </div>
           <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
           <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
+          <SideMenu open={menuOpen} data={data} onClose={() => setMenuOpen(false)} onOpen={openFromMenu} />
         </>
       ) : (
         content
