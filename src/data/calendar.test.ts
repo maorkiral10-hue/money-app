@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awaitingActual, dayHours, eventBalance, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, withAnswer, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -70,5 +70,23 @@ describe('calendar', () => {
       { ...ev('2026-10-01', 'expense', 90_00), settled: { at: '' } },
     ];
     expect(eventBalance(events, [tx], '2026-09-01', '2026-09-30')).toEqual({ expected: -1_400_00, actual: -1_150_00, answered: 2, open: 500_00, openCount: 1 });
+  });
+
+  it('finds the days a repeating event falls on', () => {
+    const base = ev('2026-01-31', 'none', 0);
+    expect(occurrencesIn({ ...base, repeat: 'monthly' }, '2026-01-01', '2026-04-30')).toEqual(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30']);
+    expect(occurrencesIn({ ...base, date: '2026-09-01', repeat: 'weekly' }, '2026-09-10', '2026-09-30')).toEqual(['2026-09-15', '2026-09-22', '2026-09-29']);
+    expect(occurrencesIn({ ...base, date: '2026-09-28', repeat: 'daily', repeatUntil: '2026-09-30' }, '2026-09-01', '2026-10-31')).toEqual(['2026-09-28', '2026-09-29', '2026-09-30']);
+    expect(occurrencesIn({ ...base, date: '2024-02-29', repeat: 'yearly' }, '2025-01-01', '2028-12-31')).toEqual(['2025-02-28', '2026-02-28', '2027-02-28', '2028-02-29']);
+    expect(occurrencesIn(base, '2026-02-01', '2026-02-28')).toEqual([]);
+  });
+
+  it('asks about each repeat of a repeating event on its own, and keeps each answer', () => {
+    const gym = { ...ev('2026-09-26', 'expense', 30_00), id: 'gym', repeat: 'daily' as const };
+    const asked = awaitingActual([gym], new Date(2026, 8, 28, 12, 0));
+    expect(asked.map(e => e.date)).toEqual(['2026-09-26', '2026-09-27']);
+    const answered = withAnswer(gym, '2026-09-26', { at: '' });
+    expect(awaitingActual([answered], new Date(2026, 8, 28, 12, 0)).map(e => e.date)).toEqual(['2026-09-27']);
+    expect(expandEvents([answered], '2026-09-26', '2026-09-27').map(e => [e.id, e.date, !!e.settled])).toEqual([['gym', '2026-09-26', true], ['gym', '2026-09-27', false]]);
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { MoneyInput, Segmented } from '../components/inputs';
-import { dayHours, eventBalance, layoutDay, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { Chips, MoneyInput, Segmented } from '../components/inputs';
+import { dayHours, eventBalance, expandEvents, layoutDay, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -67,7 +67,11 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
   };
 
   const byDate = new Map<string, CalendarEvent[]>();
-  for (const e of props.data.events) byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
+  const [viewFrom, viewTo] = periodRange(zoom, selected);
+  const [yearFrom, yearTo] = periodRange('year', selected);
+  for (const e of expandEvents(props.data.events, viewFrom < yearFrom ? viewFrom : yearFrom, viewTo > yearTo ? viewTo : yearTo)) {
+    byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
+  }
 
   // Pinching: fingers apart shows less (year → month → week), together shows more. The day or month
   // between the fingers becomes the one in view.
@@ -178,7 +182,7 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
         </button>
       </header>
 
-      <button class="secondary cal-add" onClick={() => props.onEdit(undefined, selected)}>
+      <button class="secondary cal-add" onClick={() => props.onEdit(undefined, today)}>
         + אירוע חדש
       </button>
 
@@ -294,6 +298,15 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
   );
 }
 
+type Repeat = NonNullable<CalendarEvent['repeat']> | 'none';
+const REPEATS: { id: Repeat; name: string }[] = [
+  { id: 'none', name: 'לא חוזר' },
+  { id: 'daily', name: 'כל יום' },
+  { id: 'weekly', name: 'כל שבוע' },
+  { id: 'monthly', name: 'כל חודש' },
+  { id: 'yearly', name: 'כל שנה' },
+];
+
 /** An hour after 'HH:MM' (stopping at 23:59). */
 const plusHour = (t: string) => {
   const [h, m] = t.split(':').map(Number);
@@ -384,9 +397,6 @@ function DayView(props: {
           </button>
         ))}
       </div>
-      <button class="secondary" onClick={() => props.onEdit(undefined, props.date)}>
-        + אירוע ב-{shortDate(props.date)}
-      </button>
     </div>
   );
 }
@@ -399,6 +409,8 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
   const [type, setType] = useState<CalendarEvent['type']>(e?.type ?? 'expense');
   const [amount, setAmount] = useState(e?.amount ?? 0);
   const [note, setNote] = useState(e?.note ?? '');
+  const [repeat, setRepeat] = useState<Repeat>(e?.repeat ?? 'none');
+  const [repeatUntil, setRepeatUntil] = useState(e?.repeatUntil ?? '');
   // A new event is at set hours unless changed: the hour tapped on the day, or the next whole hour
   const nextHour = Math.min(22, new Date().getHours() + 1) * 60;
   const [allDay, setAllDay] = useState(e ? !e.startTime : false);
@@ -410,7 +422,8 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
     if (t && endTime <= t) setEndTime(plusHour(t));
   };
   const badTimes = !allDay && (!startTime || !endTime || endTime <= startTime);
-  const valid = title.trim() && date && !badTimes;
+  const badUntil = repeat !== 'none' && !!repeatUntil && repeatUntil < date;
+  const valid = title.trim() && date && !badTimes && !badUntil;
 
   const save = async () => {
     if (!valid) return;
@@ -423,16 +436,19 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
       note: note.trim() || undefined,
       startTime: allDay ? undefined : startTime,
       endTime: allDay ? undefined : endTime,
-      settled: e?.settled,
+      settled: repeat === 'none' ? e?.settled : undefined,
+      repeat: repeat === 'none' ? undefined : repeat,
+      repeatUntil: repeat !== 'none' && repeatUntil ? repeatUntil : undefined,
+      settledDates: repeat === 'none' ? undefined : e?.settledDates,
       createdAt: e?.createdAt ?? new Date().toISOString(),
     };
     await putRecords(props.db, 'events', [event]);
-    // Back on the calendar, the event's day is the one showing
-    lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
+    // Back on the calendar, a one-off event's day is the one showing
+    if (repeat === 'none' || !e) lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
     props.onDone(date);
   };
   const remove = async () => {
-    if (!e || !confirm(`למחוק את "${e.title}"?`)) return;
+    if (!e || !confirm(e.repeat ? `למחוק את "${e.title}" על כל החזרות שלו?` : `למחוק את "${e.title}"?`)) return;
     await deleteRecord(props.db, 'events', e.id);
     props.onDone(e.date);
   };
@@ -454,6 +470,7 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
 
       <section>
         <h2>מתי</h2>
+        {repeat !== 'none' && <p class="field-label">מתאריך</p>}
         <input type="date" value={date} onChange={ev => setDate(ev.currentTarget.value)} />
         <div class="cal-allday-toggle">
           <Segmented
@@ -478,6 +495,18 @@ export function EventForm(props: { db: IDBDatabase; event?: CalendarEvent; date?
           </div>
         )}
         {badTimes && <p class="small warn">שעת הסיום צריכה להיות אחרי שעת ההתחלה</p>}
+      </section>
+
+      <section>
+        <h2>חוזר?</h2>
+        <Chips items={REPEATS} value={repeat} onChange={id => setRepeat(id as Repeat)} />
+        {repeat !== 'none' && (
+          <label class="field">
+            <span>עד תאריך (לא חובה)</span>
+            <input type="date" value={repeatUntil} min={date} onChange={ev => setRepeatUntil(ev.currentTarget.value)} />
+          </label>
+        )}
+        {badUntil && <p class="small warn">תאריך הסיום צריך להיות אחרי תאריך ההתחלה</p>}
       </section>
 
       <section>

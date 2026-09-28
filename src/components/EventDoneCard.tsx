@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { withAnswer } from '../data/calendar';
 import { dayLabel, todayStr } from '../data/dates';
 import { putRecords } from '../data/db';
 import type { CalendarEvent } from '../data/types';
@@ -11,7 +12,10 @@ import { MoneyInput } from './inputs';
  */
 export function EventDoneCard(props: {
   db: IDBDatabase;
+  /** This time round (for a repeating event, one of its days). */
   event: CalendarEvent;
+  /** The event as saved, which holds the answers. */
+  series: CalendarEvent;
   more: number;
   onRecord: (event: CalendarEvent, amount: number) => void;
   onLater: () => void;
@@ -24,8 +28,7 @@ export function EventDoneCard(props: {
 
   const nothing = async () => {
     setBusy(true);
-    const settled: CalendarEvent = { ...e, settled: { at: new Date().toISOString() } };
-    await putRecords(props.db, 'events', [settled]);
+    await putRecords(props.db, 'events', [withAnswer(props.series, e.date, { at: new Date().toISOString() })]);
     props.onDone();
   };
 

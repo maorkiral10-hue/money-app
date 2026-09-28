@@ -1,5 +1,5 @@
 import { addDays, daysInMonth, parseDate, ymd } from './dates';
-import type { CalendarEvent, Transaction } from './types';
+import type { CalendarEvent, EventAnswer, Transaction } from './types';
 
 /** How much of the calendar shows at once; pinching moves between them. */
 export type Zoom = 'year' | 'month' | 'week';
@@ -77,8 +77,13 @@ export function eventEnd(e: CalendarEvent): Date {
 }
 
 /** Events with an expected amount that are over and still wait for "how much was it in the end?", oldest first. */
-export const awaitingActual = (events: CalendarEvent[], now: Date) =>
-  events.filter(e => e.type !== 'none' && !e.settled && eventEnd(e) <= now).sort((a, b) => eventEnd(a).getTime() - eventEnd(b).getTime());
+export function awaitingActual(events: CalendarEvent[], now: Date) {
+  const today = ymd(now.getFullYear(), now.getMonth(), now.getDate());
+  // A repeating event is asked about for the last year of its repeats at most
+  return expandEvents(events.filter(e => e.type !== 'none'), addDays(today, -366), today)
+    .filter(e => !e.settled && eventEnd(e) <= now)
+    .sort((a, b) => eventEnd(a).getTime() - eventEnd(b).getTime());
+}
 
 export interface TimedEvent {
   event: CalendarEvent;
@@ -130,6 +135,7 @@ export function dayHours(timed: TimedEvent[]): [number, number] {
  */
 export function eventBalance(events: CalendarEvent[], transactions: Transaction[], from: string, to: string) {
   const txs = new Map(transactions.map(t => [t.id, t]));
+  events = expandEvents(events, from, to);
   const signed = (e: CalendarEvent, amount: number) => (e.type === 'income' ? amount : -amount);
   let expected = 0;
   let actual = 0;
@@ -150,3 +156,50 @@ export function eventBalance(events: CalendarEvent[], transactions: Transaction[
   }
   return { expected, actual, answered, open, openCount };
 }
+
+/** The days a (possibly repeating) event falls on between two days, inclusive. */
+export function occurrencesIn(e: CalendarEvent, from: string, to: string): string[] {
+  if (!e.repeat) return e.date >= from && e.date <= to ? [e.date] : [];
+  const last = e.repeatUntil && e.repeatUntil < to ? e.repeatUntil : to;
+  const out: string[] = [];
+  const { y, m0, d } = parseDate(e.date);
+  if (e.repeat === 'daily' || e.repeat === 'weekly') {
+    const step = e.repeat === 'daily' ? 1 : 7;
+    // Jump straight to the first repeat on or after `from`
+    let day = e.date;
+    if (from > day) {
+      const gap = Math.round((Date.UTC(...ymdParts(from)) - Date.UTC(...ymdParts(day))) / 86_400_000);
+      day = addDays(day, Math.ceil(gap / step) * step);
+    }
+    for (; day <= last; day = addDays(day, step)) out.push(day);
+    return out;
+  }
+  // Monthly on the same day (the last day in shorter months); yearly on the same date (28 Feb for 29 Feb)
+  const step = e.repeat === 'monthly' ? 1 : 12;
+  for (let k = 0; ; k += step) {
+    const first = new Date(y, m0 + k, 1);
+    const day = ymd(first.getFullYear(), first.getMonth(), Math.min(d, daysInMonth(first.getFullYear(), first.getMonth())));
+    if (day > last) break;
+    if (day >= from) out.push(day);
+  }
+  return out;
+}
+
+const ymdParts = (s: string): [number, number, number] => {
+  const { y, m0, d } = parseDate(s);
+  return [y, m0, d];
+};
+
+/** The answer given for an event on one of its days. */
+export const answerFor = (e: CalendarEvent, date: string): EventAnswer | undefined => (e.repeat ? e.settledDates?.[date] : e.settled);
+
+/** The event with the answer for one of its days saved. */
+export const withAnswer = (e: CalendarEvent, date: string, answer: EventAnswer): CalendarEvent =>
+  e.repeat ? { ...e, settledDates: { ...e.settledDates, [date]: answer } } : { ...e, settled: answer };
+
+/**
+ * Every event as it falls on each of its days between two days: repeating ones once per repeat, each
+ * with that day's date and answer. Editing one goes back to the event itself (same id).
+ */
+export const expandEvents = (events: CalendarEvent[], from: string, to: string): CalendarEvent[] =>
+  events.flatMap(e => occurrencesIn(e, from, to).map(date => (e.repeat ? { ...e, date, settled: answerFor(e, date) } : e)));

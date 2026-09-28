@@ -125,6 +125,18 @@ export interface CalendarEvent {
   /** 'HH:MM'; missing when only the start is known. */
   endTime?: string;
   /** Once it's over: the user said what it came to (the transaction recorded), or that there was nothing. */
-  settled?: { at: string; txId?: string };
+  settled?: EventAnswer;
+  /** Repeats from `date` on: every day, week (same weekday), month (same day) or year. */
+  repeat?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  /** Repeating events: no repeats after this day. */
+  repeatUntil?: string;
+  /** Repeating events: the answer for each date it came round on (`settled` is for one-off events). */
+  settledDates?: Record<string, EventAnswer>;
   createdAt: string;
+}
+
+/** What an event came to once it was over: the transaction recorded, or none when there was nothing. */
+export interface EventAnswer {
+  at: string;
+  txId?: string;
 }

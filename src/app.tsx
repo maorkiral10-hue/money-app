@@ -16,7 +16,7 @@ import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { GoalDetail, GoalForm, GoalsTab } from './screens/Goals';
 import { CalendarScreen, EventForm } from './screens/Calendar';
 import { EventDoneCard } from './components/EventDoneCard';
-import { awaitingActual } from './data/calendar';
+import { awaitingActual, withAnswer } from './data/calendar';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -26,7 +26,7 @@ import { MenuButton, SideMenu, SettingsPageScreen, type MenuSection, type MenuTa
 type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings';
 type Screen =
   | { name: Place }
-  | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place; eventId?: string }
+  | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place; eventId?: string; eventDate?: string }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
@@ -206,8 +206,7 @@ export function App() {
           // What a calendar event came to: the event is answered, tied to the transaction
           const event = entry.eventId && saved ? data.events.find(e => e.id === entry.eventId) : undefined;
           if (event && saved) {
-            const settled: CalendarEvent = { ...event, settled: { at: new Date().toISOString(), txId: saved.id } };
-            await putRecords(db, 'events', [settled]);
+            await putRecords(db, 'events', [withAnswer(event, entry.eventDate ?? event.date, { at: new Date().toISOString(), txId: saved.id })]);
           }
           const loaded = await refresh();
           if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
@@ -279,7 +278,7 @@ export function App() {
     content = (
       <EventForm
         db={db}
-        event={screen.event}
+        event={screen.event && (data.events.find(e => e.id === screen.event!.id) ?? screen.event)}
         date={screen.date}
         time={screen.time}
         onDone={async () => {
@@ -341,7 +340,7 @@ export function App() {
 
   // The main screens share the bottom bar and can be swiped between
   const tab = data.setupDone && (TABS as string[]).includes(screen.name) ? (screen.name as Tab) : null;
-  const awaiting = awaitingActual(data.events, now).filter(e => !laterIds.includes(e.id));
+  const awaiting = awaitingActual(data.events, now).filter(e => !laterIds.includes(`${e.id}|${e.date}`));
   const askEvent = awaiting[0];
   return (
     <>
@@ -379,17 +378,19 @@ export function App() {
           <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
           {askEvent && !menuOpen && (
             <EventDoneCard
-              key={askEvent.id}
+              key={`${askEvent.id}|${askEvent.date}`}
               db={db}
               event={askEvent}
+              series={data.events.find(e => e.id === askEvent.id) ?? askEvent}
               more={awaiting.length - 1}
-              onLater={() => setLaterIds(ids => [...ids, askEvent.id])}
+              onLater={() => setLaterIds(ids => [...ids, `${askEvent.id}|${askEvent.date}`])}
               onDone={afterChange}
               onRecord={(event, amount) =>
                 go({
                   name: 'entry',
                   from: tab,
                   eventId: event.id,
+                  eventDate: event.date,
                   preset: { type: event.type === 'income' ? 'income' : 'expense', amount, date: event.date, note: event.title },
                 })
               }
