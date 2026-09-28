@@ -3,7 +3,7 @@ import { todayStr } from './dates';
 import { occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recurring';
 import type { Budget } from './budget';
 import type { BalanceCheck, CheckEvery } from './reconcile';
-import type { Account, Category, PaymentMethod, Recurring, Transaction } from './types';
+import type { Account, CalendarEvent, Category, PaymentMethod, Recurring, Transaction } from './types';
 
 export interface AppData {
   accounts: Account[];
@@ -11,6 +11,8 @@ export interface AppData {
   categories: Category[];
   transactions: Transaction[];
   recurring: Recurring[];
+  /** Calendar events, by date. */
+  events: CalendarEvent[];
   setupDone: boolean;
   startDate: string;
   lastBackupAt?: string;
@@ -36,6 +38,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     categories: (await getAll<Category>(db, 'categories')).sort(byOrder),
     transactions: await getAll<Transaction>(db, 'transactions'),
     recurring: (await getAll<Recurring>(db, 'recurring')).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    events: (await getAll<CalendarEvent>(db, 'events')).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)),
     setupDone: (await getMeta<boolean>(db, 'setupDone')) === true,
     startDate: (await getMeta<string>(db, 'startDate')) ?? todayStr(),
     lastBackupAt: await getMeta<string>(db, 'lastBackupAt'),

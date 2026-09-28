@@ -417,3 +417,35 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
 }
 .side-menu-foot { margin-top: auto; padding-top: 16px; }
 @media (prefers-reduced-motion: reduce) { .side-menu-panel, .side-menu-backdrop { transition: none; } }
+
+/* calendar */
+.cal-area { touch-action: pan-y; overflow: hidden; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-head span { text-align: center; font-size: 12px; color: var(--muted); padding: 2px 0 6px; }
+.cal-day {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; margin: 0; padding: 7px 0 5px;
+  background: none; color: var(--text); font-weight: 500; font-size: 15px; border-radius: 10px; min-height: 44px;
+}
+.cal-grid.week .cal-day { min-height: 76px; font-size: 18px; }
+.cal-day.today span:first-child { color: var(--accent); font-weight: 800; }
+.cal-day.on { background: var(--accent); color: #fff; }
+.cal-day.on.today span:first-child { color: #fff; }
+.cal-dots { display: flex; gap: 3px; min-height: 6px; }
+.cal-dot { display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: var(--muted); vertical-align: middle; }
+.cal-dot.inc { background: var(--inc-bar); }
+.cal-dot.exp { background: var(--exp-bar); }
+.cal-day.on .cal-dot { box-shadow: 0 0 0 1.5px #fff; }
+.tx .cal-dot { width: 8px; height: 8px; border-radius: 4px; }
+.cal-year { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.cal-mini { display: block; width: 100%; margin: 0; padding: 6px; background: none; color: var(--text); border-radius: 10px; font-weight: 400; }
+.cal-mini.on { background: var(--soft); }
+.cal-mini-name { display: block; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.cal-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-mini-grid span { aspect-ratio: 1; border-radius: 2px; }
+.cal-mini-day { background: var(--line); }
+.cal-mini-day.inc { background: var(--inc-bar); }
+.cal-mini-day.exp { background: var(--exp-bar); }
+.cal-mini-day.none { background: var(--muted); }
+.cal-mini-day.today { outline: 1.5px solid var(--accent); }
+.cal-hint { margin: 8px 0 0; }
+.cal-totals { display: flex; justify-content: center; gap: 12px; font-size: 15px; font-weight: 600; margin: 0 0 12px; }

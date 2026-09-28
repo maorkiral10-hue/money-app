@@ -7,13 +7,14 @@ import { startup } from './data/startup';
 import { loadAll, recordDueRecurring, relinkEditedRecurring, type AppData } from './data/store';
 import { formatMoney } from './data/money';
 import { presetFromParams, type QuickPreset } from './data/quick';
-import type { Account, Recurring, Transaction } from './data/types';
+import type { Account, CalendarEvent, Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { BalanceCheck } from './screens/BalanceCheck';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { GoalDetail, GoalForm, GoalsTab } from './screens/Goals';
+import { CalendarScreen, EventForm } from './screens/Calendar';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -30,6 +31,8 @@ type Screen =
   | { name: 'budgetSetup' }
   | { name: 'goal'; id: string }
   | { name: 'goalForm'; goal?: Account }
+  | { name: 'calendar' }
+  | { name: 'eventForm'; event?: CalendarEvent; date?: string }
   | { name: 'balanceCheck'; from: Place }
   | { name: 'data'; from: Place };
 
@@ -50,7 +53,7 @@ function takeQuickAddParam(): Screen | null {
  * which the app has no other way of noticing. Screens where you are typing are never left this way.
  */
 const AWAY_FOR_NEW_ENTRY = 10_000;
-const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup', 'goal', 'goalForm'];
+const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup', 'goal', 'goalForm', 'eventForm'];
 
 function savedText(tx: Transaction, data: AppData) {
   const label = data.categories.find(c => c.id === tx.categoryId)?.name ?? (tx.type === 'transfer' ? 'העברה' : '');
@@ -165,7 +168,9 @@ export function App() {
           ? { name: 'balanceCheck', from: 'settings' }
           : target === 'data'
             ? { name: 'data', from: 'settings' }
-            : { name: 'settingsPage', page: target },
+            : target === 'calendar'
+              ? { name: 'calendar' }
+              : { name: 'settingsPage', page: target },
     );
 
   const afterChange = () => refresh();
@@ -248,6 +253,21 @@ export function App() {
           go({ name: 'budget' });
         }}
         onCancel={() => go({ name: 'budget' })}
+      />
+    );
+  } else if (screen.name === 'calendar') {
+    content = <CalendarScreen data={data} onBack={() => go({ name: 'settings' })} onEdit={(event, date) => go({ name: 'eventForm', event, date })} />;
+  } else if (screen.name === 'eventForm') {
+    content = (
+      <EventForm
+        db={db}
+        event={screen.event}
+        date={screen.date}
+        onDone={async () => {
+          await refresh();
+          go({ name: 'calendar' });
+        }}
+        onCancel={() => go({ name: 'calendar' })}
       />
     );
   } else if (screen.name === 'goal') {

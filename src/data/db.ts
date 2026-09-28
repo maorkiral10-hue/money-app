@@ -4,10 +4,10 @@ export type { Note } from './types';
 export const DB_NAME = 'money-app';
 
 // Bump only to add stores. Stores are never deleted here, so data from older versions survives.
-const DB_SCHEMA = 4;
+const DB_SCHEMA = 5;
 
 /** Stores holding records with an `id`. `meta` holds single named values. */
-export const RECORD_STORES = ['notes', 'accounts', 'methods', 'categories', 'transactions', 'recurring'] as const;
+export const RECORD_STORES = ['notes', 'accounts', 'methods', 'categories', 'transactions', 'recurring', 'events'] as const;
 export type RecordStore = (typeof RECORD_STORES)[number];
 export const DATA_STORES = [...RECORD_STORES, 'meta'] as const;
 

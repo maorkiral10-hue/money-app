@@ -106,3 +106,19 @@ export interface Recurring {
   handledThrough: string;
   createdAt: string;
 }
+
+/**
+ * Something coming up on the calendar (a wedding, a car test, a bonus), with what it's expected to cost
+ * or bring in. Planning only: events never touch balances, the budget or the forecast.
+ */
+export interface CalendarEvent {
+  id: string;
+  date: string;
+  title: string;
+  /** 'none': an event with no money attached. */
+  type: 'income' | 'expense' | 'none';
+  /** Expected amount; 0 when there isn't one. */
+  amount: number;
+  note?: string;
+  createdAt: string;
+}

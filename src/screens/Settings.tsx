@@ -10,7 +10,7 @@ import { deleteSetting, type AppData } from '../data/store';
 import { APP_VERSION } from '../version';
 
 export type SettingsPage = 'accounts' | 'methods' | 'categories' | 'preferences';
-export type MenuTarget = SettingsPage | 'recurring' | 'check' | 'data';
+export type MenuTarget = SettingsPage | 'recurring' | 'check' | 'data' | 'calendar';
 
 /** Everything about how the money is set up, gathered under one heading of the side menu. */
 const MONEY_SETTINGS: [MenuTarget, string][] = [
@@ -48,6 +48,9 @@ export function SideMenu(props: {
             ✕
           </button>
         </div>
+        <button class="side-menu-item" onClick={() => props.onOpen('calendar')}>
+          לוח זמנים
+        </button>
         <button class="side-menu-item" aria-expanded={moneyOpen} onClick={() => props.onSection(moneyOpen ? 'main' : 'money')}>
           הכסף שלי - הגדרות
           <span class={`chevron ${moneyOpen ? 'open' : ''}`}>‹</span>
