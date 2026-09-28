@@ -34,4 +34,15 @@ describe('savings goals', () => {
     expect(goalPlan(monthly, 0, [], '2026-09-28').perMonth).toBe(300_00);
     expect(goalPlan(trip, 7_000_00, [], '2026-09-28')).toMatchObject({ reached: true, perMonth: undefined });
   });
+
+  it('spending straight from a goal takes it out of the goal, not out of the liquid money', () => {
+    const spend: Transaction = { id: 's', type: 'expense', amount: 800_00, date: '2026-09-25', categoryId: 'vacation', accountId: 'trip', createdAt: '', updatedAt: '' };
+    const s = summarize({ ...ledger, transactions: [...ledger.transactions, spend] }, '2026-09-28');
+    expect(s.liquid).toBe(10_000_00 - 2_000_00 + 500_00);
+    expect(s.goals[0].balance).toBe(2_500_00 - 800_00);
+    // ...and what was paid for it still counts towards the target
+    const plan = goalPlan(trip, 1_700_00, [...ledger.transactions, spend], '2026-09-28');
+    expect(plan).toMatchObject({ spent: 800_00, perMonth: 600_00 });
+    expect(plan.progress).toBeCloseTo(2_500_00 / 7_000_00);
+  });
 });

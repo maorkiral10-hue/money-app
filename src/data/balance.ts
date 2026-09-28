@@ -48,7 +48,8 @@ export function transactionEffects(tx: Transaction, methods: Map<string, Payment
     ];
   }
   const method = tx.methodId ? methods.get(tx.methodId) : undefined;
-  if (!method) return [];
+  // Spent straight from a savings goal
+  if (!method) return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: -tx.amount, kind: 'expense', txId }] : [];
   if (method.kind === 'credit' && method.chargeDay) {
     // The purchase is recorded on its own date, but the bank only pays it on the card's charge days
     const first = nextChargeDate(tx.date, method.chargeDay);

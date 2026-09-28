@@ -4,6 +4,8 @@ import type { Account, Transaction } from './types';
 /** How a goal is going: what to put in each month to make it, and what went in this month. */
 export interface GoalPlan {
   saved: number;
+  /** Already paid straight out of the goal for what it's for: counts towards the target. */
+  spent: number;
   /** For a goal with a target: 0..1. */
   progress?: number;
   /** What to put in each month from now on: to reach the target by its date, or the fixed monthly amount. */
@@ -28,16 +30,19 @@ export function goalPlan(goal: Account, saved: number, transactions: Transaction
   const thisMonth = transactions
     .filter(t => t.type === 'transfer' && t.date >= monthStart && t.date <= today)
     .reduce((a, t) => a + (t.toAccountId === goal.id ? t.amount : t.accountId === goal.id ? -t.amount : 0), 0);
+  const spent = transactions.filter(t => t.type === 'expense' && t.accountId === goal.id).reduce((a, t) => a + t.amount, 0);
+  // Paying for the goal out of it (a flight for the trip) is progress, not falling behind
+  const done = saved + spent;
   const target = goal.goalTarget;
-  const reached = !!target && saved >= target;
+  const reached = !!target && done >= target;
   const left = (perMonth?: number) => (perMonth ? Math.max(0, perMonth - thisMonth) : 0);
   if (target && goal.goalDate && !reached) {
     const monthsLeft = goal.goalDate < today ? 1 : monthsUntil(today, goal.goalDate);
     // Worked out from where the goal stood when this month began, so a deposit made this month counts
     // towards this month instead of lowering the monthly amount
-    const perMonth = Math.ceil((target - (saved - thisMonth)) / monthsLeft / 100) * 100;
-    return { saved, progress: saved / target, perMonth, monthsLeft, thisMonth, leftThisMonth: left(perMonth), reached };
+    const perMonth = Math.ceil((target - (done - thisMonth)) / monthsLeft / 100) * 100;
+    return { saved, spent, progress: done / target, perMonth, monthsLeft, thisMonth, leftThisMonth: left(perMonth), reached };
   }
   const perMonth = reached ? undefined : goal.goalMonthly;
-  return { saved, progress: target ? Math.min(1, saved / target) : undefined, perMonth, thisMonth, leftThisMonth: left(perMonth), reached };
+  return { saved, spent, progress: target ? Math.min(1, done / target) : undefined, perMonth, thisMonth, leftThisMonth: left(perMonth), reached };
 }

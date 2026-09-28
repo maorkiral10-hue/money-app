@@ -68,7 +68,8 @@ export function EntryForm(props: {
   const [type, setType] = useState<TxType>(initialType);
   const [amountText, setAmountText] = useState(tx ? moneyInputText(tx.amount) : preset?.amount ? moneyInputText(preset.amount) : '');
   const [categoryId, setCategoryId] = useState(tx?.categoryId ?? presetCategory?.id);
-  const [methodId, setMethodId] = useState(tx?.methodId ?? presetMethod?.id ?? defaultMethod?.id);
+  // How it was paid: a payment method, or a savings goal the money comes straight out of
+  const [methodId, setMethodId] = useState(tx?.methodId ?? (tx?.type === 'expense' ? tx.accountId : undefined) ?? presetMethod?.id ?? defaultMethod?.id);
   const [accountId, setAccountId] = useState(tx?.accountId ?? presetAccount?.id);
   const [toAccountId, setToAccountId] = useState(tx?.toAccountId);
   const [date, setDate] = useState(tx?.date ?? today);
@@ -94,6 +95,7 @@ export function EntryForm(props: {
   const steps = STEPS[type];
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === tx?.categoryId));
   const method = methods.find(m => m.id === methodId);
+  const paidFromGoal = goalAccounts.some(g => g.id === methodId);
   const isCredit = type === 'expense' && method?.kind === 'credit';
   // What the card's limit will have left once this purchase is saved (a purchase dated later doesn't use it yet)
   const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
@@ -156,12 +158,15 @@ export function EntryForm(props: {
       updatedAt: now,
       // Editing a transaction a standing order recorded keeps it tied to that order, so it isn't counted twice
       ...(tx?.recurringId && type === tx.type && { recurringId: tx.recurringId, occurrence: tx.occurrence }),
-      ...(type === 'expense' && { categoryId, methodId, installments: isCredit && installments > 1 ? installments : undefined }),
+      ...(type === 'expense' &&
+        (paidFromGoal
+          ? { categoryId, accountId: methodId }
+          : { categoryId, methodId, installments: isCredit && installments > 1 ? installments : undefined })),
       ...(type === 'income' && { categoryId, accountId }),
       ...(type === 'transfer' && { accountId, toAccountId }),
     };
     await putRecords(props.db, 'transactions', [record]);
-    if (type === 'expense' && methodId) await setMeta(props.db, 'lastMethodId', methodId);
+    if (type === 'expense' && methodId && !paidFromGoal) await setMeta(props.db, 'lastMethodId', methodId);
     props.onSaved(record);
   };
 
@@ -221,7 +226,17 @@ export function EntryForm(props: {
 
       {step === 'category' && <Chips items={categories} value={categoryId} onChange={setCategoryId} />}
 
-      {step === 'method' && <Chips items={methods} value={methodId} onChange={setMethodId} />}
+      {step === 'method' && (
+        <>
+          <Chips items={methods} value={methodId} onChange={setMethodId} />
+          {goalAccounts.length > 0 && (
+            <>
+              <p class="field-label">מתוך יעד חיסכון</p>
+              <Chips items={goalAccounts} value={methodId} onChange={setMethodId} />
+            </>
+          )}
+        </>
+      )}
 
       {step === 'account' && <Chips items={liquidAccounts} value={accountId} onChange={setAccountId} />}
 

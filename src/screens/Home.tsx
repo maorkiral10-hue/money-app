@@ -166,7 +166,7 @@ export function Home(props: {
                   </div>
                   <div class="muted small">
                     {[
-                      tx.type === 'expense' ? name.get(tx.methodId!) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
+                      tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
                       tx.recurringId && 'הוראת קבע',
                       tx.installments && `${tx.installments} תשלומים`,
                       !tx.recurringId && tx.note,

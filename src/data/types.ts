@@ -28,6 +28,8 @@ export interface Account {
   goalDate?: string;
   /** Goals without a target: a fixed amount to put aside every month. */
   goalMonthly?: number;
+  /** Goals: the expense category the money is for, used when it's spent straight from the goal. */
+  goalCategoryId?: string;
 }
 
 export const isGoal = (a: Pick<Account, 'kind'>) => a.kind === 'goal';
@@ -68,7 +70,7 @@ export interface Transaction {
   categoryId?: string;
   /** Expenses: how it was paid. */
   methodId?: string;
-  /** Income: account it went into. Transfers: account it left. */
+  /** Income: account it went into. Transfers: account it left. Expenses paid straight from a savings goal: the goal. */
   accountId?: string;
   /** Transfers: account it went into. */
   toAccountId?: string;
