@@ -23,7 +23,7 @@ import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
 import { MenuButton, SideMenu, SettingsPageScreen, type MenuSection, type MenuTarget, type SettingsPage } from './screens/Settings';
 
-type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings';
+type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings' | 'calendar';
 type Screen =
   | { name: Place }
   | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place; eventId?: string; eventDate?: string }
@@ -33,7 +33,6 @@ type Screen =
   | { name: 'budgetSetup' }
   | { name: 'goal'; id: string }
   | { name: 'goalForm'; goal?: Account }
-  | { name: 'calendar' }
   | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string }
   | { name: 'balanceCheck'; from: Place }
   | { name: 'data'; from: Place };
@@ -273,7 +272,12 @@ export function App() {
       />
     );
   } else if (screen.name === 'calendar') {
-    content = <CalendarScreen data={data} onBack={() => go({ name: 'settings' })} onEdit={(event, date, time) => go({ name: 'eventForm', event, date, time })} />;
+    content = <CalendarScreen
+        data={data}
+        onBack={() => go({ name: 'settings' })}
+        onEdit={(event, date, time) => go({ name: 'eventForm', event, date, time })}
+        onEditTx={tx => go({ name: 'entry', tx, from: 'calendar' })}
+      />;
   } else if (screen.name === 'eventForm') {
     content = (
       <EventForm

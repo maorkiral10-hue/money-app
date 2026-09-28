@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
-import { dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
+import { statsTransactions } from '../data/budget';
+import { categoryColor } from '../data/colors';
 import type { AppData } from '../data/store';
-import type { CalendarEvent } from '../data/types';
+import type { CalendarEvent, Transaction } from '../data/types';
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 const ZOOM_NAMES: Record<Zoom, string> = { year: 'שנה', month: 'חודש', week: 'שבוע' };
@@ -20,24 +22,34 @@ let lastView: { zoom: Zoom; selected: string } | null = null;
 /** Green for money coming in, red for going out, grey for an event with no money. */
 const dotClass = (e: CalendarEvent) => (e.type === 'income' ? 'inc' : e.type === 'expense' ? 'exp' : 'none');
 
-function Dots(props: { events: CalendarEvent[] }) {
-  if (!props.events.length) return null;
+/** Under a day: a dot per kind of event, and a short bar when money was recorded that day (green or red by which way it went). */
+function Dots(props: { events: CalendarEvent[]; txs?: Transaction[] }) {
+  const txs = props.txs ?? [];
+  if (!props.events.length && !txs.length) return <span class="cal-dots" />;
   const kinds = [...new Set(props.events.map(dotClass))];
+  const net = txs.reduce((a, t) => a + (t.type === 'income' ? t.amount : -t.amount), 0);
   return (
     <span class="cal-dots">
       {kinds.map(k => (
         <span key={k} class={`cal-dot ${k}`} />
       ))}
+      {txs.length > 0 && <span class={`cal-tx ${net >= 0 ? 'inc' : 'exp'}`} />}
     </span>
   );
 }
 
 /**
  * The calendar: a year, a month or a week at a time; pinch in or out with two fingers (or tap the
- * buttons) to change how much shows. Below it, the chosen day's events. Events are for planning only:
- * nothing here touches the balance, the budget or the statement.
+ * buttons) to change how much shows. It shows both the events and the money actually recorded: each
+ * day's income and spending, and the period's totals. Events themselves never touch the balance or
+ * the budget; what they come to is recorded as an ordinary transaction once they're over.
  */
-export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdit: (event?: CalendarEvent, date?: string, time?: string) => void }) {
+export function CalendarScreen(props: {
+  data: AppData;
+  onBack: () => void;
+  onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
+  onEditTx: (tx: Transaction) => void;
+}) {
   const today = todayStr();
   const [zoom, setZoom] = useState<Zoom>(lastView?.zoom ?? 'month');
   const [selected, setSelected] = useState(lastView?.selected ?? today);
@@ -152,8 +164,17 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
   }, []);
 
   const [from, to] = periodRange(zoom, selected);
-  const balance = eventBalance(props.data.events, props.data.transactions, from, to);
-  const diff = balance.actual - balance.expected;
+  // Money recorded, counted as the home screen counts it (card purchases on the day bought, transfers left out)
+  const txs = statsTransactions(props.data).filter(t => t.type !== 'transfer');
+  const txByDate = new Map<string, Transaction[]>();
+  for (const t of txs) txByDate.set(t.date, [...(txByDate.get(t.date) ?? []), t]);
+  const money = { income: 0, expense: 0 };
+  for (const t of txs) {
+    if (t.date < from || t.date > to) continue;
+    if (t.type === 'income') money.income += t.amount;
+    else money.expense += t.amount;
+  }
+  const expected = eventBalance(props.data.events, props.data.transactions, from, to);
   const { y, m0 } = parseDate(selected);
   const title = zoom === 'year' ? String(y) : zoom === 'month' ? `${MONTH_NAMES[m0]} ${y}` : `${shortDate(from)} – ${shortDate(to)}`;
   const dayEvents = byDate.get(selected) ?? [];
@@ -167,7 +188,7 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
         onClick={() => setSelected(d)}
       >
         <span>{parseDate(d).d}</span>
-        <Dots events={byDate.get(d) ?? []} />
+        <Dots events={byDate.get(d) ?? []} txs={txByDate.get(d)} />
       </button>
     ) : (
       <span key={`blank${i}`} />
@@ -260,38 +281,29 @@ export function CalendarScreen(props: { data: AppData; onBack: () => void; onEdi
         <p class="muted small center cal-hint">גרירה ימינה או שמאלה: {ZOOM_NAMES[zoom]} הבא או הקודם · צביטה: פנימה לשבוע, החוצה לשנה</p>
       </div>
 
-      {(balance.answered > 0 || balance.openCount > 0) && (
-        // The events' own balance: what they were expected to cost or bring in against what they did
+      {(money.income > 0 || money.expense > 0 || expected.openCount > 0) && (
+        // What was really recorded in the period (the same count as the home screen), and what the events still expect
         <div class="card cal-balance">
-          <h2>מאזן אירועים ב{ZOOM_NAMES[zoom]}</h2>
-          {balance.answered > 0 && (
-            <>
-              <div class="line">
-                <span>צפי</span>
-                <span class={balance.expected < 0 ? 'exp' : 'inc'}>{formatMoney(balance.expected, { sign: true })}</span>
-              </div>
-              <div class="line">
-                <span>בפועל</span>
-                <span class={balance.actual < 0 ? 'exp' : 'inc'}>{formatMoney(balance.actual, { sign: true })}</span>
-              </div>
-              <div class="line cal-balance-diff">
-                <span>{diff > 0 ? 'יצא טוב מהצפי ב־' : diff < 0 ? 'חריגה מהצפי ב־' : 'בדיוק לפי הצפי'}</span>
-                {diff !== 0 && <span class={diff > 0 ? 'inc' : 'exp'}>{formatMoney(Math.abs(diff))}</span>}
-              </div>
-            </>
-          )}
-          {balance.openCount > 0 && (
+          <h2>מאזן ה{ZOOM_NAMES[zoom]}</h2>
+          <div class="line">
+            <span>נכנס</span>
+            <span class="inc">{formatMoney(money.income, { sign: true })}</span>
+          </div>
+          <div class="line">
+            <span>יצא</span>
+            <span class="exp">{formatMoney(-money.expense, { sign: true })}</span>
+          </div>
+          {expected.openCount > 0 && (
             <div class="muted small">
-              {balance.answered > 0 ? 'ועוד צפוי: ' : 'צפוי: '}
-              <span class={balance.open < 0 ? 'exp' : 'inc'}>{formatMoney(balance.open, { sign: true })}</span>
-              {' '}({balance.openCount === 1 ? 'אירוע אחד' : `${balance.openCount} אירועים`} {balance.openCount === 1 ? 'שעוד לא נגמר או לא עודכן' : 'שעוד לא נגמרו או לא עודכנו'})
+              עוד צפוי מאירועים: <span class={expected.open < 0 ? 'exp' : 'inc'}>{formatMoney(expected.open, { sign: true })}</span>
+              {' '}({expected.openCount === 1 ? 'אירוע אחד' : `${expected.openCount} אירועים`})
             </div>
           )}
         </div>
       )}
 
       {zoom !== 'year' && (
-        <DayView data={props.data} date={selected} today={today} events={dayEvents} onEdit={props.onEdit} />
+        <DayView data={props.data} date={selected} today={today} events={dayEvents} txs={txByDate.get(selected) ?? []} onEdit={props.onEdit} onEditTx={props.onEditTx} />
       )}
       <p class="muted small center">הסכומים כאן לתכנון בלבד. הם לא משנים את היתרה, התקציב או עובר ושב.</p>
     </>
@@ -344,9 +356,12 @@ function DayView(props: {
   date: string;
   today: string;
   events: CalendarEvent[];
+  txs: Transaction[];
   onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
+  onEditTx: (tx: Transaction) => void;
 }) {
   const allDay = props.events.filter(e => !e.startTime);
+  const name = (id?: string) => props.data.categories.find(c => c.id === id)?.name ?? '';
   const timed = layoutDay(props.events);
   const [first, last] = dayHours(timed);
   const now = new Date();
@@ -358,6 +373,24 @@ function DayView(props: {
   return (
     <div class="card">
       <h2 class="list-title">{dayLabel(props.date, props.today)}</h2>
+      {props.txs.length > 0 && (
+        // What was actually recorded that day
+        <div class="cal-day-txs">
+          <div class="muted small">נרשם ביום הזה</div>
+          {props.txs.map(t => (
+            <button key={t.id} class="tx" onClick={() => props.onEditTx(t)}>
+              <div>
+                <div>
+                  <span class="cat-dot" style={{ background: categoryColor(t.categoryId, props.data.categories) }} />
+                  {name(t.categoryId)}
+                </div>
+                {t.note && <div class="muted small">{t.note}</div>}
+              </div>
+              <div class={t.type === 'income' ? 'inc' : 'exp'}>{formatMoney(t.type === 'income' ? t.amount : -t.amount, { sign: true })}</div>
+            </button>
+          ))}
+        </div>
+      )}
       {allDay.length > 0 && (
         <div class="cal-allday">
           <div class="muted small">כל היום</div>
@@ -419,7 +452,9 @@ export function EventForm(props: {
 }) {
   const e = props.event;
   const [title, setTitle] = useState(e?.title ?? '');
-  const [date, setDate] = useState(e?.date ?? props.date ?? todayStr());
+  const [date, setDate] = useState(props.occurrence ?? e?.date ?? props.date ?? todayStr());
+  // Saving a change to a repeating event opened from one of its days asks: only this time, or every time?
+  const [askScope, setAskScope] = useState(false);
   const [type, setType] = useState<CalendarEvent['type']>(e?.type ?? 'expense');
   const [amount, setAmount] = useState(e?.amount ?? 0);
   const [note, setNote] = useState(e?.note ?? '');
@@ -453,9 +488,18 @@ export function EventForm(props: {
 
   const save = async () => {
     if (!valid) return;
+    if (e?.repeat && props.occurrence && !askScope) {
+      setAskScope(true);
+      return;
+    }
+    await saveSeries();
+  };
+  const saveSeries = async () => {
+    // A series keeps its first day unless the date was changed here
+    const start = e?.repeat && props.occurrence && date === props.occurrence ? e.date : date;
     const event: CalendarEvent = {
       id: e?.id ?? crypto.randomUUID(),
-      date,
+      date: start,
       title: title.trim(),
       type,
       amount: type === 'none' ? 0 : amount,
@@ -473,6 +517,25 @@ export function EventForm(props: {
     await putRecords(props.db, 'events', [event]);
     // Back on the calendar, a one-off event's day is the one showing
     if (repeat === 'none' || !e) lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
+    props.onDone(date);
+  };
+  // Only this time: the day comes out of the series and becomes an event of its own, with the changes
+  const saveOne = async () => {
+    if (!e || !props.occurrence) return;
+    const single: CalendarEvent = {
+      id: crypto.randomUUID(),
+      date,
+      title: title.trim(),
+      type,
+      amount: type === 'none' ? 0 : amount,
+      note: note.trim() || undefined,
+      startTime: allDay ? undefined : startTime,
+      endTime: allDay ? undefined : endTime,
+      settled: answerFor(e, props.occurrence),
+      createdAt: new Date().toISOString(),
+    };
+    await putRecords(props.db, 'events', [skipDay(e, props.occurrence), single]);
+    lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
     props.onDone(date);
   };
   // Only this time: the day comes out of the series, the rest stays
@@ -579,6 +642,24 @@ export function EventForm(props: {
         <h2>הערה (לא חובה)</h2>
         <input type="text" value={note} onInput={ev => setNote(ev.currentTarget.value)} />
       </section>
+
+      {askScope && props.occurrence && (
+        <div class="event-popup" role="dialog" aria-modal="true">
+          <div class="event-popup-backdrop" onClick={() => setAskScope(false)} />
+          <div class="card pending event-popup-card">
+            <h2>לשנות רק את הפעם הזו, או את כל החזרות?</h2>
+            <div class="scope-buttons">
+              <button onClick={saveOne}>רק הפעם הזו ({dayLabel(props.occurrence, todayStr())})</button>
+              <button class="secondary" onClick={saveSeries}>
+                כל החזרות
+              </button>
+            </div>
+            <button class="link small event-popup-later" onClick={() => setAskScope(false)}>
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
 
       <button disabled={!valid} onClick={save}>
         שמור

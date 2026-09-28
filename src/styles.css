@@ -9,6 +9,8 @@
   }
 }
 * { box-sizing: border-box; }
+/* Behave like an app: no double-tap or pinch zoom of the whole page (the calendar has its own pinch) */
+html { touch-action: manipulation; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -500,3 +502,14 @@ button.cal-add { margin: 0 0 10px; }
 .cal-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
 .cal-weekday { margin: 0; padding: 10px 0; border-radius: 10px; background: var(--soft); color: var(--text); font-weight: 600; }
 .cal-weekday.on { background: var(--accent); color: #fff; }
+
+/* calendar: money recorded on a day */
+.cal-tx { display: inline-block; width: 10px; height: 4px; border-radius: 2px; background: var(--muted); }
+.cal-tx.inc { background: var(--inc-bar); }
+.cal-tx.exp { background: var(--exp-bar); }
+.cal-day.on .cal-tx { box-shadow: 0 0 0 1.5px #fff; }
+.cal-dots { align-items: center; }
+.cal-day-txs { margin-bottom: 10px; }
+.cal-day-txs .tx { padding: 8px 0; }
+.scope-buttons { display: flex; flex-direction: column; gap: 8px; }
+.scope-buttons button { margin: 0; }
