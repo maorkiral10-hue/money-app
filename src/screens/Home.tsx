@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
@@ -30,10 +30,10 @@ export function Home(props: {
 }) {
   const { data } = props;
   const today = todayStr();
-  const summary = summarize(data, today);
+  const summary = useMemo(() => summarize(data, today), [data, today]);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [calendarDay, setCalendarDay] = useState(props.day);
-  const checkState = checkStatus(data, today);
+  const checkState = useMemo(() => checkStatus(data, today), [data, today]);
 
   return (
     <>

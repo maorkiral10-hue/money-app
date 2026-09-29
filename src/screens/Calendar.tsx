@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
@@ -116,12 +116,15 @@ export function CalendarScreen(props: {
     setZoom(next);
   };
 
-  const byDate = new Map<string, CalendarEvent[]>();
   const [viewFrom, viewTo] = periodRange(zoom, selected);
   const [yearFrom, yearTo] = periodRange('year', selected);
-  for (const e of expandEvents(props.data.events, viewFrom < yearFrom ? viewFrom : yearFrom, viewTo > yearTo ? viewTo : yearTo)) {
-    byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
-  }
+  const rangeFrom = viewFrom < yearFrom ? viewFrom : yearFrom;
+  const rangeTo = viewTo > yearTo ? viewTo : yearTo;
+  const byDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of expandEvents(props.data.events, rangeFrom, rangeTo)) map.set(e.date, [...(map.get(e.date) ?? []), e]);
+    return map;
+  }, [props.data.events, rangeFrom, rangeTo]);
 
   // Pinching: fingers apart shows less (year → month → week), together shows more. The day or month
   // between the fingers becomes the one in view.
@@ -204,25 +207,34 @@ export function CalendarScreen(props: {
   const [from, to] = periodRange(zoom, selected);
   // Money recorded, counted as the home screen counts it (card purchases on the day bought, transfers left out)
   // (a standing order on a card is part of the card's charge, not a day of its own)
-  const txs = statsTransactions(props.data).filter(t => t.type !== 'transfer' && !onCardStandingOrder(t, props.data.methods));
-  const txByDate = new Map<string, Transaction[]>();
-  for (const t of txs) txByDate.set(t.date, [...(txByDate.get(t.date) ?? []), t]);
-  const money = { income: 0, expense: 0 };
-  for (const t of txs) {
-    if (t.date < from || t.date > to) continue;
-    if (t.type === 'income') money.income += t.amount;
-    else money.expense += t.amount;
-  }
-  const expected = eventBalance(props.data.events, props.data.transactions, from, to);
+  const txs = useMemo(
+    () => statsTransactions(props.data).filter(t => t.type !== 'transfer' && !onCardStandingOrder(t, props.data.methods)),
+    [props.data],
+  );
+  const txByDate = useMemo(() => {
+    const map = new Map<string, Transaction[]>();
+    for (const t of txs) map.set(t.date, [...(map.get(t.date) ?? []), t]);
+    return map;
+  }, [txs]);
+  const money = useMemo(() => {
+    const m = { income: 0, expense: 0 };
+    for (const t of txs) {
+      if (t.date < from || t.date > to) continue;
+      if (t.type === 'income') m.income += t.amount;
+      else m.expense += t.amount;
+    }
+    return m;
+  }, [txs, from, to]);
+  const expected = useMemo(() => eventBalance(props.data.events, props.data.transactions, from, to), [props.data, from, to]);
   // Days with money still to come: a card's charge, a standing order
-  const plannedDays = new Set<string>();
-  {
-    const until = viewTo > yearTo ? viewTo : yearTo;
-    const planned = plannedMoney(props.data, today, until);
-    for (const t of planned.expected) if (!onCardStandingOrder(t, props.data.methods)) plannedDays.add(t.date);
-    for (const t of planned.variable) plannedDays.add(t.date);
-    for (const st of planned.charges) plannedDays.add(st.date);
-  }
+  const plannedDays = useMemo(() => {
+    const days = new Set<string>();
+    const planned = plannedMoney(props.data, today, rangeTo);
+    for (const t of planned.expected) if (!onCardStandingOrder(t, props.data.methods)) days.add(t.date);
+    for (const t of planned.variable) days.add(t.date);
+    for (const st of planned.charges) days.add(st.date);
+    return days;
+  }, [props.data, today, rangeTo]);
   const { y, m0 } = parseDate(selected);
   const title = zoom === 'year' ? String(y) : zoom === 'month' ? `${MONTH_NAMES[m0]} ${y}` : `${shortDate(from)} – ${shortDate(to)}`;
   const dayEvents = byDate.get(selected) ?? [];
@@ -415,12 +427,12 @@ function DayAgenda(props: {
   const { data } = props;
   const [view, setView] = useState<'day' | 'month'>('day');
   const events = [...props.events].sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
-  const dayRows = moneyRows(data, props.date, props.date, props.today);
+  const dayRows = useMemo(() => moneyRows(data, props.date, props.date, props.today), [data, props.date, props.today]);
   // The financial month the chosen day is in, as set in the settings (e.g. the 1st to the end of the month)
   const key = periodKey(props.date, data.monthStartDay);
   const from = periodStart(key, data.monthStartDay);
   const to = periodEnd(key, data.monthStartDay);
-  const monthRows = view === 'month' ? moneyRows(data, from, to, props.today) : [];
+  const monthRows = useMemo(() => (view === 'month' ? moneyRows(data, from, to, props.today) : []), [view, data, from, to, props.today]);
   // Charge lines aren't something you recorded
   const monthCount = monthRows.filter(r => r.kind === 'tx').length;
 

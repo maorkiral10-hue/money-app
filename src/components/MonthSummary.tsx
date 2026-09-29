@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { AnimatedMoney } from './AnimatedMoney';
 import { CardLine } from './CardLine';
 import { cardStatements, cardUsage } from '../data/balance';
@@ -64,7 +64,7 @@ export function MonthSummary(props: {
   const index = months.indexOf(key);
   const start = periodStart(key, startDay);
   const end = periodEnd(key, startDay);
-  const txs = statsTransactions(data);
+  const txs = useMemo(() => statsTransactions(data), [data]);
   const stats = monthStats(txs, key, startDay);
   const isCurrent = key === currentKey;
   const name = (id: string) => data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה';
@@ -72,7 +72,10 @@ export function MonthSummary(props: {
   // Standing orders and fixed income: the ones recorded this month, and the ones still to come in it. They
   // happen for sure (recorded automatically on their day), so they count in the month's totals already.
   const savingsId = data.budget?.savingsMode === 'separate' ? data.budget.savingsCategoryId : undefined;
-  const coming = end > today ? expectedTransactions(data.recurring, data.transactions, today, end, data.startDate).filter(t => t.date >= start) : [];
+  const coming = useMemo(
+    () => (end > today ? expectedTransactions(data.recurring, data.transactions, today, end, data.startDate).filter(t => t.date >= start) : []),
+    [data, today, start, end],
+  );
   const fixedOf = (type: 'income' | 'expense') =>
     [
       ...txs.filter(t => t.type === type && t.recurringId && t.date >= start && t.date <= end),
@@ -153,7 +156,7 @@ export function MonthSummary(props: {
 
   // Credit cards together: how much of all the limits is used
   const asOf = props.asOf ?? today;
-  const cards = cardUsage(data, asOf, today);
+  const cards = useMemo(() => cardUsage(data, asOf, today), [data, asOf, today]);
   const used = cards.reduce((a, c) => a + c.used, 0);
   const limits = cards.reduce((a, c) => a + (c.card.creditLimit ?? 0), 0);
   const withLimit = cards.filter(c => c.card.creditLimit);
