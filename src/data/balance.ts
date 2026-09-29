@@ -194,10 +194,16 @@ export interface CardUsage {
   lastEntry?: string;
 }
 
-/** How much of each credit card's limit is taken up right now. Purchases dated in the future don't count yet. */
-export function cardUsage(ledger: Ledger, today: string): CardUsage[] {
-  const txDates = new Map(ledger.transactions.map(t => [t.id, t.date]));
-  const pending = allEffects(ledger).filter(
+/**
+ * How much of each credit card's limit is taken up on a day (`today` unless said otherwise): purchases
+ * made by then that the bank hasn't paid for by then. For a day still to come, the card's standing orders
+ * due by then count too (from the charge the form's "החיוב הראשון" answer put the first one in).
+ */
+export function cardUsage(ledger: Ledger, today: string, now = today): CardUsage[] {
+  const coming = today > now && ledger.recurring ? expectedTransactions(ledger.recurring, ledger.transactions, now, today, ledger.startDate) : [];
+  const withComing = coming.length ? { ...ledger, transactions: [...ledger.transactions, ...coming] } : ledger;
+  const txDates = new Map(withComing.transactions.map(t => [t.id, t.date]));
+  const pending = allEffects(withComing).filter(
     e => e.kind === 'credit' && e.date > today && (!e.txId || (txDates.get(e.txId) ?? '') <= today),
   );
   return ledger.methods

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cardStatements, cardUsage, nextChargeDate, splitInstallments, summarize, upcomingItems, type Ledger } from './balance';
 import { parseMoney } from './money';
-import type { Account, PaymentMethod, Transaction } from './types';
+import type { Account, PaymentMethod, Transaction, Recurring } from './types';
 
 const acc = (id: string, openingBalance: number, kind: Account['kind'] = 'bank'): Account => ({ id, name: id, kind, openingBalance, order: 0 });
 const bank = acc('bank', 1_000_00);
@@ -169,4 +169,29 @@ describe('typing amounts', () => {
   it.each([
     ['12', 12_00], ['12.5', 12_50], ['12,50', 12_50], ['1,234', 1_234_00], ['₪ 45', 45_00], ['', null], ['abc', null],
   ])('%s', (text, agorot) => expect(parseMoney(text)).toBe(agorot));
+});
+
+describe('standing orders on a card and its limit', () => {
+  const rec = (id: string, firstDate: string, amount: number): Recurring => ({
+    id, name: id, type: 'expense', frequency: 'monthly', firstDate, variable: false, estimate: 'set', amount,
+    methodId: 'visa', categoryId: 'c', handledThrough: '2026-09-29', createdAt: '',
+  });
+  const ledger: Ledger = {
+    accounts: [{ id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 0, order: 0 }],
+    methods: [{ id: 'visa', name: 'ויזה', kind: 'credit', accountId: 'bank', chargeDay: 2, openingPending: 2_300_00, creditLimit: 3_000_00, order: 0 }],
+    transactions: [],
+    // Spotify on the 15th; a gym already inside what was on the card at the start, so (as the form's
+    // "רק מהחודש הבא" does) it starts on the charge day and is first in the charge after
+    recurring: [rec('spotify', '2026-09-15', 20_00), rec('gym', '2026-10-02', 150_00)],
+    startDate: '2026-09-20',
+  };
+
+  it('counts coming standing orders in the limit on a day still to come', () => {
+    // Today: only what was typed in at the start
+    expect(cardUsage(ledger, '2026-09-29')[0].used).toBe(2_300_00);
+    // 1 October: nothing new on the card yet
+    expect(cardUsage(ledger, '2026-10-01', '2026-09-29')[0].used).toBe(2_300_00);
+    // 1 November: the first charge is paid; Spotify of 15 October and the gym of 2 October are on the card
+    expect(cardUsage(ledger, '2026-11-01', '2026-09-29')[0].used).toBe(170_00);
+  });
 });

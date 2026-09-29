@@ -94,7 +94,7 @@ export function MonthSummary(props: {
 
   // Credit cards together: how much of all the limits is used
   const asOf = props.asOf ?? today;
-  const cards = cardUsage(data, asOf);
+  const cards = cardUsage(data, asOf, today);
   const used = cards.reduce((a, c) => a + c.used, 0);
   const limits = cards.reduce((a, c) => a + (c.card.creditLimit ?? 0), 0);
   const withLimit = cards.filter(c => c.card.creditLimit);
