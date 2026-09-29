@@ -4,7 +4,7 @@ import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
 import { periodKey } from '../data/dashboard';
 import { todayStr } from '../data/dates';
-import { checkStatus } from '../data/reconcile';
+import { checkMark, checkStatus } from '../data/reconcile';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { CalendarEvent, Transaction } from '../data/types';
@@ -66,9 +66,22 @@ export function Home(props: {
         )}
         {showBreakdown && (
           <div class="upcoming">
-            {summary.byAccount.map(({ account, balance }) => (
-              <Line key={account.id} label={account.name} value={balance} />
-            ))}
+            {summary.byAccount.map(({ account, balance }) => {
+              // When this source was last checked against the bank (or the wallet), and how it came out
+              const last = data.balanceChecks.find(c => c.accountId === account.id);
+              const mark = last && checkMark(last.real, last.app, data.checkTolerance);
+              return (
+                <div key={account.id} class="line account-line">
+                  <span>
+                    {account.name}
+                    <span class={`small block check-when ${mark ?? ''}`}>
+                      {last ? `נבדק ${daysAgo(last.date + 'T12:00:00')} ${mark === 'exact' ? '✓' : mark === 'minor' ? '✓✗' : '✗'}` : 'עוד לא נבדק'}
+                    </span>
+                  </span>
+                  <span>{formatMoney(balance)}</span>
+                </div>
+              );
+            })}
           </div>
         )}
         <div class="hero-buttons">
@@ -95,14 +108,5 @@ export function Home(props: {
         </button>
       </div>
     </>
-  );
-}
-
-function Line(props: { label: string; value: number }) {
-  return (
-    <div class="line">
-      <span>{props.label}</span>
-      <span>{formatMoney(props.value)}</span>
-    </div>
   );
 }

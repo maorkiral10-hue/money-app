@@ -561,3 +561,10 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .holiday-lines { margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
 .holiday-line { color: var(--holiday); font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
 .rest-note { color: var(--holiday); }
+
+/* the big number's breakdown: when each source was last checked */
+.account-line { align-items: center; padding: 5px 0; }
+.check-when { color: var(--muted); font-weight: 400; }
+.check-when.exact { color: var(--pos); }
+.check-when.minor { color: var(--minor); }
+.check-when.off { color: var(--neg); }
