@@ -4,7 +4,7 @@ import { dayLabel, todayStr } from '../data/dates';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, checkStatus, correctBalance, defaultEvery, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { appBalance, checkMark, checkStatus, correctBalance, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -40,18 +40,25 @@ export function BalanceCheck(props: {
     setTyped(false);
     setReal(0);
     setDone('');
+    setEarly(null);
   };
   const [real, setReal] = useState(0);
   const [typed, setTyped] = useState(false);
   const [checked, setChecked] = useState(false);
   const [done, setDone] = useState('');
+  // Checked before its time: ask whether the next reminder counts from today or stays on schedule
+  const [early, setEarly] = useState<'ask' | 'today' | 'regular' | null>(null);
   const account = accounts.find(a => a.id === accountId);
   const app = account ? appBalance(data, account.id, today) : 0;
   const gap = real - app;
+  const mark = checkMark(real, app, data.checkTolerance);
   const name = (id: string) => data.accounts.find(a => a.id === id)?.name ?? '';
 
   const compare = async () => {
     if (!account) return;
+    const due = checkStatus(data, today).due.some(a => a.id === account.id);
+    const checkedBefore = data.balanceChecks.some(c => c.accountId === account.id);
+    setEarly(!due && checkedBefore && everyFor(data, account) !== 'never' ? 'ask' : null);
     setChecked(true);
     setDone('');
     await logCheck(props.db, { date: today, accountId: account.id, real, app, result: gap === 0 ? 'match' : 'gap' });
@@ -61,6 +68,7 @@ export function BalanceCheck(props: {
   const correct = async () => {
     if (!account || !confirm(`לעדכן את היתרה של ${account.name} באפליקציה ל-${formatMoney(real)}?\nזה לא משנה הוצאות או הכנסות, רק את היתרה.`)) return;
     await correctBalance(props.db, account, real, app, today);
+    if (early === 'regular') await keepRegularSchedule(props.db, account.id, today);
     setDone(`היתרה של ${account.name} עודכנה ל-${formatMoney(real)}.`);
     props.onChange();
   };
@@ -96,12 +104,17 @@ export function BalanceCheck(props: {
       </div>
 
       {checked && account && !done && (
-        <div class={`card check-result ${gap === 0 ? 'inc-panel' : 'exp-panel'}`}>
-          {gap === 0 ? (
+        <div class={`card check-result ${mark === 'exact' ? 'inc-panel' : mark === 'minor' ? 'minor-panel' : 'exp-panel'}`}>
+          {mark === 'exact' ? (
             <h2 class="inc">✓ מתאים בדיוק</h2>
           ) : (
             <>
-              <h2 class="exp">יש פער של {formatMoney(Math.abs(gap))}</h2>
+              {mark === 'minor' ? (
+                <h2 class="minor">✓✗ שינוי מינורי של {formatMoney(Math.abs(gap))}</h2>
+              ) : (
+                <h2 class="exp">✗ יש פער של {formatMoney(Math.abs(gap))}</h2>
+              )}
+              {mark === 'minor' && <p class="muted small">בתוך הטווח שהגדרת ({formatMoney(data.checkTolerance)}), אז הבדיקה נחשבת תקינה.</p>}
               <div class="line">
                 <span>באפליקציה</span>
                 <span>{formatMoney(app)}</span>
@@ -129,6 +142,24 @@ export function BalanceCheck(props: {
         </div>
       )}
       {done && <div class="card note">{done}</div>}
+      {checked && early === 'ask' && account && (
+        <div class="card">
+          <h2>בדקת לפני הזמן. מתי הבדיקה הבאה?</h2>
+          <div class="scope-buttons">
+            <button onClick={() => setEarly('today')}>לספור מהיום</button>
+            <button
+              class="secondary"
+              onClick={async () => {
+                await keepRegularSchedule(props.db, account.id, today);
+                setEarly('regular');
+                props.onChange();
+              }}
+            >
+              להישאר בקצב הרגיל
+            </button>
+          </div>
+        </div>
+      )}
       {checked && nextDue && (
         <button onClick={() => pick(nextDue.id)}>לבדיקה הבאה: {nextDue.name}</button>
       )}
@@ -147,6 +178,16 @@ export function BalanceCheck(props: {
             ['separate', 'לכל אחד בנפרד'],
           ]}
         />
+        <label class="field">
+          <span>פער שנחשב שינוי מינורי (לא נחשב חריגה): עד</span>
+          <MoneyInput
+            value={data.checkTolerance}
+            onChange={async v => {
+              await setMeta(props.db, 'checkTolerance', v);
+              props.onChange();
+            }}
+          />
+        </label>
         {data.checkMode === 'together' ? (
           <div class="check-every">
             <Segmented
@@ -190,10 +231,23 @@ export function BalanceCheck(props: {
               <div>
                 <div>{name(c.accountId)}</div>
                 <div class="muted small">
-                  {dayLabel(c.date, today)} · {c.result === 'match' ? 'התאים' : c.result === 'corrected' ? 'היתרה עודכנה' : `פער של ${formatMoney(Math.abs(c.real - c.app))}`}
+                  {[
+                    dayLabel(c.date, today),
+                    checkMark(c.real, c.app, data.checkTolerance) === 'exact'
+                      ? 'התאים'
+                      : checkMark(c.real, c.app, data.checkTolerance) === 'minor'
+                        ? `שינוי מינורי של ${formatMoney(Math.abs(c.real - c.app))}`
+                        : `פער של ${formatMoney(Math.abs(c.real - c.app))}`,
+                    c.result === 'corrected' && 'היתרה עודכנה',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </div>
               </div>
-              <div class={c.result === 'gap' ? 'exp' : 'inc'}>{c.result === 'gap' ? '≠' : '✓'}</div>
+              {(() => {
+                const m = checkMark(c.real, c.app, data.checkTolerance);
+                return <div class={m === 'exact' ? 'inc' : m === 'minor' ? 'minor' : 'exp'}>{m === 'exact' ? '✓' : m === 'minor' ? '✓✗' : '✗'}</div>;
+              })()}
             </div>
           ))}
         </div>

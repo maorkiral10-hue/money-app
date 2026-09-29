@@ -545,3 +545,9 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .check-every { margin-top: 10px; }
 .check-every-row { align-items: center; padding: 6px 0; font-size: 15px; }
 .check-every-row select { width: auto; margin: 0; padding: 6px 8px; font-size: 15px; }
+
+/* a gap within the user's own limit: minor, not a failed check */
+:root { --minor: #b7791f; }
+@media (prefers-color-scheme: dark) { :root { --minor: #e0a33a; } }
+.minor { color: var(--minor); font-weight: 700; }
+.minor-panel { border-color: var(--minor); }

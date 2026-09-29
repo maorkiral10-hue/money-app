@@ -13,6 +13,27 @@ export interface BalanceCheck {
   app: number;
   /** "corrected": the app's balance was set to the real one. */
   result: 'match' | 'gap' | 'corrected';
+  /**
+   * Checked before it was due, and the user chose to stay on the regular schedule: the next reminder is
+   * counted from the check before, as if this one hadn't moved it.
+   */
+  keepSchedule?: boolean;
+}
+
+/** How a check came out: exactly right, a gap small enough to count as minor (the user's own limit), or off. */
+export function checkMark(real: number, app: number, tolerance: number): 'exact' | 'minor' | 'off' {
+  const gap = Math.abs(real - app);
+  return gap === 0 ? 'exact' : gap <= tolerance ? 'minor' : 'off';
+}
+
+/** Keeps a source on its regular schedule after an early check (all of that day's records for it). */
+export async function keepRegularSchedule(db: IDBDatabase, accountId: string, date: string) {
+  const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+  await setMeta(
+    db,
+    'balanceChecks',
+    all.map(c => (c.accountId === accountId && c.date === date ? { ...c, keepSchedule: true } : c)),
+  );
 }
 
 export type CheckEvery = 'never' | 'week' | 'twoWeeks' | 'month';
@@ -74,7 +95,8 @@ export const everyFor = (s: CheckSettings, a: Account): CheckEvery =>
  */
 export function checkStatus(data: CheckSettings & { accounts: Account[]; balanceChecks: BalanceCheck[] }, today: string) {
   const sources = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal' && everyFor(data, a) !== 'never');
-  const last = (id: string) => data.balanceChecks.find(c => c.accountId === id)?.date;
+  // An early check the user chose not to count doesn't move the schedule
+  const last = (id: string) => data.balanceChecks.find(c => c.accountId === id && !c.keepSchedule)?.date;
   const due = sources.filter(a => checkDue(everyFor(data, a), last(a.id), today));
   return { due, total: sources.length, checked: sources.length - due.length };
 }

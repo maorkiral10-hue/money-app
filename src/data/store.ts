@@ -30,6 +30,8 @@ export interface AppData {
   /** Checks: all sources together on `checkEvery`, or each on its own schedule. */
   checkMode: CheckMode;
   checkEveryByAccount: Record<string, CheckEvery>;
+  /** A gap up to this much (agorot) counts as minor, not as a failed check. */
+  checkTolerance: number;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -54,6 +56,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     checkEvery: (await getMeta<CheckEvery>(db, 'checkEvery')) ?? 'week',
     checkMode: (await getMeta<CheckMode>(db, 'checkMode')) ?? 'together',
     checkEveryByAccount: (await getMeta<Record<string, CheckEvery>>(db, 'checkEveryByAccount')) ?? {},
+    checkTolerance: (await getMeta<number>(db, 'checkTolerance')) ?? 0,
   };
 }
 

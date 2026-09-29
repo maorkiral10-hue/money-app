@@ -23,6 +23,7 @@ const data = {
   checkEvery: 'never',
   checkMode: 'together',
   checkEveryByAccount: {},
+  checkTolerance: 0,
 } as AppData;
 
 describe('the month, like a bank statement', () => {

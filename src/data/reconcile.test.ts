@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, checkDue, checkStatus, correctBalance, type BalanceCheck } from './reconcile';
+import { appBalance, checkDue, checkMark, checkStatus, correctBalance, type BalanceCheck } from './reconcile';
 import type { Account } from './types';
 
 let n = 0;
@@ -56,5 +56,24 @@ describe('which money sources are due a check', () => {
     };
     expect(checkStatus(s, '2026-09-29').due.map(a => a.id)).toEqual(['bank']);
     expect(checkStatus(s, '2026-10-21').due.map(a => a.id)).toEqual(['bank', 'cash']);
+  });
+});
+
+describe('early checks and minor gaps', () => {
+  const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 0, order: 0 };
+  const check = (date: string, keepSchedule?: boolean): BalanceCheck => ({ date, accountId: 'bank', real: 0, app: 0, result: 'match', keepSchedule });
+
+  it('an early check kept off the schedule leaves the next reminder where it was', () => {
+    const s = (checks: BalanceCheck[]) => ({ accounts: [bank], checkMode: 'together' as const, checkEvery: 'week' as const, checkEveryByAccount: {}, balanceChecks: checks });
+    // Checked on Tuesday the 22nd; on Monday the 28th checked again, early
+    expect(checkStatus(s([check('2026-09-28'), check('2026-09-22')]), '2026-09-29').due).toEqual([]);
+    expect(checkStatus(s([check('2026-09-28', true), check('2026-09-22')]), '2026-09-29').due.map(a => a.id)).toEqual(['bank']);
+  });
+
+  it('marks a gap within the limit as minor', () => {
+    expect(checkMark(100_00, 100_00, 10_00)).toBe('exact');
+    expect(checkMark(100_00, 92_00, 10_00)).toBe('minor');
+    expect(checkMark(100_00, 89_00, 10_00)).toBe('off');
+    expect(checkMark(100_00, 99_00, 0)).toBe('off');
   });
 });
