@@ -24,12 +24,15 @@ export function Home(props: {
   onOpenCheck: (accountId?: string) => void;
   onOpenGoals: () => void;
   onEditEvent: (event?: CalendarEvent, date?: string, time?: string) => void;
+  /** The calendar's chosen day: kept by the app, so "+" records on it and coming back keeps it. */
+  day: string;
+  onDayChange: (date: string) => void;
 }) {
   const { data } = props;
   const today = todayStr();
   const summary = summarize(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [calendarDay, setCalendarDay] = useState(today);
+  const [calendarDay, setCalendarDay] = useState(props.day);
   const checkState = checkStatus(data, today);
 
   return (
@@ -91,18 +94,19 @@ export function Home(props: {
         </div>
       </div>
 
-      <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit} onSelect={setCalendarDay} />
+      <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit}
+        initialDay={props.day}
+        onSelect={d => {
+          setCalendarDay(d);
+          props.onDayChange(d);
+        }}
+      />
 
       {/* The month of the day chosen in the calendar above: moving the calendar moves this too */}
       <MonthSummary data={data} onEdit={props.onEdit} monthKey={periodKey(calendarDay, data.monthStartDay)} asOf={calendarDay} />
 
 
       <div class="quiet-lines">
-        <button class="quiet" onClick={() => props.onOpenCheck()}>
-          {data.balanceChecks[0]
-            ? `בדיקה מול הבנק: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')}`
-            : 'בדיקה מול הבנק'}
-        </button>
         <button class="quiet" onClick={props.onOpenData}>
           {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
         </button>

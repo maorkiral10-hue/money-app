@@ -82,12 +82,14 @@ export function CalendarScreen(props: {
   compact?: boolean;
   /** Told whenever the chosen day changes (the home screen shows that day's month below). */
   onSelect?: (date: string) => void;
+  /** Compact: the day to open on (the one last chosen, or a new entry's day); today otherwise. */
+  initialDay?: string;
 }) {
   const today = todayStr();
   const compact = !!props.compact;
   const zoomList: Zoom[] = compact ? ['month', 'week'] : ZOOMS;
   const [zoom, setZoom] = useState<Zoom>(compact ? 'week' : (lastView?.zoom ?? 'month'));
-  const [selected, setSelected] = useState(compact ? today : (lastView?.selected ?? today));
+  const [selected, setSelected] = useState(compact ? (props.initialDay ?? today) : (lastView?.selected ?? today));
   const [pinch, setPinch] = useState(1);
   // A one-finger drag sideways: how far it's gone, and which way the new period slides in
   const [dragX, setDragX] = useState(0);

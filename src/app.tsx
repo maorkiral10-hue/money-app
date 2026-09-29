@@ -81,6 +81,8 @@ export function App() {
   const lastTab = useRef<Tab>('home');
   if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
   const [menuOpen, setMenuOpen] = useState(false);
+  // The day chosen in the home screen's calendar: "+" records on it; a new entry's day becomes it
+  const homeDay = useRef(todayStr());
   // Calendar events asked about: checked every half minute, so one ending while the app is open pops up too
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -146,7 +148,10 @@ export function App() {
       if (!db) return;
       const awayLong = hiddenAt.current !== null && Date.now() - hiddenAt.current > AWAY_FOR_NEW_ENTRY;
       setNow(new Date());
-      if (awayLong) setLaterIds([]);
+      if (awayLong) {
+        setLaterIds([]);
+        homeDay.current = todayStr();
+      }
       hiddenAt.current = null;
       const quick = takeQuickAddParam();
       refresh(db).then(loaded => {
@@ -213,6 +218,8 @@ export function App() {
           }
           const loaded = await refresh();
           if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
+          // Back on the home screen, its calendar shows the day this was recorded on
+          if (saved && !entry.tx && entry.from === 'home') homeDay.current = saved.date;
           back();
         }}
       />
@@ -347,6 +354,8 @@ export function App() {
         onOpenCheck={accountId => go({ name: 'balanceCheck', from: 'home', accountId })}
         onOpenGoals={() => go({ name: 'goals' })}
         onEditEvent={(event, date, time) => go({ name: 'eventForm', event, date, time, from: 'home' })}
+        day={homeDay.current}
+        onDayChange={d => (homeDay.current = d)}
       />
     );
 
@@ -394,7 +403,10 @@ export function App() {
             />
           </div>
           <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
-          <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
+          <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() =>
+              go({ name: 'entry', from: tab, ...(tab === 'home' && homeDay.current !== todayStr() && { preset: { date: homeDay.current } }) })
+            }
+          />
           {askVariable && !menuOpen && (
             <VariableDueCard
               key={`${askVariable.rec.id}|${askVariable.occurrence}`}
