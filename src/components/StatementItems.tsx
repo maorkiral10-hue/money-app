@@ -14,7 +14,7 @@ export function StatementItems(props: { data: AppData; items: StatementItem[]; t
       {props.items.length === 0 && <p class="muted small">אין עדיין קניות לחיוב הזה.</p>}
       {props.items.map((item, i) =>
         item.tx ? (
-          <button key={`${item.tx.id}-${i}`} class="tx" onClick={() => props.onEdit(item.tx!)}>
+          <button key={`${item.tx.id}-${i}`} class="tx" onClick={() => !item.tx!.id.startsWith('expected:') && props.onEdit(item.tx!)}>
             <div>
               <div>
                 <span class="cat-dot" style={{ background: categoryColor(item.tx.categoryId, data.categories) }} />
@@ -23,7 +23,7 @@ export function StatementItems(props: { data: AppData; items: StatementItem[]; t
               <div class="muted small">
                 {[
                   dayLabel(item.tx.date, props.today),
-                  item.tx.recurringId && 'הוראת קבע',
+                  item.tx.recurringId && (item.tx.id.startsWith('expected:') ? 'הוראת קבע · צפוי' : 'הוראת קבע'),
                   item.installment && `תשלום ${item.installment.n} מתוך ${item.installment.of}`,
                   !item.tx.recurringId && item.tx.note,
                 ]

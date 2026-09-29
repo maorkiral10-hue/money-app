@@ -4,7 +4,7 @@ import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, we
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
-import { MoneyByDay, MoneyLines, moneyRows } from '../components/MoneyList';
+import { MoneyByDay, MoneyLines, moneyRows, plannedMoney } from '../components/MoneyList';
 import { statsTransactions } from '../data/budget';
 import { periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { categoryColor } from '../data/colors';
@@ -25,9 +25,9 @@ let lastView: { zoom: Zoom; selected: string } | null = null;
 const dotClass = (e: CalendarEvent) => (e.type === 'income' ? 'inc' : e.type === 'expense' ? 'exp' : 'none');
 
 /** Under a day: a dot per kind of event, and a short bar when money was recorded that day (green or red by which way it went). */
-function Dots(props: { events: CalendarEvent[]; txs?: Transaction[] }) {
+function Dots(props: { events: CalendarEvent[]; txs?: Transaction[]; planned?: boolean }) {
   const txs = props.txs ?? [];
-  if (!props.events.length && !txs.length) return <span class="cal-dots" />;
+  if (!props.events.length && !txs.length && !props.planned) return <span class="cal-dots" />;
   const kinds = [...new Set(props.events.map(dotClass))];
   const net = txs.reduce((a, t) => a + (t.type === 'income' ? t.amount : -t.amount), 0);
   return (
@@ -36,6 +36,7 @@ function Dots(props: { events: CalendarEvent[]; txs?: Transaction[] }) {
         <span key={k} class={`cal-dot ${k}`} />
       ))}
       {txs.length > 0 && <span class={`cal-tx ${net >= 0 ? 'inc' : 'exp'}`} />}
+      {props.planned && !txs.length && <span class="cal-tx planned" />}
     </span>
   );
 }
@@ -187,6 +188,14 @@ export function CalendarScreen(props: {
     else money.expense += t.amount;
   }
   const expected = eventBalance(props.data.events, props.data.transactions, from, to);
+  // Days with money still to come: a card's charge, a standing order
+  const plannedDays = new Set<string>();
+  {
+    const until = viewTo > yearTo ? viewTo : yearTo;
+    const planned = plannedMoney(props.data, today, until);
+    for (const t of planned.expected) plannedDays.add(t.date);
+    for (const st of planned.charges) plannedDays.add(st.date);
+  }
   const { y, m0 } = parseDate(selected);
   const title = zoom === 'year' ? String(y) : zoom === 'month' ? `${MONTH_NAMES[m0]} ${y}` : `${shortDate(from)} – ${shortDate(to)}`;
   const dayEvents = byDate.get(selected) ?? [];
@@ -200,7 +209,7 @@ export function CalendarScreen(props: {
         onClick={() => setSelected(d)}
       >
         <span>{parseDate(d).d}</span>
-        <Dots events={byDate.get(d) ?? []} txs={txByDate.get(d)} />
+        <Dots events={byDate.get(d) ?? []} txs={txByDate.get(d)} planned={plannedDays.has(d)} />
       </button>
     ) : (
       <span key={`blank${i}`} />

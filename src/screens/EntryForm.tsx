@@ -32,7 +32,7 @@ export function EntryForm(props: {
   /** Reads what the iPhone Shortcut copied; resolves with a message to show when there was nothing usable. */
   onPaste?: () => Promise<string | void>;
   onClose: () => void;
-  onSaved: (saved?: Transaction) => void;
+  onSaved: (saved?: Transaction) => void | Promise<void>;
 }) {
   const { data, tx } = props;
   const today = todayStr();
@@ -165,9 +165,15 @@ export function EntryForm(props: {
       ...(type === 'income' && { categoryId, accountId }),
       ...(type === 'transfer' && { accountId, toAccountId }),
     };
-    await putRecords(props.db, 'transactions', [record]);
-    if (type === 'expense' && methodId && !paidFromGoal) await setMeta(props.db, 'lastMethodId', methodId);
-    props.onSaved(record);
+    // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
+    try {
+      await putRecords(props.db, 'transactions', [record]);
+      if (type === 'expense' && methodId && !paidFromGoal) await setMeta(props.db, 'lastMethodId', methodId);
+      await props.onSaved(record);
+    } catch (e) {
+      setSaving(false);
+      alert(`השמירה לא הצליחה: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const remove = async () => {
