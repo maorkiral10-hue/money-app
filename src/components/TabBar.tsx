@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 export type Tab = 'home' | 'budget' | 'goals' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
-export const TABS: Tab[] = ['home', 'budget', 'goals', 'dashboard'];
+// Budget and dashboard are hidden for now (29.9.2026): the home screen is put in order first. Their screens
+// and saved settings stay; adding them back here brings them back.
+export const TABS: Tab[] = ['home', 'goals'];
 
 const ICONS: Record<Tab, ComponentChildren> = {
   home: <path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />,
