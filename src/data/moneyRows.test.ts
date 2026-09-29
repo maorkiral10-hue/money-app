@@ -33,4 +33,13 @@ describe('the month, like a bank statement', () => {
       '2026-09-02 חיוב 10000',
     ]);
   });
+
+  it('a standing order on a card is only inside the card charge, not again on its own day', () => {
+    const spotify = { ...tx('s', '2026-09-15', 20_00, 'visa'), recurringId: 'spot', occurrence: '2026-09-15', note: 'ספוטיפיי' };
+    const rows = moneyRows({ ...data, transactions: [...data.transactions, spotify] }, '2026-09-15', '2026-09-15', '2026-09-29');
+    expect(rows).toEqual([]);
+    const oct = moneyRows({ ...data, transactions: [...data.transactions, spotify] }, '2026-10-02', '2026-10-02', '2026-09-29');
+    // ...and it's in the charge: the 320 bought on the 27th and the 20 on the 15th
+    expect(oct.map(r => (r.kind === 'charge' ? r.st.amount : 0))).toEqual([340_00]);
+  });
 });

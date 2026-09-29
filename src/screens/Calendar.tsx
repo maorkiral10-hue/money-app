@@ -4,7 +4,7 @@ import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, we
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
-import { MoneyByDay, MoneyLines, moneyRows, plannedMoney } from '../components/MoneyList';
+import { MoneyByDay, MoneyLines, moneyRows, onCardStandingOrder, plannedMoney } from '../components/MoneyList';
 import { statsTransactions } from '../data/budget';
 import { periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { categoryColor } from '../data/colors';
@@ -178,7 +178,8 @@ export function CalendarScreen(props: {
 
   const [from, to] = periodRange(zoom, selected);
   // Money recorded, counted as the home screen counts it (card purchases on the day bought, transfers left out)
-  const txs = statsTransactions(props.data).filter(t => t.type !== 'transfer');
+  // (a standing order on a card is part of the card's charge, not a day of its own)
+  const txs = statsTransactions(props.data).filter(t => t.type !== 'transfer' && !onCardStandingOrder(t, props.data.methods));
   const txByDate = new Map<string, Transaction[]>();
   for (const t of txs) txByDate.set(t.date, [...(txByDate.get(t.date) ?? []), t]);
   const money = { income: 0, expense: 0 };
@@ -193,7 +194,7 @@ export function CalendarScreen(props: {
   {
     const until = viewTo > yearTo ? viewTo : yearTo;
     const planned = plannedMoney(props.data, today, until);
-    for (const t of planned.expected) plannedDays.add(t.date);
+    for (const t of planned.expected) if (!onCardStandingOrder(t, props.data.methods)) plannedDays.add(t.date);
     for (const st of planned.charges) plannedDays.add(st.date);
   }
   const { y, m0 } = parseDate(selected);

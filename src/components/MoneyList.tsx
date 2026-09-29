@@ -16,6 +16,15 @@ const shortDate = (s: string) => {
   return `${d}.${m0 + 1}`;
 };
 
+/**
+ * A standing order charged to a credit card: it takes up the card's limit and is paid in the card's
+ * charge, so it's listed inside that charge only, not again on its own day.
+ */
+export function onCardStandingOrder(tx: Transaction, methods: AppData['methods']) {
+  if (tx.type !== 'expense' || !tx.recurringId || !tx.methodId) return false;
+  return methods.find(m => m.id === tx.methodId)?.kind === 'credit';
+}
+
 /** A standing order that hasn't come round yet: shown on its day, but it isn't a record to open. */
 export const isExpected = (tx: Transaction) => tx.id.startsWith('expected:');
 
@@ -48,8 +57,8 @@ export function moneyRows(data: AppData, from: string, to: string, today: string
     .filter(st => st.date >= from && st.date <= to && st.date <= today);
   const planned = plannedMoney(data, today, to);
   return [
-    ...data.transactions.filter(t => t.date >= from && t.date <= to).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
-    ...planned.expected.filter(t => t.date >= from).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
+    ...data.transactions.filter(t => t.date >= from && t.date <= to && !onCardStandingOrder(t, data.methods)).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
+    ...planned.expected.filter(t => t.date >= from && !onCardStandingOrder(t, data.methods)).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
     ...[...past, ...planned.charges.filter(st => st.date >= from)].map(st => ({ kind: 'charge' as const, date: st.date, st })),
   ].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === 'tx' && b.kind === 'tx' ? b.tx.createdAt.localeCompare(a.tx.createdAt) : a.kind === 'charge' ? 1 : -1));
 }
