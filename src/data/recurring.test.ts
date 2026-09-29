@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { summarize, upcomingItems, type Ledger } from './balance';
 import { getAll, openDb, putRecords, setMeta } from './db';
-import { estimateFor, occurrencesBetween, openOccurrences, scheduleDatesIn } from './recurring';
+import { estimateFor, occurrencesBetween, openOccurrences, scheduleDatesIn, expectedTransactions } from './recurring';
 import { deleteSetting, recordDueRecurring, relinkEditedRecurring, resolveOccurrence } from './store';
 import type { Account, PaymentMethod, Recurring, Transaction } from './types';
 
@@ -92,15 +92,17 @@ describe('recording', () => {
     expect(txs.filter(t => t.recurringId).map(t => [t.id, t.occurrence])).toEqual([['a', '2026-09-27']]);
   });
 
-  it('records items whose amount changes too, with their estimate, without asking', async () => {
+  it('leaves items whose amount changes for the user to answer, and counts no guess before that', async () => {
     const db = await freshDb();
     const r = rec({ variable: true, estimate: 'set', type: 'income', accountId: 'bank', methodId: undefined });
     await putRecords(db, 'recurring', [r]);
-    expect(await recordDueRecurring(db, '2026-09-24', '2026-10-05')).toBe(true);
-    const [t] = await getAll<Transaction>(db, 'transactions');
-    expect([t.amount, t.date, t.accountId, t.recurringId]).toEqual([r.amount, '2026-10-01', 'bank', r.id]);
-    // Recorded once only
     expect(await recordDueRecurring(db, '2026-09-24', '2026-10-05')).toBe(false);
+    // Nothing expected from it either: its estimate isn't counted anywhere
+    expect(expectedTransactions([r], [], '2026-09-24', '2026-12-31', '2026-09-24')).toEqual([]);
+    expect(expectedTransactions([r], [], '2026-09-24', '2026-12-31', '2026-09-24', true).length).toBeGreaterThan(0);
+    await resolveOccurrence(db, r, '2026-10-01', 123_45);
+    const [t] = await getAll<Transaction>(db, 'transactions');
+    expect([t.amount, t.date, t.accountId]).toEqual([123_45, '2026-10-01', 'bank']);
   });
 });
 
@@ -153,10 +155,10 @@ describe('in the forecast', () => {
     expect(upcomingItems(l, '2026-10-12').map(i => [i.date, i.amount])).toEqual([['2026-11-10', -50_00]]);
   });
 
-  it('a variable income still waiting for confirmation is expected, not in the balance', () => {
+  it('a variable income still waiting for its answer is neither in the balance nor in the forecast', () => {
     const l = ledger([rec({ type: 'income', variable: true, accountId: 'bank', methodId: undefined, amount: 500_00, firstDate: '2026-09-25', handledThrough: '2026-09-24' })]);
     const s = summarize(l, '2026-09-28');
     expect(s.liquid).toBe(1_000_00);
-    expect(s.upcoming.income).toBeGreaterThanOrEqual(500_00);
+    expect(s.upcoming.income).toBe(0);
   });
 });

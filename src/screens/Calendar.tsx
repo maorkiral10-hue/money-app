@@ -195,6 +195,7 @@ export function CalendarScreen(props: {
     const until = viewTo > yearTo ? viewTo : yearTo;
     const planned = plannedMoney(props.data, today, until);
     for (const t of planned.expected) if (!onCardStandingOrder(t, props.data.methods)) plannedDays.add(t.date);
+    for (const t of planned.variable) plannedDays.add(t.date);
     for (const st of planned.charges) plannedDays.add(st.date);
   }
   const { y, m0 } = parseDate(selected);

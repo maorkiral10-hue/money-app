@@ -34,14 +34,19 @@ export const isExpected = (tx: Transaction) => tx.id.startsWith('expected:');
  * that fall before the charge). A new purchase on a card changes its coming charge.
  */
 export function plannedMoney(data: AppData, today: string, until: string) {
-  if (until <= today) return { expected: [] as Transaction[], charges: [] as Statement[] };
+  if (until <= today) return { expected: [] as Transaction[], variable: [] as Transaction[], charges: [] as Statement[] };
   const expected = expectedTransactions(data.recurring, data.transactions, today, until, data.startDate);
+  // Changing amounts: only their days, for the calendar (asked about on the day, counted nowhere before)
+  const variableIds = new Set(data.recurring.filter(r => r.variable).map(r => r.id));
+  const variable = expectedTransactions(data.recurring, data.transactions, today, until, data.startDate, true).filter(
+    t => variableIds.has(t.recurringId ?? '') && (t.occurrence ?? t.date) > today,
+  );
   const ledger = { ...data, transactions: [...data.transactions, ...expected] };
   const charges = data.methods
     .filter(m => m.kind === 'credit')
     .flatMap(m => cardStatements(ledger, m.id))
     .filter(st => st.date > today && st.date <= until);
-  return { expected, charges };
+  return { expected, variable, charges };
 }
 
 /**
@@ -59,6 +64,7 @@ export function moneyRows(data: AppData, from: string, to: string, today: string
   return [
     ...data.transactions.filter(t => t.date >= from && t.date <= to && !onCardStandingOrder(t, data.methods)).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
     ...planned.expected.filter(t => t.date >= from && !onCardStandingOrder(t, data.methods)).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
+    ...planned.variable.filter(t => t.date >= from).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
     ...[...past, ...planned.charges.filter(st => st.date >= from)].map(st => ({ kind: 'charge' as const, date: st.date, st })),
   ].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === 'tx' && b.kind === 'tx' ? b.tx.createdAt.localeCompare(a.tx.createdAt) : a.kind === 'charge' ? 1 : -1));
 }
@@ -98,6 +104,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
         // A card purchase: when the bank pays for it
         const charged = card?.kind === 'credit' && card.chargeDay ? nextChargeDate(tx.date, card.chargeDay) : undefined;
         const expected = isExpected(tx);
+        const changing = expected && data.recurring.find(r => r.id === tx.recurringId)?.variable;
         // A standing order still to come is shown, not opened (it's recorded on its day)
         const Line = expected ? 'div' : 'button';
         return (
@@ -111,7 +118,16 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
                 {[
                   tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
                   charged && (charged > props.today ? `תיגבה ב־${shortDate(charged)}` : `נגבתה ב־${shortDate(charged)}`),
-                  tx.recurringId && (expected ? (tx.type === 'income' ? 'הכנסה קבועה · נכנסת אוטומטית' : 'הוראת קבע · יורדת אוטומטית') : tx.type === 'income' ? 'הכנסה קבועה' : 'הוראת קבע'),
+                  tx.recurringId &&
+                    (changing
+                      ? 'סכום משתנה · יתעדכן ביום'
+                      : expected
+                        ? tx.type === 'income'
+                          ? 'הכנסה קבועה · נכנסת אוטומטית'
+                          : 'הוראת קבע · יורדת אוטומטית'
+                        : tx.type === 'income'
+                          ? 'הכנסה קבועה'
+                          : 'הוראת קבע'),
                   tx.installments && `${tx.installments} תשלומים`,
                   !tx.recurringId && tx.note,
                 ]
@@ -119,7 +135,11 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
                   .join(' · ')}
               </div>
             </div>
-            <div class={`amount ${tx.type}`}>{formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}</div>
+            {changing ? (
+              <div class="muted small">לא נספר</div>
+            ) : (
+              <div class={`amount ${tx.type}`}>{formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}</div>
+            )}
           </Line>
         );
       })}

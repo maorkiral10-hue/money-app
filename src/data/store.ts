@@ -1,6 +1,6 @@
 import { deleteRecord, getAll, getMeta, putRecords, run, type RecordStore } from './db';
 import { todayStr } from './dates';
-import { estimateFor, occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recurring';
+import { occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recurring';
 import type { Budget } from './budget';
 import type { BalanceCheck, CheckEvery } from './reconcile';
 import type { Account, CalendarEvent, Category, PaymentMethod, Recurring, Transaction } from './types';
@@ -67,9 +67,9 @@ export function finishSetup(
 }
 
 /**
- * Records every standing order and fixed income that has come due (e.g. rent on the 1st) and marks it
- * handled: nothing is asked, they happen for sure. One whose amount changes (electricity) is recorded
- * with its estimate, the set amount or the average of the last ones, and can be corrected afterwards.
+ * Records every fixed-amount standing order and fixed income that has come due (e.g. rent on the 1st) and
+ * marks it handled: nothing is asked, they happen for sure. One whose amount changes (electricity) isn't
+ * recorded here: on its day the user is asked how much it really was (VariableDueCard).
  * Reads and writes inside one transaction, so even two runs at once never record an occurrence twice.
  * Returns true if anything was recorded.
  */
@@ -80,12 +80,10 @@ export async function recordDueRecurring(db: IDBDatabase, startDate: string, tod
     req.onsuccess = () => {
       const txReq = tx.objectStore('transactions').getAll();
       txReq.onsuccess = () => {
-        const recorded = txReq.result as Transaction[];
-        for (const rec of req.result as Recurring[]) {
+        for (const rec of (req.result as Recurring[]).filter(r => !r.variable)) {
           const due = openOccurrences(rec, today, startDate);
           if (!due.length) continue;
-          const amount = rec.variable ? estimateFor(rec, recorded) : rec.amount;
-          due.forEach(occ => tx.objectStore('transactions').put(occurrenceTransaction(rec, occ, amount)));
+          due.forEach(occ => tx.objectStore('transactions').put(occurrenceTransaction(rec, occ, rec.amount)));
           tx.objectStore('recurring').put({ ...rec, handledThrough: due[due.length - 1] });
           changed = true;
         }

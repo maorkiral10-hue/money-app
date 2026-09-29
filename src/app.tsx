@@ -16,6 +16,8 @@ import { BudgetSetup, BudgetTab } from './screens/Budget';
 import { GoalDetail, GoalForm, GoalsTab } from './screens/Goals';
 import { CalendarScreen, EventForm } from './screens/Calendar';
 import { EventDoneCard } from './components/EventDoneCard';
+import { VariableDueCard } from './components/VariableDueCard';
+import { openOccurrences } from './data/recurring';
 import { awaitingActual, withAnswer } from './data/calendar';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
@@ -87,6 +89,8 @@ export function App() {
   }, []);
   // "Later" on an event's question: not asked again until the app is next opened
   const [laterIds, setLaterIds] = useState<string[]>([]);
+  // Standing orders with a changing amount put off with "remind me in half an hour": until when
+  const [snoozedUntil, setSnoozedUntil] = useState(0);
   const [menuSection, setMenuSection] = useState<MenuSection>('main');
   // Leaving the main screens (a new entry on opening the app, say) closes the menu
   useEffect(() => {
@@ -349,6 +353,13 @@ export function App() {
   const tab = data.setupDone && (TABS as string[]).includes(screen.name) ? (screen.name as Tab) : null;
   const awaiting = awaitingActual(data.events, now).filter(e => !laterIds.includes(`${e.id}|${e.date}`));
   const askEvent = awaiting[0];
+  // Changing amounts due and not answered yet, oldest first; they come before the events' questions
+  const today = todayStr();
+  const variableDue = data.recurring
+    .filter(r => r.variable)
+    .flatMap(rec => openOccurrences(rec, today, data.startDate).map(occurrence => ({ rec, occurrence })))
+    .sort((a, b) => a.occurrence.localeCompare(b.occurrence));
+  const askVariable = now.getTime() >= snoozedUntil ? variableDue[0] : undefined;
   return (
     <>
       <UpdateBanner />
@@ -383,7 +394,22 @@ export function App() {
           </div>
           <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
           <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => go({ name: 'entry', from: tab })} />
-          {askEvent && !menuOpen && (
+          {askVariable && !menuOpen && (
+            <VariableDueCard
+              key={`${askVariable.rec.id}|${askVariable.occurrence}`}
+              db={db}
+              data={data}
+              rec={askVariable.rec}
+              occurrence={askVariable.occurrence}
+              more={variableDue.length - 1}
+              onSnooze={() => {
+                setSnoozedUntil(Date.now() + 30 * 60_000);
+                setNow(new Date());
+              }}
+              onDone={afterChange}
+            />
+          )}
+          {!askVariable && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

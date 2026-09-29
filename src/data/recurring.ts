@@ -55,12 +55,14 @@ export function occurrenceTransaction(rec: Recurring, occurrence: string, amount
 }
 
 /**
- * Expected occurrences up to `until` as not-yet-real transactions, for the forecast only.
- * Variable ones still waiting for confirmation are placed tomorrow: expected, but not in today's balance.
+ * Standing orders and fixed income still to come up to `until`, as not-yet-real transactions. Ones with a
+ * changing amount aren't among them: their amount isn't known until the user says it on the day, so it's
+ * counted nowhere before that (`withVariable` lists them too, for showing their days only).
+ * Occurrences already due but not recorded are placed tomorrow: not in today's balance.
  */
-export function expectedTransactions(recurring: Recurring[], transactions: Transaction[], today: string, until: string, startDate: string) {
+export function expectedTransactions(recurring: Recurring[], transactions: Transaction[], today: string, until: string, startDate: string, withVariable = false) {
   const tomorrow = addDays(today, 1);
-  return recurring.flatMap(rec => {
+  return recurring.filter(rec => withVariable || !rec.variable).flatMap(rec => {
     const amount = estimateFor(rec, transactions);
     return openOccurrences(rec, until, startDate).map(occ => ({
       ...occurrenceTransaction(rec, occ, amount, `expected:${rec.id}:${occ}`),
