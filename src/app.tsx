@@ -208,6 +208,7 @@ export function App() {
         data={data}
         tx={entry.tx}
         preset={entry.preset}
+        onNewEvent={date => go({ name: 'eventForm', date, from: entry.from })}
         launch={entry.launch}
         onClose={back}
         onSaved={async saved => {

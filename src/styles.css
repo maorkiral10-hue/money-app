@@ -568,3 +568,11 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .check-when.exact { color: var(--pos); }
 .check-when.minor { color: var(--minor); }
 .check-when.off { color: var(--neg); }
+
+/* the entry's "when?" step: the day framed so it can't be missed */
+.when-step { display: flex; flex-direction: column; gap: 14px; }
+.when-box { border: 2px solid var(--accent); border-radius: 16px; padding: 18px 14px; text-align: center; background: var(--soft); }
+.when-label { font-size: 30px; font-weight: 800; color: var(--accent); line-height: 1.2; }
+.when-chips { justify-content: center; }
+.tile.event { border-style: dashed; }
+.future-note { text-align: center; margin: 0 0 12px; }

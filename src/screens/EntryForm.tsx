@@ -9,19 +9,21 @@ import { resolvePreset, type QuickPreset } from '../data/quick';
 import type { AppData } from '../data/store';
 import type { Transaction, TxType } from '../data/types';
 
-type Step = 'type' | 'amount' | 'category' | 'method' | 'account' | 'from' | 'to' | 'review';
+type Step = 'type' | 'amount' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'review';
 
 // One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
 const STEPS: Record<TxType, Step[]> = {
-  expense: ['type', 'amount', 'category', 'method', 'review'],
-  income: ['type', 'amount', 'category', 'account', 'review'],
-  transfer: ['type', 'amount', 'from', 'to', 'review'],
+  expense: ['type', 'amount', 'category', 'method', 'when', 'review'],
+  income: ['type', 'amount', 'category', 'account', 'when', 'review'],
+  transfer: ['type', 'amount', 'from', 'to', 'when', 'review'],
 };
 
 const TYPE_NAMES: Record<TxType, string> = { expense: 'הוצאה', income: 'הכנסה', transfer: 'העברה' };
 const INSTALLMENTS = Array.from({ length: 36 }, (_, i) => i + 1);
 
 export function EntryForm(props: {
+  /** Opens a new calendar event on this day instead ("אירוע" on the first screen). */
+  onNewEvent?: (date: string) => void;
   db: IDBDatabase;
   data: AppData;
   tx?: Transaction;
@@ -73,6 +75,9 @@ export function EntryForm(props: {
   const [accountId, setAccountId] = useState(tx?.accountId ?? presetAccount?.id);
   const [toAccountId, setToAccountId] = useState(tx?.toAccountId);
   const [date, setDate] = useState(tx?.date ?? preset?.date ?? today);
+  const future = date > today;
+  // A transaction already dated ahead (from before this rule) can still be edited as it is
+  const dateOk = !future || (!!tx && tx.date === date);
   const [installments, setInstallments] = useState(tx?.installments ?? 1);
   const [note, setNote] = useState(tx?.note ?? preset?.note ?? '');
   const [step, setStep] = useState<Step>(() => {
@@ -104,6 +109,7 @@ export function EntryForm(props: {
   const name = (id?: string) => [...accounts, ...methods, ...categories].find(x => x.id === id)?.name ?? '';
 
   const valid =
+    dateOk &&
     amount > 0 &&
     (type === 'expense' ? !!categoryId && !!methodId : type === 'income' ? !!categoryId && !!accountId : !!accountId && !!toAccountId && accountId !== toAccountId);
 
@@ -135,13 +141,14 @@ export function EntryForm(props: {
   };
 
   const canContinue: Partial<Record<Step, boolean>> = {
-    type: true,
+    type: !future || !!tx,
     amount: amount > 0,
     category: !!categoryId,
     method: !!methodId,
     account: !!accountId,
     from: !!accountId,
     to: !!toAccountId && toAccountId !== accountId,
+    when: dateOk,
   };
 
   const save = async () => {
@@ -190,6 +197,7 @@ export function EntryForm(props: {
     account: 'לאן נכנס הכסף?',
     from: 'מאיפה הכסף יצא?',
     to: 'לאן הוא עבר?',
+    when: 'מתי?',
     review: tx ? 'עריכה' : 'לסיום',
   };
 
@@ -213,9 +221,18 @@ export function EntryForm(props: {
       </div>
       <h1 class="step-title">{titles[step]}</h1>
 
+      {step === 'type' && future && !tx && (
+        <p class="muted small future-note">{dayLabel(date, today)} עוד לא הגיע: אפשר לרשום אירוע עם צפי, ומה שיצא או נכנס בפועל נרשם כשהוא קורה.</p>
+      )}
       {step === 'type' && (
         <div class="tiles">
-          {(['expense', 'income', 'transfer'] as const).map(t => (
+          {!tx && props.onNewEvent && (
+            <button class="tile event" onClick={() => props.onNewEvent!(date)}>
+              אירוע
+              <span class="small">עם צפי, שעות וחזרה · ללוח הזמנים</span>
+            </button>
+          )}
+          {(['expense', 'income', 'transfer'] as const).filter(() => !future || !!tx).map(t => (
             <button key={t} class={`tile ${t} ${type === t ? 'on' : ''}`} onClick={() => chooseType(t)}>
               {TYPE_NAMES[t]}
               {t === 'transfer' && <span class="small">{goalAccounts.length ? 'בין בנק, מזומן, ביט ויעדים' : 'בין בנק, מזומן וביט'}</span>}
@@ -255,7 +272,29 @@ export function EntryForm(props: {
 
       {step === 'to' && transferChips(toAccountId, setToAccountId, accountId)}
 
-      {step !== 'review' && (
+      {step === 'when' && (
+        <div class="when-step">
+          <div class="when-box">
+            <div class="when-label">{dayLabel(date, today)}</div>
+            <div class="muted small">{date.split('-').reverse().map(Number).join('.')}</div>
+          </div>
+          <div class="chips when-chips">
+            {[0, 1, 2].map(back => {
+              const d = addDays(today, -back);
+              return (
+                <button key={d} type="button" class={`chip ${date === d ? 'on' : ''}`} onClick={() => setDate(d)}>
+                  {dayLabel(d, today)}
+                </button>
+              );
+            })}
+            <input type="date" class="chip" max={today} value={date} onChange={e => e.currentTarget.value && setDate(e.currentTarget.value)} />
+          </div>
+          {!dateOk && <p class="small warn">אי אפשר לרשום תנועה בתאריך עתידי. לתאריך עתידי רושמים אירוע.</p>}
+          {date < data.startDate && <p class="muted small">התאריך לפני תחילת המעקב, ולכן התנועה לא תשנה את היתרה (היא כבר כלולה ביתרת הפתיחה).</p>}
+        </div>
+      )}
+
+      {step !== 'review' && !(step === 'type' && future && !tx) && (
         <button class="continue" disabled={!canContinue[step]} onClick={next}>
           המשך
         </button>
@@ -287,6 +326,7 @@ export function EntryForm(props: {
             {type === 'income' && <ReviewRow label="לאן נכנס" value={name(accountId)} onClick={() => change('account')} />}
             {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => change('from')} />}
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
+            <ReviewRow label="מתי" value={dayLabel(date, today)} onClick={() => change('when')} />
           </div>
 
           {isCredit && (
@@ -308,20 +348,6 @@ export function EntryForm(props: {
             </p>
           )}
 
-          <section>
-            <div class="chips">
-              <button type="button" class={`chip ${date === today ? 'on' : ''}`} onClick={() => setDate(today)}>
-                היום
-              </button>
-              <button type="button" class={`chip ${date === addDays(today, -1) ? 'on' : ''}`} onClick={() => setDate(addDays(today, -1))}>
-                אתמול
-              </button>
-              <input type="date" class="chip" value={date} onChange={e => e.currentTarget.value && setDate(e.currentTarget.value)} />
-            </div>
-            {date !== today && date !== addDays(today, -1) && <p class="muted small">{dayLabel(date, today)}</p>}
-            {date > today && <p class="muted small">תאריך עתידי: התנועה תופיע בצפי, ותיכנס ליתרה רק כשיגיע התאריך.</p>}
-            {date < data.startDate && <p class="muted small">התאריך לפני תחילת המעקב, ולכן התנועה לא תשנה את היתרה (היא כבר כלולה ביתרת הפתיחה).</p>}
-          </section>
 
           <input type="text" class="note-input" placeholder="הערה (לא חובה)" value={note} onInput={e => setNote(e.currentTarget.value)} />
 

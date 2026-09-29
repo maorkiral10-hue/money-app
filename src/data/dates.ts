@@ -33,6 +33,7 @@ export const monthName = (s: string) => {
 export function dayLabel(s: string, today: string) {
   if (s === today) return 'היום';
   if (s === addDays(today, -1)) return 'אתמול';
+  if (s === addDays(today, -2)) return 'שלשום';
   if (s === addDays(today, 1)) return 'מחר';
   const { y, m0, d } = parseDate(s);
   return new Date(y, m0, d).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
