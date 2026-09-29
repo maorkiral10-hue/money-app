@@ -4,7 +4,7 @@ import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
 import { periodKey } from '../data/dashboard';
 import { todayStr } from '../data/dates';
-import { checkDue } from '../data/reconcile';
+import { checkStatus } from '../data/reconcile';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { CalendarEvent, Transaction } from '../data/types';
@@ -21,7 +21,7 @@ export function Home(props: {
   onChange: () => void;
   onEdit: (tx: Transaction) => void;
   onOpenData: () => void;
-  onOpenCheck: () => void;
+  onOpenCheck: (accountId?: string) => void;
   onOpenGoals: () => void;
   onEditEvent: (event?: CalendarEvent, date?: string, time?: string) => void;
 }) {
@@ -30,6 +30,7 @@ export function Home(props: {
   const summary = summarize(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [calendarDay, setCalendarDay] = useState(today);
+  const checkState = checkStatus(data, today);
 
   return (
     <>
@@ -37,12 +38,18 @@ export function Home(props: {
         <h1>הכסף שלי</h1>
       </header>
 
-      {checkDue(data.checkEvery, data.balanceChecks[0]?.date, today) && (
-        // Stays until a check is done
-        <button class="check-due" onClick={props.onOpenCheck}>
-          <span class="check-due-title">הגיע הזמן לבדוק מול הבנק</span>
+      {checkState.due.length > 0 && (
+        // Stays until every source that's due has been checked
+        <button class="check-due" onClick={() => props.onOpenCheck(checkState.due[0].id)}>
+          <span class="check-due-title">
+            {checkState.checked === 0 && data.checkMode === 'together' ? 'הגיע הזמן לבדוק מול הבנק' : `נדרשת בדיקה: ${checkState.due.map(a => a.name).join(', ')}`}
+          </span>
           <span class="small">
-            {data.balanceChecks[0] ? `בדיקה אחרונה: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')}` : 'עוד לא נבדק אף פעם'} · לחץ לבדיקה
+            {data.checkMode === 'together' && checkState.checked > 0
+              ? `${checkState.checked} מתוך ${checkState.total} נבדקו · לחץ להמשך`
+              : data.balanceChecks[0]
+                ? `בדיקה אחרונה: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')} · לחץ לבדיקה`
+                : 'עוד לא נבדק אף פעם · לחץ לבדיקה'}
           </span>
         </button>
       )}
@@ -78,7 +85,7 @@ export function Home(props: {
 
 
       <div class="quiet-lines">
-        <button class="quiet" onClick={props.onOpenCheck}>
+        <button class="quiet" onClick={() => props.onOpenCheck()}>
           {data.balanceChecks[0]
             ? `בדיקה מול הבנק: ${daysAgo(data.balanceChecks[0].date + 'T12:00:00')}`
             : 'בדיקה מול הבנק'}

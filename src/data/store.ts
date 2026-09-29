@@ -2,7 +2,7 @@ import { deleteRecord, getAll, getMeta, putRecords, run, type RecordStore } from
 import { todayStr } from './dates';
 import { occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recurring';
 import type { Budget } from './budget';
-import type { BalanceCheck, CheckEvery } from './reconcile';
+import type { BalanceCheck, CheckEvery, CheckMode } from './reconcile';
 import type { Account, CalendarEvent, Category, PaymentMethod, Recurring, Transaction } from './types';
 
 export interface AppData {
@@ -27,6 +27,9 @@ export interface AppData {
   balanceChecks: BalanceCheck[];
   /** The quiet reminder to check the balance. */
   checkEvery: CheckEvery;
+  /** Checks: all sources together on `checkEvery`, or each on its own schedule. */
+  checkMode: CheckMode;
+  checkEveryByAccount: Record<string, CheckEvery>;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -49,6 +52,8 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     balanceChecks: (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [],
     // Weekly unless chosen otherwise (28.9.2026: the reminder should show without having to turn it on)
     checkEvery: (await getMeta<CheckEvery>(db, 'checkEvery')) ?? 'week',
+    checkMode: (await getMeta<CheckMode>(db, 'checkMode')) ?? 'together',
+    checkEveryByAccount: (await getMeta<Record<string, CheckEvery>>(db, 'checkEveryByAccount')) ?? {},
   };
 }
 

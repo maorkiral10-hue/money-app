@@ -15,9 +15,14 @@ export interface BalanceCheck {
   result: 'match' | 'gap' | 'corrected';
 }
 
-export type CheckEvery = 'never' | 'week' | 'month';
+export type CheckEvery = 'never' | 'week' | 'twoWeeks' | 'month';
+/** All money sources checked on one schedule, or each on its own. */
+export type CheckMode = 'together' | 'separate';
 
-const KEEP = 20;
+const EVERY_DAYS: Record<Exclude<CheckEvery, 'never'>, number> = { week: 7, twoWeeks: 14, month: 30 };
+
+// Enough history to know each source's last check even when several are checked every week
+const KEEP = 60;
 
 /** The account's balance in the app today. */
 export const appBalance = (ledger: Ledger, accountId: string, today: string) =>
@@ -42,9 +47,34 @@ export async function correctBalance(db: IDBDatabase, account: Account, real: nu
   });
 }
 
-/** Whether the quiet reminder on the home screen is due. */
+/** Whether a check is due, by when it was last done. */
 export function checkDue(every: CheckEvery, last: string | undefined, today: string) {
   if (every === 'never') return false;
   if (!last) return true;
-  return addDays(last, every === 'week' ? 7 : 30) <= today;
+  return addDays(last, EVERY_DAYS[every]) <= today;
+}
+
+/** Counting cash every week is a chore, so it's monthly unless changed; the others weekly. */
+export const defaultEvery = (a: Pick<Account, 'kind'>): CheckEvery => (a.kind === 'cash' ? 'month' : 'week');
+
+export interface CheckSettings {
+  checkMode: CheckMode;
+  /** "Together": one schedule for all. */
+  checkEvery: CheckEvery;
+  /** "Each on its own": per source (missing: its default). */
+  checkEveryByAccount: Record<string, CheckEvery>;
+}
+
+export const everyFor = (s: CheckSettings, a: Account): CheckEvery =>
+  s.checkMode === 'together' ? s.checkEvery : (s.checkEveryByAccount[a.id] ?? defaultEvery(a));
+
+/**
+ * Which money sources are due a check today: each by its own last check and its schedule. Savings goals
+ * aren't checked (they're the user's own "piggy banks"). `total` counts the sources that get checked at all.
+ */
+export function checkStatus(data: CheckSettings & { accounts: Account[]; balanceChecks: BalanceCheck[] }, today: string) {
+  const sources = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal' && everyFor(data, a) !== 'never');
+  const last = (id: string) => data.balanceChecks.find(c => c.accountId === id)?.date;
+  const due = sources.filter(a => checkDue(everyFor(data, a), last(a.id), today));
+  return { due, total: sources.length, checked: sources.length - due.length };
 }

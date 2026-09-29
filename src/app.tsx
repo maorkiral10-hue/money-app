@@ -36,7 +36,7 @@ type Screen =
   | { name: 'goal'; id: string }
   | { name: 'goalForm'; goal?: Account }
   | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string; from?: Place }
-  | { name: 'balanceCheck'; from: Place }
+  | { name: 'balanceCheck'; from: Place; accountId?: string }
   | { name: 'data'; from: Place };
 
 /**
@@ -258,6 +258,7 @@ export function App() {
       <BalanceCheck
         db={db}
         data={data}
+        accountId={screen.accountId}
         onBack={() => go({ name: from })}
         onChange={afterChange}
         onAddMissing={preset => go({ name: 'entry', preset, from })}
@@ -343,7 +344,7 @@ export function App() {
         onChange={afterChange}
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
-        onOpenCheck={() => go({ name: 'balanceCheck', from: 'home' })}
+        onOpenCheck={accountId => go({ name: 'balanceCheck', from: 'home', accountId })}
         onOpenGoals={() => go({ name: 'goals' })}
         onEditEvent={(event, date, time) => go({ name: 'eventForm', event, date, time, from: 'home' })}
       />

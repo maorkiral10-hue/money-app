@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, checkDue, correctBalance, type BalanceCheck } from './reconcile';
+import { appBalance, checkDue, checkStatus, correctBalance, type BalanceCheck } from './reconcile';
 import type { Account } from './types';
 
 let n = 0;
@@ -29,5 +29,32 @@ describe('checking the balance against the bank', () => {
     expect(checkDue('week', '2026-09-22', '2026-09-28')).toBe(false);
     expect(checkDue('week', '2026-09-21', '2026-09-28')).toBe(true);
     expect(checkDue('month', '2026-09-01', '2026-09-28')).toBe(false);
+  });
+});
+
+describe('which money sources are due a check', () => {
+  const acc = (id: string, kind: 'bank' | 'app' | 'cash' | 'goal'): Account => ({ id, name: id, kind, openingBalance: 0, order: 0 });
+  const accounts = [acc('bank', 'bank'), acc('bit', 'app'), acc('cash', 'cash'), acc('trip', 'goal')];
+  const check = (accountId: string, date: string): BalanceCheck => ({ date, accountId, real: 0, app: 0, result: 'match' });
+
+  it('together: all on one schedule, and the count of those done so far', () => {
+    const s = { accounts, checkMode: 'together' as const, checkEvery: 'week' as const, checkEveryByAccount: {}, balanceChecks: [check('bank', '2026-09-28')] };
+    const st = checkStatus(s, '2026-09-29');
+    // The goal isn't checked; the bank was checked yesterday
+    expect(st.due.map(a => a.id)).toEqual(['bit', 'cash']);
+    expect([st.checked, st.total]).toEqual([1, 3]);
+    expect(checkStatus(s, '2026-10-05').due.map(a => a.id)).toEqual(['bank', 'bit', 'cash']);
+  });
+
+  it('each on its own: cash monthly by default, anything can be changed or turned off', () => {
+    const s = {
+      accounts,
+      checkMode: 'separate' as const,
+      checkEvery: 'week' as const,
+      checkEveryByAccount: { bit: 'never' as const },
+      balanceChecks: [check('bank', '2026-09-20'), check('cash', '2026-09-20')],
+    };
+    expect(checkStatus(s, '2026-09-29').due.map(a => a.id)).toEqual(['bank']);
+    expect(checkStatus(s, '2026-10-21').due.map(a => a.id)).toEqual(['bank', 'cash']);
   });
 });

@@ -540,3 +540,8 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .fixed-title { font-weight: 700; }
 .bar .fixed-bar { background: var(--text); opacity: .55; }
 .bar .savings-bar { background: var(--pos); opacity: .5; }
+
+/* balance check: how often, together or each source on its own */
+.check-every { margin-top: 10px; }
+.check-every-row { align-items: center; padding: 6px 0; font-size: 15px; }
+.check-every-row select { width: auto; margin: 0; padding: 6px 8px; font-size: 15px; }

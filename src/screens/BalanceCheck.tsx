@@ -4,8 +4,15 @@ import { dayLabel, todayStr } from '../data/dates';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, correctBalance, logCheck, type CheckEvery } from '../data/reconcile';
+import { appBalance, checkStatus, correctBalance, defaultEvery, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
+
+const EVERY_OPTIONS: [CheckEvery, string][] = [
+  ['never', 'בלי'],
+  ['week', 'כל שבוע'],
+  ['twoWeeks', 'כל שבועיים'],
+  ['month', 'כל חודש'],
+];
 
 /**
  * Checking a balance against the bank (or the wallet): type what's really there, see the gap, and choose
@@ -18,11 +25,22 @@ export function BalanceCheck(props: {
   onBack: () => void;
   onChange: () => void;
   onAddMissing: (preset: QuickPreset) => void;
+  /** Open on this source (the first one due, from the home screen's bubble). */
+  accountId?: string;
 }) {
   const { data } = props;
   const today = todayStr();
   const accounts = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal');
-  const [accountId, setAccountId] = useState(accounts.find(a => a.kind === 'bank')?.id ?? accounts[0]?.id);
+  const [accountId, setAccountId] = useState(props.accountId ?? accounts.find(a => a.kind === 'bank')?.id ?? accounts[0]?.id);
+  // The sources still due a check, not counting the one on screen
+  const nextDue = checkStatus(data, today).due.find(a => a.id !== accountId);
+  const pick = (id: string) => {
+    setAccountId(id);
+    setChecked(false);
+    setTyped(false);
+    setReal(0);
+    setDone('');
+  };
   const [real, setReal] = useState(0);
   const [typed, setTyped] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -59,15 +77,7 @@ export function BalanceCheck(props: {
 
       <div class="card">
         <h2>איפה בודקים?</h2>
-        <Chips
-          items={accounts}
-          value={accountId}
-          onChange={id => {
-            setAccountId(id);
-            setChecked(false);
-            setDone('');
-          }}
-        />
+        <Chips items={accounts} value={accountId} onChange={pick} />
         <label class="field">
           <span>כמה יש שם עכשיו באמת</span>
           <MoneyInput
@@ -119,22 +129,57 @@ export function BalanceCheck(props: {
         </div>
       )}
       {done && <div class="card note">{done}</div>}
+      {checked && nextDue && (
+        <button onClick={() => pick(nextDue.id)}>לבדיקה הבאה: {nextDue.name}</button>
+      )}
 
       <div class="card">
         <h2>תזכורת</h2>
         <p class="muted small">כשמגיע הזמן, מופיעה בראש מסך הבית בועה שנשארת עד שבודקים.</p>
         <Segmented
-          value={data.checkEvery}
-          onChange={async (v: CheckEvery) => {
-            await setMeta(props.db, 'checkEvery', v);
+          value={data.checkMode}
+          onChange={async (v: CheckMode) => {
+            await setMeta(props.db, 'checkMode', v);
             props.onChange();
           }}
           options={[
-            ['never', 'בלי'],
-            ['week', 'כל שבוע'],
-            ['month', 'כל חודש'],
+            ['together', 'כולם יחד'],
+            ['separate', 'לכל אחד בנפרד'],
           ]}
         />
+        {data.checkMode === 'together' ? (
+          <div class="check-every">
+            <Segmented
+              value={data.checkEvery}
+              onChange={async (v: CheckEvery) => {
+                await setMeta(props.db, 'checkEvery', v);
+                props.onChange();
+              }}
+              options={EVERY_OPTIONS}
+            />
+          </div>
+        ) : (
+          <div class="check-every">
+            {accounts.map(a => (
+              <label key={a.id} class="line check-every-row">
+                <span>{a.name}</span>
+                <select
+                  value={data.checkEveryByAccount[a.id] ?? defaultEvery(a)}
+                  onChange={async e => {
+                    await setMeta(props.db, 'checkEveryByAccount', { ...data.checkEveryByAccount, [a.id]: e.currentTarget.value as CheckEvery });
+                    props.onChange();
+                  }}
+                >
+                  {EVERY_OPTIONS.map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {data.balanceChecks.length > 0 && (
