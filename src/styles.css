@@ -535,3 +535,7 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 /* money still to come: a coming card charge, a standing order */
 .cal-tx.planned { background: none; box-shadow: inset 0 0 0 1.5px var(--exp-bar); }
 .expected-row { opacity: .75; }
+
+/* standing orders together at the top of the income and spending panels */
+.fixed-title { font-weight: 700; }
+.bar .fixed-bar { background: var(--text); opacity: .55; }

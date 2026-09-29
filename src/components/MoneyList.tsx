@@ -101,7 +101,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
         // A standing order still to come is shown, not opened (it's recorded on its day)
         const Line = expected ? 'div' : 'button';
         return (
-          <Line key={tx.id} class={`tx ${expected ? 'expected-row' : ''}`} onClick={expected ? undefined : () => props.onEdit(tx)}>
+          <Line key={tx.id} class="tx" onClick={expected ? undefined : () => props.onEdit(tx)}>
             <div>
               <div>
                 {tx.type !== 'transfer' && <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />}
@@ -111,7 +111,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
                 {[
                   tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
                   charged && (charged > props.today ? `תיגבה ב־${shortDate(charged)}` : `נגבתה ב־${shortDate(charged)}`),
-                  tx.recurringId && (expected ? 'הוראת קבע · צפוי' : 'הוראת קבע'),
+                  tx.recurringId && (expected ? (tx.type === 'income' ? 'הכנסה קבועה · נכנסת אוטומטית' : 'הוראת קבע · יורדת אוטומטית') : tx.type === 'income' ? 'הכנסה קבועה' : 'הוראת קבע'),
                   tx.installments && `${tx.installments} תשלומים`,
                   !tx.recurringId && tx.note,
                 ]
@@ -137,7 +137,6 @@ export function MoneyByDay(props: { data: AppData; rows: MoneyRow[]; today: stri
         <div key={date} class="money-day">
           <div class="day-label">
             {dayLabel(date, props.today)}
-            {date > props.today && <span class="tag">צפויה</span>}
           </div>
           <MoneyLines data={props.data} rows={rows} today={props.today} onEdit={props.onEdit} />
         </div>

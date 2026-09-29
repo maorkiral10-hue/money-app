@@ -23,7 +23,7 @@ export function StatementItems(props: { data: AppData; items: StatementItem[]; t
               <div class="muted small">
                 {[
                   dayLabel(item.tx.date, props.today),
-                  item.tx.recurringId && (item.tx.id.startsWith('expected:') ? 'הוראת קבע · צפוי' : 'הוראת קבע'),
+                  item.tx.recurringId && 'הוראת קבע',
                   item.installment && `תשלום ${item.installment.n} מתוך ${item.installment.of}`,
                   !item.tx.recurringId && item.tx.note,
                 ]

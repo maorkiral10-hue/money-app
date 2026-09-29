@@ -92,15 +92,15 @@ describe('recording', () => {
     expect(txs.filter(t => t.recurringId).map(t => [t.id, t.occurrence])).toEqual([['a', '2026-09-27']]);
   });
 
-  it('leaves variable items for the user to confirm', async () => {
+  it('records items whose amount changes too, with their estimate, without asking', async () => {
     const db = await freshDb();
-    const r = rec({ variable: true, type: 'income', accountId: 'bank', methodId: undefined });
+    const r = rec({ variable: true, estimate: 'set', type: 'income', accountId: 'bank', methodId: undefined });
     await putRecords(db, 'recurring', [r]);
-    await setMeta(db, 'x', 1);
-    expect(await recordDueRecurring(db, '2026-09-24', '2026-10-05')).toBe(false);
-    await resolveOccurrence(db, r, '2026-10-01', 123_45);
+    expect(await recordDueRecurring(db, '2026-09-24', '2026-10-05')).toBe(true);
     const [t] = await getAll<Transaction>(db, 'transactions');
-    expect([t.amount, t.date, t.accountId]).toEqual([123_45, '2026-10-01', 'bank']);
+    expect([t.amount, t.date, t.accountId, t.recurringId]).toEqual([r.amount, '2026-10-01', 'bank', r.id]);
+    // Recorded once only
+    expect(await recordDueRecurring(db, '2026-09-24', '2026-10-05')).toBe(false);
   });
 });
 

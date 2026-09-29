@@ -4,9 +4,10 @@ import { CardLine } from './CardLine';
 import { cardStatements, cardUsage } from '../data/balance';
 import { statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
-import { expectedExpenses, monthsSince, monthStats, periodEnd, periodKey, periodStart } from '../data/dashboard';
+import { monthsSince, monthStats, periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
+import { expectedTransactions } from '../data/recurring';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 
@@ -68,29 +69,79 @@ export function MonthSummary(props: {
   const isCurrent = key === currentKey;
   const name = (id: string) => data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה';
 
-  // Spending by category, with the standing orders still due this month as a lighter "expected" part
+  // Standing orders and fixed income: the ones recorded this month, and the ones still to come in it. They
+  // happen for sure (recorded automatically on their day), so they count in the month's totals already.
   const savingsId = data.budget?.savingsMode === 'separate' ? data.budget.savingsCategoryId : undefined;
-  const expected = isCurrent ? expectedExpenses(data, today, end).filter(t => t.categoryId !== savingsId) : [];
-  const expectedTotal = expected.reduce((a, t) => a + t.amount, 0);
-  const spending = new Map(stats.byCategory.map(c => [c.categoryId, { categoryId: c.categoryId, spent: c.amount, expected: 0 }]));
-  for (const t of expected) {
-    const row = spending.get(t.categoryId ?? '') ?? { categoryId: t.categoryId ?? '', spent: 0, expected: 0 };
-    row.expected += t.amount;
-    spending.set(row.categoryId, row);
-  }
-  const spendingRows = [...spending.values()].sort((a, b) => b.spent + b.expected - (a.spent + a.expected));
-  const maxSpend = Math.max(1, ...spendingRows.map(c => c.spent + c.expected));
-  const spendTotal = stats.expenses + expectedTotal;
+  const coming = end > today ? expectedTransactions(data.recurring, data.transactions, today, end, data.startDate).filter(t => t.date >= start) : [];
+  const fixedOf = (type: 'income' | 'expense') =>
+    [
+      ...txs.filter(t => t.type === type && t.recurringId && t.date >= start && t.date <= end),
+      ...coming.filter(t => t.type === type && !(type === 'expense' && t.categoryId === savingsId)),
+    ].sort((a, b) => a.date.localeCompare(b.date));
+  const fixedSpend = fixedOf('expense');
+  const fixedIncome = fixedOf('income');
+  const sum = (list: Transaction[]) => list.reduce((a, t) => a + t.amount, 0);
+  const comingSpend = sum(coming.filter(t => t.type === 'expense' && t.categoryId !== savingsId));
+  const comingIncome = sum(coming.filter(t => t.type === 'income'));
+  const spendTotal = stats.expenses + comingSpend;
+  const incomeTotal = stats.income + comingIncome;
 
-  const incomeRows = (() => {
+  // Everything else, by category
+  const oneOff = (type: 'income' | 'expense') => {
     const sums = new Map<string, number>();
-    for (const t of txs) if (t.type === 'income' && t.date >= start && t.date <= end) sums.set(t.categoryId ?? '', (sums.get(t.categoryId ?? '') ?? 0) + t.amount);
+    for (const t of txs) if (t.type === type && !t.recurringId && t.date >= start && t.date <= end) sums.set(t.categoryId ?? '', (sums.get(t.categoryId ?? '') ?? 0) + t.amount);
     return [...sums].map(([categoryId, amount]) => ({ categoryId, amount })).sort((a, b) => b.amount - a.amount);
-  })();
-  const maxIncome = Math.max(1, ...incomeRows.map(r => r.amount));
+  };
+  const spendingRows = oneOff('expense');
+  const incomeRows = oneOff('income');
+  const maxSpend = Math.max(1, sum(fixedSpend), ...spendingRows.map(c => c.amount));
+  const maxIncome = Math.max(1, sum(fixedIncome), ...incomeRows.map(r => r.amount));
 
   const inMonth = (t: Transaction, type: 'income' | 'expense', categoryId: string) =>
-    t.type === type && t.date >= start && t.date <= end && (t.categoryId ?? '') === categoryId;
+    t.type === type && !t.recurringId && t.date >= start && t.date <= end && (t.categoryId ?? '') === categoryId;
+
+  /** The fixed ones as one row at the top of the panel, opening to each with its category. */
+  const FixedGroup = (p: { type: 'income' | 'expense'; list: Transaction[]; total: number }) => {
+    if (!p.list.length) return null;
+    const total = sum(p.list);
+    const income = p.type === 'income';
+    const id = `fixed-${p.type}`;
+    return (
+      <div>
+        <button class="bar-row" onClick={() => setOpenCategory(openCategory === id ? null : id)} aria-expanded={openCategory === id}>
+          <div class="line">
+            <span class="fixed-title">{income ? 'הכנסות קבועות' : 'הוצאות קבועות'}</span>
+            <span class={income ? 'inc' : 'exp'}>
+              {formatMoney(income ? total : -total, { sign: income })} <span class="muted small">· {pct(total, p.total)}</span>
+            </span>
+          </div>
+          <div class="bar">
+            <span class="fixed-bar" style={{ width: `${(total / (income ? maxIncome : maxSpend)) * 100}%` }} />
+          </div>
+        </button>
+        {openCategory === id && (
+          <div class="bar-detail">
+            {p.list.map(t => {
+              const upcoming = t.id.startsWith('expected:');
+              const Line = upcoming ? 'div' : 'button';
+              return (
+                <Line key={t.id} class="tx" onClick={upcoming ? undefined : () => props.onEdit(t)}>
+                  <div>
+                    <div>{t.note}</div>
+                    <div class="muted small">
+                      <span class="cat-dot" style={{ background: categoryColor(t.categoryId, data.categories) }} />
+                      {[name(t.categoryId ?? ''), upcoming ? `${income ? 'ייכנס' : 'יירד'} ב־${shortDate(t.date)}` : dayLabel(t.date, today)].join(' · ')}
+                    </div>
+                  </div>
+                  <span class={`small ${income ? 'inc' : 'exp'}`}>{formatMoney(income ? t.amount : -t.amount, { sign: income })}</span>
+                </Line>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Credit cards together: how much of all the limits is used
   const asOf = props.asOf ?? today;
@@ -127,13 +178,13 @@ export function MonthSummary(props: {
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>
           <div class="small inc">הכנסות</div>
           <div class="stat-value inc">
-            <AnimatedMoney value={stats.income} />
+            <AnimatedMoney value={incomeTotal} />
           </div>
         </button>
         <button class={`stat tappable ${open === 'expenses' ? 'on exp-bg' : ''}`} onClick={() => toggle('expenses')} aria-expanded={open === 'expenses'}>
           <div class="small exp">הוצאות</div>
           <div class="stat-value exp">
-            <AnimatedMoney value={-stats.expenses} />
+            <AnimatedMoney value={-spendTotal} />
           </div>
         </button>
       </div>
@@ -141,7 +192,8 @@ export function MonthSummary(props: {
 
       {open === 'expenses' && (
         <div class="card breakdown-panel exp-panel">
-          {spendingRows.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
+          {spendingRows.length === 0 && fixedSpend.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
+          <FixedGroup type="expense" list={fixedSpend} total={spendTotal} />
           {spendingRows.map(c => (
             <div key={c.categoryId}>
               <button class="bar-row" onClick={() => setOpenCategory(openCategory === c.categoryId ? null : c.categoryId)}>
@@ -151,28 +203,15 @@ export function MonthSummary(props: {
                     {name(c.categoryId)}
                   </span>
                   <span class="exp">
-                    {c.spent > 0 && formatMoney(-c.spent)}
-                    {c.expected > 0 && <span class="muted small"> {c.spent > 0 ? '+' : ''}{formatMoney(c.expected)} צפוי</span>}
-                    <span class="muted small"> · {pct(c.spent + c.expected, spendTotal)}</span>
+                    {formatMoney(-c.amount)} <span class="muted small">· {pct(c.amount, spendTotal)}</span>
                   </span>
                 </div>
-                <div class="bar split">
-                  <span style={{ width: `${(c.spent / maxSpend) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
-                  <span class="expected" style={{ width: `${(c.expected / maxSpend) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
+                <div class="bar">
+                  <span style={{ width: `${(c.amount / maxSpend) * 100}%`, background: categoryColor(c.categoryId, data.categories) }} />
                 </div>
               </button>
               {openCategory === c.categoryId && (
                 <div class="bar-detail">
-                  {expected
-                    .filter(t => (t.categoryId ?? '') === c.categoryId)
-                    .map(t => (
-                      <div key={t.id} class="tx">
-                        <span class="muted small">
-                          {[dayLabel(t.date, today), t.note].filter(Boolean).join(' · ')} <span class="tag">צפוי</span>
-                        </span>
-                        <span class="small exp">{formatMoney(-t.amount)}</span>
-                      </div>
-                    ))}
                   {data.transactions
                     .filter(t => inMonth(t, 'expense', c.categoryId))
                     .sort((a, b) => b.date.localeCompare(a.date))
@@ -186,13 +225,13 @@ export function MonthSummary(props: {
               )}
             </div>
           ))}
-          {expectedTotal > 0 && <p class="muted small">ועוד {formatMoney(expectedTotal)} הוראות קבע שיירדו עד סוף החודש (בחלק הבהיר).</p>}
         </div>
       )}
 
       {open === 'income' && (
         <div class="card breakdown-panel inc-panel">
-          {incomeRows.length === 0 && <p class="muted small">אין הכנסות בחודש הזה</p>}
+          {incomeRows.length === 0 && fixedIncome.length === 0 && <p class="muted small">אין הכנסות בחודש הזה</p>}
+          <FixedGroup type="income" list={fixedIncome} total={incomeTotal} />
           {incomeRows.map(r => (
             <div key={r.categoryId}>
               <button class="bar-row" onClick={() => setOpenCategory(openCategory === r.categoryId ? null : r.categoryId)}>
@@ -202,7 +241,7 @@ export function MonthSummary(props: {
                     {name(r.categoryId)}
                   </span>
                   <span class="inc">
-                    {formatMoney(r.amount, { sign: true })} <span class="muted small">· {pct(r.amount, stats.income)}</span>
+                    {formatMoney(r.amount, { sign: true })} <span class="muted small">· {pct(r.amount, incomeTotal)}</span>
                   </span>
                 </div>
                 <div class="bar">
