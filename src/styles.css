@@ -521,3 +521,12 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .home-day-head { display: flex; justify-content: space-between; align-items: center; }
 .home-day .tx { padding: 9px 0; }
 .agenda-time { direction: ltr; text-align: right; }
+
+/* home: the day or the whole month under the calendar */
+.day-switch { display: flex; gap: 4px; background: var(--soft); border-radius: 10px; padding: 3px; }
+.day-switch button { margin: 0; padding: 5px 10px; font-size: 14px; font-weight: 600; background: none; color: var(--muted); border-radius: 8px; width: auto; }
+.day-switch button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.home-day-head { margin-bottom: 6px; }
+.month-range { margin: 0 0 4px; }
+.money-day .day-label { margin: 10px 0 2px; }
+.charge-row .muted { font-weight: 600; }

@@ -1,12 +1,9 @@
 import { useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MonthSummary } from '../components/MonthSummary';
-import { StatementItems } from '../components/StatementItems';
-import { cardStatements, cardUsage, summarize, type Statement } from '../data/balance';
+import { summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
-import { categoryColor } from '../data/colors';
-import { periodKey, periodStart } from '../data/dashboard';
-import { dayLabel, todayStr } from '../data/dates';
+import { todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { checkDue } from '../data/reconcile';
 import { formatMoney } from '../data/money';
@@ -32,29 +29,11 @@ export function Home(props: {
   const { data } = props;
   const today = todayStr();
   const summary = summarize(data, today);
-  const cards = cardUsage(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [openCharge, setOpenCharge] = useState<string | null>(null);
-  const [showLedger, setShowLedger] = useState(false);
   const pending = data.recurring
     .filter(r => r.variable)
     .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
     .filter(p => p.open.length > 0);
-
-  const name = new Map<string, string>([...data.accounts, ...data.methods, ...data.categories].map(x => [x.id, x.name]));
-  // Like an account statement: what leaves or enters your accounts and wallet. A credit card purchase
-  // (including subscriptions and standing orders on the card) isn't a line of its own: it's inside the
-  // card's charge, which appears on its charge day. Tap a card in "פירוט" to see what's building up.
-  const creditIds = new Set(data.methods.filter(m => m.kind === 'credit').map(m => m.id));
-  const statements = new Map(cards.map(u => [u.card.id, cardStatements(data, u.card.id)]));
-  const rows: Row[] = [
-    ...data.transactions.filter(t => !(t.type === 'expense' && creditIds.has(t.methodId ?? ''))).map(tx => ({ kind: 'tx' as const, date: tx.date, tx })),
-    ...[...statements.values()].flat().filter(st => st.date <= today).map(st => ({ kind: 'charge' as const, date: st.date, st })),
-  ].sort((a, b) => b.date.localeCompare(a.date) || (a.kind === 'tx' && b.kind === 'tx' ? b.tx.createdAt.localeCompare(a.tx.createdAt) : 0));
-  const monthStart = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
-  const thisMonthCount = rows.filter(r => r.date >= monthStart && r.date <= today).length;
-  const groups = new Map<string, Row[]>();
-  for (const r of rows) groups.set(r.date, [...(groups.get(r.date) ?? []), r]);
 
   return (
     <>
@@ -104,49 +83,6 @@ export function Home(props: {
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
       ))}
 
-      <div class="card section">
-        <button class="section-head" onClick={() => setShowLedger(!showLedger)} aria-expanded={showLedger}>
-          <span>
-            <span class="section-title">עובר ושב</span>
-            <span class="muted small block">
-              {rows.length === 0 ? 'עדיין אין פעולות' : `${thisMonthCount === 1 ? 'פעולה אחת' : `${thisMonthCount} פעולות`} החודש · לחץ לפירוט`}
-            </span>
-          </span>
-          <span class={`chevron ${showLedger ? 'open' : ''}`}>‹</span>
-        </button>
-      </div>
-
-      {showLedger && groups.size === 0 && <p class="muted center">עדיין אין תנועות. לחץ על + כדי להוסיף את הראשונה.</p>}
-      {showLedger && [...groups].map(([date, items]) => (
-        <div key={date} class="day">
-          <div class="day-label">
-            {dayLabel(date, today)}
-            {date > today && <span class="tag">צפויה</span>}
-            {date < data.startDate && <span class="tag">לפני תחילת המעקב</span>}
-          </div>
-          <div class="card list">
-            {items.map(row =>
-              row.kind === 'charge' ? (
-                <div key={`${row.st.methodId}${row.st.date}`}>
-                  <button class="tx" onClick={() => setOpenCharge(openCharge === row.st.methodId + row.st.date ? null : row.st.methodId + row.st.date)}>
-                    <div>
-                      <div>חיוב {name.get(row.st.methodId)}</div>
-                      <div class="muted small">
-                        {row.st.items.length === 1 ? 'פריט אחד' : `${row.st.items.length} פריטים`} · לחץ לפירוט
-                      </div>
-                    </div>
-                    <div class="amount expense">{formatMoney(-row.st.amount)}</div>
-                  </button>
-                  {openCharge === row.st.methodId + row.st.date && <StatementItems data={data} items={row.st.items} today={today} onEdit={props.onEdit} />}
-                </div>
-              ) : (
-              <TxRow key={row.tx.id} tx={row.tx} />
-              ),
-            )}
-          </div>
-        </div>
-      ))}
-
       <div class="quiet-lines">
         <button class="quiet" onClick={props.onOpenCheck}>
           {data.balanceChecks[0]
@@ -159,35 +95,7 @@ export function Home(props: {
       </div>
     </>
   );
-
-  function TxRow({ tx }: { tx: Transaction }) {
-    return (
-              <button class="tx" onClick={() => props.onEdit(tx)}>
-                <div>
-                  <div>
-                    {tx.type !== 'transfer' && <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />}
-                    {tx.type === 'transfer' ? `${name.get(tx.accountId!)} ← ${name.get(tx.toAccountId!)}` : tx.recurringId ? tx.note : name.get(tx.categoryId!)}
-                  </div>
-                  <div class="muted small">
-                    {[
-                      tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
-                      tx.recurringId && 'הוראת קבע',
-                      tx.installments && `${tx.installments} תשלומים`,
-                      !tx.recurringId && tx.note,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </div>
-                </div>
-                <div class={`amount ${tx.type}`}>
-                  {formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}
-                </div>
-              </button>
-    );
-  }
 }
-
-type Row = { kind: 'tx'; date: string; tx: Transaction } | { kind: 'charge'; date: string; st: Statement };
 
 function Line(props: { label: string; value: number }) {
   return (

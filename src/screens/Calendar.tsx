@@ -4,7 +4,9 @@ import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, we
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
+import { MoneyByDay, MoneyLines, moneyRows } from '../components/MoneyList';
 import { statsTransactions } from '../data/budget';
+import { periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { categoryColor } from '../data/colors';
 import type { AppData } from '../data/store';
 import type { CalendarEvent, Transaction } from '../data/types';
@@ -282,7 +284,7 @@ export function CalendarScreen(props: {
         <div class="card cal-area" ref={area}>
           {calendarGrid}
         </div>
-        <DayAgenda data={props.data} date={selected} today={today} events={dayEvents} txs={txByDate.get(selected) ?? []} onEdit={props.onEdit} onEditTx={props.onEditTx} />
+        <DayAgenda data={props.data} date={selected} today={today} events={dayEvents} onEdit={props.onEdit} onEditTx={props.onEditTx} />
       </div>
     );
   }
@@ -360,64 +362,71 @@ const plusHour = (t: string) => {
 };
 
 /**
- * The chosen day on the home screen, as one short list: its events (all-day first, then by time) and
- * the money recorded that day, in the order it happened (by when it was written down).
+ * Under the calendar on the home screen: the chosen day (its events, all-day first then by time, and its
+ * money), or the whole financial month's money, day by day, like a bank statement ("עובר ושב").
  */
 function DayAgenda(props: {
   data: AppData;
   date: string;
   today: string;
   events: CalendarEvent[];
-  txs: Transaction[];
   onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
   onEditTx: (tx: Transaction) => void;
 }) {
-  const names = new Map([...props.data.categories, ...props.data.methods].map(x => [x.id, x.name]));
-  const localTime = (iso: string) => {
-    const d = new Date(iso);
-    return toDateStr(d) === props.date ? timeLabel(d.getHours() * 60 + d.getMinutes()) : '99:99';
-  };
-  const rows = [
-    ...props.events.map(e => ({ key: `e${e.id}`, at: e.startTime ?? '', event: e, tx: undefined as Transaction | undefined })),
-    ...props.txs.map(t => ({ key: `t${t.id}`, at: localTime(t.createdAt), event: undefined as CalendarEvent | undefined, tx: t })),
-  ].sort((a, b) => a.at.localeCompare(b.at));
+  const { data } = props;
+  const [view, setView] = useState<'day' | 'month'>('day');
+  const events = [...props.events].sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
+  const dayRows = moneyRows(data, props.date, props.date, props.today);
+  // The financial month the chosen day is in, as set in the settings (e.g. the 1st to the end of the month)
+  const key = periodKey(props.date, data.monthStartDay);
+  const from = periodStart(key, data.monthStartDay);
+  const to = periodEnd(key, data.monthStartDay);
+  const monthRows = view === 'month' ? moneyRows(data, from, to, props.today) : [];
+  // Charge lines aren't something you recorded
+  const monthCount = monthRows.filter(r => r.kind === 'tx').length;
 
   return (
     <div class="card list home-day">
       <div class="home-day-head">
-        <h2 class="list-title">{dayLabel(props.date, props.today)}</h2>
-        <button class="link small" onClick={() => props.onEdit(undefined, props.date)}>
-          + אירוע
-        </button>
+        <div class="day-switch">
+          <button class={view === 'day' ? 'on' : ''} onClick={() => setView('day')}>
+            {dayLabel(props.date, props.today)}
+          </button>
+          <button class={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>
+            כל החודש
+          </button>
+        </div>
+        {view === 'day' && (
+          <button class="link small" onClick={() => props.onEdit(undefined, props.date)}>
+            + אירוע
+          </button>
+        )}
       </div>
-      {rows.length === 0 && <p class="muted small">אין אירועים או פעולות ביום הזה</p>}
-      {rows.map(r =>
-        r.event ? (
-          <button key={r.key} class="tx agenda-event" onClick={() => props.onEdit(r.event)}>
-            <div>
+
+      {view === 'day' ? (
+        <>
+          {events.length === 0 && dayRows.length === 0 && <p class="muted small">אין אירועים או פעולות ביום הזה</p>}
+          {events.map(e => (
+            <button key={`e${e.id}`} class="tx agenda-event" onClick={() => props.onEdit(e)}>
               <div>
-                <span class={`cal-dot ${dotClass(r.event)}`} /> {r.event.title}
+                <div>
+                  <span class={`cal-dot ${dotClass(e)}`} /> {e.title}
+                </div>
+                <div class="muted small agenda-time">{e.startTime ? `${e.startTime}${e.endTime ? `–${e.endTime}` : ''}` : 'כל היום'}</div>
               </div>
-              <div class="muted small agenda-time">{r.event.startTime ? `${r.event.startTime}${r.event.endTime ? `–${r.event.endTime}` : ''}` : 'כל היום'}</div>
-            </div>
-            <EventMoney data={props.data} event={r.event} />
-          </button>
-        ) : (
-          <button key={r.key} class="tx" onClick={() => props.onEditTx(r.tx!)}>
-            <div>
-              <div>
-                <span class="cat-dot" style={{ background: categoryColor(r.tx!.categoryId, props.data.categories) }} />
-                {names.get(r.tx!.categoryId ?? '') ?? ''}
-              </div>
-              <div class="muted small">
-                {[r.tx!.methodId ? names.get(r.tx!.methodId) : r.tx!.type === 'income' ? props.data.accounts.find(a => a.id === r.tx!.accountId)?.name : undefined, r.tx!.note]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </div>
-            </div>
-            <div class={r.tx!.type === 'income' ? 'inc' : 'exp'}>{formatMoney(r.tx!.type === 'income' ? r.tx!.amount : -r.tx!.amount, { sign: true })}</div>
-          </button>
-        ),
+              <EventMoney data={data} event={e} />
+            </button>
+          ))}
+          <MoneyLines data={data} rows={dayRows} today={props.today} onEdit={props.onEditTx} />
+        </>
+      ) : (
+        <>
+          <p class="muted small month-range">
+            {shortDate(from)}–{shortDate(to)} · {monthCount === 1 ? 'פעולה אחת' : `${monthCount} פעולות`}
+          </p>
+          {monthRows.length === 0 && <p class="muted small">אין פעולות בחודש הזה</p>}
+          <MoneyByDay data={data} rows={monthRows} today={props.today} onEdit={props.onEditTx} />
+        </>
       )}
     </div>
   );
