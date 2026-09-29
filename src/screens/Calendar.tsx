@@ -4,7 +4,7 @@ import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, we
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
-import { MoneyByDay, MoneyLines, moneyRows, onCardStandingOrder, plannedMoney } from '../components/MoneyList';
+import { MoneyLines, moneyRows, onCardStandingOrder, plannedMoney, type MoneyRow } from '../components/MoneyList';
 import { statsTransactions } from '../data/budget';
 import { holidaysOn, type Holiday } from '../data/holidays';
 import { periodEnd, periodKey, periodStart } from '../data/dashboard';
@@ -426,15 +426,50 @@ function DayAgenda(props: {
 }) {
   const { data } = props;
   const [view, setView] = useState<'day' | 'month'>('day');
-  const events = [...props.events].sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
+  // The month's list: only money (like a bank statement), or everything including the events
+  const [show, setShow] = useState<'money' | 'all'>('money');
+  const [comingOpen, setComingOpen] = useState(false);
+  // An event whose outcome was recorded is that transaction now: shown once, as the transaction
+  const txIds = useMemo(() => new Set(data.transactions.map(t => t.id)), [data.transactions]);
+  const stillEvent = (e: CalendarEvent) => !(e.settled?.txId && txIds.has(e.settled.txId));
+  const events = props.events.filter(stillEvent).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const dayRows = useMemo(() => moneyRows(data, props.date, props.date, props.today), [data, props.date, props.today]);
   // The financial month the chosen day is in, as set in the settings (e.g. the 1st to the end of the month)
   const key = periodKey(props.date, data.monthStartDay);
   const from = periodStart(key, data.monthStartDay);
   const to = periodEnd(key, data.monthStartDay);
   const monthRows = useMemo(() => (view === 'month' ? moneyRows(data, from, to, props.today) : []), [view, data, from, to, props.today]);
-  // Charge lines aren't something you recorded
-  const monthCount = monthRows.filter(r => r.kind === 'tx').length;
+  const monthEvents = useMemo(
+    () => (view === 'month' && show === 'all' ? expandEvents(data.events, from, to).filter(stillEvent) : []),
+    [view, show, data.events, from, to, txIds],
+  );
+  // What already happened, and what's still to come this month (standing orders, card charges, events)
+  const done = monthRows.filter(r => r.date <= props.today);
+  const coming = monthRows.filter(r => r.date > props.today);
+  const recorded = done.filter(r => r.kind === 'tx').length;
+  const comingCount = coming.length + monthEvents.filter(e => e.date > props.today).length;
+  // A month still to come has nothing done yet: then what's coming is open from the start
+  const nothingDone = done.length === 0 && !monthEvents.some(e => e.date <= props.today);
+  const showComing = comingOpen || nothingDone;
+
+  /** Days with their events and money lines, in the order given. */
+  const days = (dates: string[], rows: MoneyRow[]) => {
+    const byDay = new Map<string, MoneyRow[]>();
+    for (const r of rows) byDay.set(r.date, [...(byDay.get(r.date) ?? []), r]);
+    return dates.map(d => (
+      <div key={d} class="money-day">
+        <div class="day-label">{dayLabel(d, props.today)}</div>
+        {monthEvents
+          .filter(e => e.date === d)
+          .map(e => (
+            <EventRow key={`e${e.id}${d}`} data={data} event={e} onEdit={props.onEdit} />
+          ))}
+        <MoneyLines data={data} rows={byDay.get(d) ?? []} today={props.today} onEdit={props.onEditTx} />
+      </div>
+    ));
+  };
+  const datesOf = (rows: MoneyRow[], after: boolean) =>
+    [...new Set([...rows.map(r => r.date), ...monthEvents.filter(e => (after ? e.date > props.today : e.date <= props.today)).map(e => e.date)])];
 
   return (
     <div class="card list home-day">
@@ -459,28 +494,62 @@ function DayAgenda(props: {
           <HolidayLines date={props.date} />
           {events.length === 0 && dayRows.length === 0 && <p class="muted small">אין אירועים או פעולות ביום הזה</p>}
           {events.map(e => (
-            <button key={`e${e.id}`} class="tx agenda-event" onClick={() => props.onEdit(e)}>
-              <div>
-                <div>
-                  <span class={`cal-dot ${dotClass(e)}`} /> {e.title}
-                </div>
-                <div class="muted small agenda-time">{e.startTime ? `${e.startTime}${e.endTime ? `–${e.endTime}` : ''}` : 'כל היום'}</div>
-              </div>
-              <EventMoney data={data} event={e} />
-            </button>
+            <EventRow key={`e${e.id}`} data={data} event={e} onEdit={props.onEdit} />
           ))}
           <MoneyLines data={data} rows={dayRows} today={props.today} onEdit={props.onEditTx} />
         </>
       ) : (
         <>
-          <p class="muted small month-range">
-            {shortDate(from)}–{shortDate(to)} · {monthCount === 1 ? 'פעולה אחת' : `${monthCount} פעולות`}
-          </p>
-          {monthRows.length === 0 && <p class="muted small">אין פעולות בחודש הזה</p>}
-          <MoneyByDay data={data} rows={monthRows} today={props.today} onEdit={props.onEditTx} />
+          <div class="month-head">
+            <p class="muted small month-range">
+              {shortDate(from)}–{shortDate(to)} · {recorded === 1 ? 'פעולה אחת בוצעה' : `${recorded} פעולות בוצעו`}
+            </p>
+            <div class="day-switch small-switch">
+              <button class={show === 'money' ? 'on' : ''} onClick={() => setShow('money')}>
+                כסף
+              </button>
+              <button class={show === 'all' ? 'on' : ''} onClick={() => setShow('all')}>
+                הכל
+              </button>
+            </div>
+          </div>
+          {comingCount > 0 && (
+            <button class="link small coming-toggle" aria-expanded={showComing} onClick={() => setComingOpen(!showComing)}>
+              עוד {comingCount} עד סוף החודש ({show === 'all' ? 'הוראות קבע, חיובים ואירועים' : 'הוראות קבע וחיובים'}) <span class={`chevron ${showComing ? 'open' : ''}`}>‹</span>
+            </button>
+          )}
+          {showComing && comingCount > 0 && (
+            <div class="coming-part">
+              <div class="part-title">עוד החודש</div>
+              {days(datesOf(coming, true).sort(), coming)}
+            </div>
+          )}
+          {(done.length > 0 || monthEvents.some(e => e.date <= props.today)) && (
+            <>
+              {showComing && <div class="part-title">עד היום</div>}
+              {days(datesOf(done, false).sort().reverse(), done)}
+            </>
+          )}
+          {monthRows.length === 0 && monthEvents.length === 0 && <p class="muted small">אין פעולות בחודש הזה</p>}
         </>
       )}
     </div>
+  );
+}
+
+/** One event in a list: its dot, title and time, and its money (expected, and what it came to). */
+function EventRow(props: { data: AppData; event: CalendarEvent; onEdit: (event?: CalendarEvent) => void }) {
+  const e = props.event;
+  return (
+    <button class="tx agenda-event" onClick={() => props.onEdit(e)}>
+      <div>
+        <div>
+          <span class={`cal-dot ${dotClass(e)}`} /> {e.title}
+        </div>
+        <div class="muted small agenda-time">{e.startTime ? `${e.startTime}${e.endTime ? `–${e.endTime}` : ''}` : 'כל היום'}</div>
+      </div>
+      <EventMoney data={props.data} event={e} />
+    </button>
   );
 }
 

@@ -576,3 +576,10 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .when-chips { justify-content: center; }
 .tile.event { border-style: dashed; }
 .future-note { text-align: center; margin: 0 0 12px; }
+
+/* the whole month: what happened and what's still to come */
+.month-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.small-switch button { padding: 3px 9px; font-size: 13px; }
+button.coming-toggle { display: block; margin: 4px 0 2px; }
+.part-title { font-weight: 700; font-size: 14px; margin: 12px 0 0; }
+.coming-part { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
