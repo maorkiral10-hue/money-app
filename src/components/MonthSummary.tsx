@@ -43,6 +43,11 @@ export function MonthSummary(props: {
   onEdit: (tx: Transaction) => void;
   /** The financial month to show, set from outside (the home screen's calendar); then there are no arrows of its own. */
   monthKey?: string;
+  /**
+   * The day the cards' usage is shown for (the day chosen in the calendar): purchases recorded up to it
+   * that the bank hasn't paid for by then. After a charge day, what that charge paid for is free again.
+   */
+  asOf?: string;
 }) {
   const { data } = props;
   const startDay = data.monthStartDay;
@@ -88,7 +93,8 @@ export function MonthSummary(props: {
     t.type === type && t.date >= start && t.date <= end && (t.categoryId ?? '') === categoryId;
 
   // Credit cards together: how much of all the limits is used
-  const cards = cardUsage(data, today);
+  const asOf = props.asOf ?? today;
+  const cards = cardUsage(data, asOf);
   const used = cards.reduce((a, c) => a + c.used, 0);
   const limits = cards.reduce((a, c) => a + (c.card.creditLimit ?? 0), 0);
   const withLimit = cards.filter(c => c.card.creditLimit);
@@ -241,13 +247,14 @@ export function MonthSummary(props: {
                 </>
               )}
               {limits === 0 && <span class="muted small block">לא הוגדרו מסגרות. אפשר להוסיף בהגדרות</span>}
+              {asOf !== today && <span class="muted small block">נכון ל{dayLabel(asOf, today)} (לפי הקניות שנרשמו עד אז)</span>}
             </span>
             <span class={`chevron ${cardsOpen ? 'open' : ''}`}>‹</span>
           </button>
           {cardsOpen && (
             <div class="section-body">
               {cards.map(u => (
-                <CardLine key={u.card.id} usage={u} today={today} statements={cardStatements(data, u.card.id)} data={data} onEdit={props.onEdit} />
+                <CardLine key={u.card.id} usage={u} today={today} asOf={asOf} statements={cardStatements(data, u.card.id)} data={data} onEdit={props.onEdit} />
               ))}
             </div>
           )}

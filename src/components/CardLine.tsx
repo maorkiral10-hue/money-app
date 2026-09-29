@@ -13,6 +13,8 @@ import { StatementItems } from './StatementItems';
 export function CardLine(props: {
   usage: CardUsage;
   today: string;
+  /** The day the usage is for, when it isn't today. */
+  asOf?: string;
   statements?: Statement[];
   data?: AppData;
   onEdit?: (tx: Transaction) => void;
@@ -21,7 +23,7 @@ export function CardLine(props: {
   const [open, setOpen] = useState(false);
   const limit = usage.card.creditLimit;
   const share = limit ? Math.min(1, usage.used / limit) : 0;
-  const next = props.statements?.find(s => s.date > today);
+  const next = props.statements?.find(s => s.date > (props.asOf ?? today));
   const later = props.statements?.filter(s => next && s.date > next.date) ?? [];
   const canOpen = !!(props.statements && props.data && props.onEdit);
 

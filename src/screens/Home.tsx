@@ -80,7 +80,7 @@ export function Home(props: {
       <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit} onSelect={setCalendarDay} />
 
       {/* The month of the day chosen in the calendar above: moving the calendar moves this too */}
-      <MonthSummary data={data} onEdit={props.onEdit} monthKey={periodKey(calendarDay, data.monthStartDay)} />
+      <MonthSummary data={data} onEdit={props.onEdit} monthKey={periodKey(calendarDay, data.monthStartDay)} asOf={calendarDay} />
 
       {pending.map(({ rec, open }) => (
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
