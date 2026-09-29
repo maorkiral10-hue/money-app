@@ -530,3 +530,4 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 .month-range { margin: 0 0 4px; }
 .money-day .day-label { margin: 10px 0 2px; }
 .charge-row .muted { font-weight: 600; }
+.month-switch.single { justify-content: center; }

@@ -38,13 +38,19 @@ const pct = (part: number, total: number) => {
  * and the credit cards together. There's no "left over" figure: income and spending land in different
  * months (salary, card bills), so their difference didn't mean much.
  */
-export function MonthSummary(props: { data: AppData; onEdit: (tx: Transaction) => void }) {
+export function MonthSummary(props: {
+  data: AppData;
+  onEdit: (tx: Transaction) => void;
+  /** The financial month to show, set from outside (the home screen's calendar); then there are no arrows of its own. */
+  monthKey?: string;
+}) {
   const { data } = props;
   const startDay = data.monthStartDay;
   const today = todayStr();
   const months = monthsSince(data.startDate, today, startDay);
   const currentKey = periodKey(today, startDay);
-  const [key, setKey] = useState(currentKey);
+  const [ownKey, setKey] = useState(currentKey);
+  const key = props.monthKey ?? ownKey;
   const [open, setOpen] = useState<Open>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [cardsOpen, setCardsOpen] = useState(false);
@@ -95,6 +101,11 @@ export function MonthSummary(props: { data: AppData; onEdit: (tx: Transaction) =
 
   return (
     <>
+      {props.monthKey ? (
+        <div class="month-switch single">
+          <span>{periodTitle(key, startDay)}</span>
+        </div>
+      ) : (
       <div class="month-switch">
         <button class="link" disabled={index <= 0} onClick={() => setKey(months[index - 1])} aria-label="חודש קודם">
           ›
@@ -104,6 +115,7 @@ export function MonthSummary(props: { data: AppData; onEdit: (tx: Transaction) =
           ‹
         </button>
       </div>
+      )}
 
       <div class="stat-row two">
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>

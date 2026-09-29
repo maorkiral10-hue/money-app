@@ -56,6 +56,8 @@ export function CalendarScreen(props: {
    * listed below it; no header, no hour grid. Always opens on this week.
    */
   compact?: boolean;
+  /** Told whenever the chosen day changes (the home screen shows that day's month below). */
+  onSelect?: (date: string) => void;
 }) {
   const today = todayStr();
   const compact = !!props.compact;
@@ -70,6 +72,7 @@ export function CalendarScreen(props: {
   const [zoomAnim, setZoomAnim] = useState<'in' | 'out' | null>(null);
   const [origin, setOrigin] = useState('50% 40%');
   if (!compact) lastView = { zoom, selected };
+  useEffect(() => props.onSelect?.(selected), [selected]);
   const area = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;

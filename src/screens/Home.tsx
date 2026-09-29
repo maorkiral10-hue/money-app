@@ -3,6 +3,7 @@ import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
 import { PendingCard } from '../components/PendingCard';
+import { periodKey } from '../data/dashboard';
 import { todayStr } from '../data/dates';
 import { openOccurrences } from '../data/recurring';
 import { checkDue } from '../data/reconcile';
@@ -30,6 +31,7 @@ export function Home(props: {
   const today = todayStr();
   const summary = summarize(data, today);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [calendarDay, setCalendarDay] = useState(today);
   const pending = data.recurring
     .filter(r => r.variable)
     .map(rec => ({ rec, open: openOccurrences(rec, today, data.startDate) }))
@@ -75,9 +77,10 @@ export function Home(props: {
         </div>
       </div>
 
-      <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit} />
+      <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit} onSelect={setCalendarDay} />
 
-      <MonthSummary data={data} onEdit={props.onEdit} />
+      {/* The month of the day chosen in the calendar above: moving the calendar moves this too */}
+      <MonthSummary data={data} onEdit={props.onEdit} monthKey={periodKey(calendarDay, data.monthStartDay)} />
 
       {pending.map(({ rec, open }) => (
         <PendingCard key={`${rec.id}${open[0]}`} db={props.db} data={data} rec={rec} occurrence={open[0]} more={open.length - 1} onDone={props.onChange} />
