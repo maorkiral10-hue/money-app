@@ -539,3 +539,4 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 /* standing orders together at the top of the income and spending panels */
 .fixed-title { font-weight: 700; }
 .bar .fixed-bar { background: var(--text); opacity: .55; }
+.bar .savings-bar { background: var(--pos); opacity: .5; }

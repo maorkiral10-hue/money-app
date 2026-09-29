@@ -81,6 +81,14 @@ export function MonthSummary(props: {
   const fixedSpend = fixedOf('expense');
   const fixedIncome = fixedOf('income');
   const sum = (list: Transaction[]) => list.reduce((a, t) => a + t.amount, 0);
+  // Money put into savings (when the budget keeps savings apart): not spending, so not in the totals, but
+  // shown so it's never missed — standing orders like a pension fund and one-off deposits alike
+  const savings = savingsId
+    ? [
+        ...data.transactions.filter(t => t.type === 'expense' && t.categoryId === savingsId && t.date >= start && t.date <= end),
+        ...coming.filter(t => t.type === 'expense' && t.categoryId === savingsId),
+      ].sort((a, b) => a.date.localeCompare(b.date))
+    : [];
   const comingSpend = sum(coming.filter(t => t.type === 'expense' && t.categoryId !== savingsId));
   const comingIncome = sum(coming.filter(t => t.type === 'income'));
   const spendTotal = stats.expenses + comingSpend;
@@ -192,8 +200,42 @@ export function MonthSummary(props: {
 
       {open === 'expenses' && (
         <div class="card breakdown-panel exp-panel">
-          {spendingRows.length === 0 && fixedSpend.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
+          {spendingRows.length === 0 && fixedSpend.length === 0 && savings.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
           <FixedGroup type="expense" list={fixedSpend} total={spendTotal} />
+          {savings.length > 0 && (
+            <div>
+              <button class="bar-row" onClick={() => setOpenCategory(openCategory === 'savings' ? null : 'savings')} aria-expanded={openCategory === 'savings'}>
+                <div class="line">
+                  <span>
+                    <span class="fixed-title">חיסכון</span> <span class="tag">לא נספר בהוצאות</span>
+                  </span>
+                  <span class="muted">{formatMoney(sum(savings))}</span>
+                </div>
+                <div class="bar">
+                  <span class="savings-bar" style={{ width: `${Math.min(1, sum(savings) / maxSpend) * 100}%` }} />
+                </div>
+              </button>
+              {openCategory === 'savings' && (
+                <div class="bar-detail">
+                  {savings.map(t => {
+                    const upcoming = t.id.startsWith('expected:');
+                    const Line = upcoming ? 'div' : 'button';
+                    return (
+                      <Line key={t.id} class="tx" onClick={upcoming ? undefined : () => props.onEdit(t)}>
+                        <div>
+                          <div>{t.recurringId ? t.note : name(t.categoryId ?? '')}</div>
+                          <div class="muted small">
+                            {[t.recurringId && 'הוראת קבע', upcoming ? `יירד ב־${shortDate(t.date)}` : dayLabel(t.date, today), !t.recurringId && t.note].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                        <span class="small muted">{formatMoney(t.amount)}</span>
+                      </Line>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           {spendingRows.map(c => (
             <div key={c.categoryId}>
               <button class="bar-row" onClick={() => setOpenCategory(openCategory === c.categoryId ? null : c.categoryId)}>
