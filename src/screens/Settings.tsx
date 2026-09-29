@@ -1,6 +1,7 @@
 import { AccountsEditor, CategoriesEditor } from '../components/Editors';
 import { MethodsSettings } from '../components/MethodsSettings';
 import { MonthStartPicker } from '../components/MonthStartPicker';
+import { MoneyInput } from '../components/inputs';
 import { addDays, todayStr } from '../data/dates';
 import { putRecords, setMeta } from '../data/db';
 
@@ -159,6 +160,16 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
                 <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי 10 שניות ומעלה (לא באמצע הקלדה)</span>
               </span>
               <input type="checkbox" checked={data.openOnEntry} onChange={e => setting('openOnEntry')(e.currentTarget.checked)} />
+            </label>
+          </div>
+          <div class="card">
+            <h2>בדיקה מול הבנק: מה נחשב תקין</h2>
+            <p class="muted small">
+              פער עד הסכום הזה נחשב "שינוי מינורי" (✓✗) ולא חריגה (✗). 0 = כל פער נחשב חריגה.
+            </p>
+            <label class="field">
+              <span>שינוי מינורי: עד</span>
+              <MoneyInput value={data.checkTolerance} onChange={setting('checkTolerance')} />
             </label>
           </div>
         </>

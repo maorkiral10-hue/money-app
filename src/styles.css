@@ -551,3 +551,13 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 @media (prefers-color-scheme: dark) { :root { --minor: #e0a33a; } }
 .minor { color: var(--minor); font-weight: 700; }
 .minor-panel { border-color: var(--minor); }
+
+/* Jewish and Israeli days: on the grid and at the top of the day */
+:root { --holiday: #6b46c1; }
+@media (prefers-color-scheme: dark) { :root { --holiday: #b794f4; } }
+.cal-day.holiday > span:first-child { color: var(--holiday); font-weight: 700; }
+.cal-day.rest > span:first-child { box-shadow: 0 -2px 0 var(--holiday); border-radius: 1px; }
+.cal-day.on.holiday > span:first-child { color: #fff; }
+.holiday-lines { margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
+.holiday-line { color: var(--holiday); font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.rest-note { color: var(--holiday); }

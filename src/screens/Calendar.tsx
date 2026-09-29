@@ -6,6 +6,7 @@ import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
 import { MoneyByDay, MoneyLines, moneyRows, onCardStandingOrder, plannedMoney } from '../components/MoneyList';
 import { statsTransactions } from '../data/budget';
+import { holidaysOn, type Holiday } from '../data/holidays';
 import { periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { categoryColor } from '../data/colors';
 import type { AppData } from '../data/store';
@@ -17,6 +18,28 @@ const shortDate = (s: string) => {
   const { m0, d } = parseDate(s);
   return `${d}.${m0 + 1}`;
 };
+
+/** How a day looks on the grid: a holiday or fast, a rest day (eves aren't marked, to keep it calm). */
+const dayMarks = (d: string) => {
+  const days = holidaysOn(d).filter(h => !h.eve);
+  return days.length ? `holiday ${days.some(h => h.rest) ? 'rest' : ''}` : '';
+};
+
+/** The day's Jewish and Israeli days, at the top of its list. */
+function HolidayLines(props: { date: string }) {
+  const days: Holiday[] = holidaysOn(props.date);
+  if (!days.length) return null;
+  return (
+    <div class="holiday-lines">
+      {days.map(h => (
+        <div key={h.name} class={`holiday-line ${h.rest ? 'rest' : ''}`}>
+          {h.name}
+          {h.rest && <span class="tag">שבתון</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** Where the calendar was left, so coming back from an event keeps the same view. */
 let lastView: { zoom: Zoom; selected: string } | null = null;
@@ -207,7 +230,7 @@ export function CalendarScreen(props: {
       <button
         key={d}
         data-date={d}
-        class={`cal-day ${d === today ? 'today' : ''} ${d === selected ? 'on' : ''}`}
+        class={`cal-day ${d === today ? 'today' : ''} ${d === selected ? 'on' : ''} ${dayMarks(d)}`}
         onClick={() => setSelected(d)}
       >
         <span>{parseDate(d).d}</span>
@@ -419,6 +442,7 @@ function DayAgenda(props: {
 
       {view === 'day' ? (
         <>
+          <HolidayLines date={props.date} />
           {events.length === 0 && dayRows.length === 0 && <p class="muted small">אין אירועים או פעולות ביום הזה</p>}
           {events.map(e => (
             <button key={`e${e.id}`} class="tx agenda-event" onClick={() => props.onEdit(e)}>
@@ -489,6 +513,7 @@ function DayView(props: {
   return (
     <div class="card">
       <h2 class="list-title">{dayLabel(props.date, props.today)}</h2>
+      <HolidayLines date={props.date} />
       {props.txs.length > 0 && (
         // What was actually recorded that day
         <div class="cal-day-txs">

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
-import { dayLabel, todayStr } from '../data/dates';
+import { addDays, dayLabel, parseDate, todayStr } from '../data/dates';
+import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
@@ -52,6 +53,17 @@ export function BalanceCheck(props: {
   const app = account ? appBalance(data, account.id, today) : 0;
   const gap = real - app;
   const mark = checkMark(real, app, data.checkTolerance);
+  // Today or one of the last three days was Shabbat or a rest day: the bank may not have caught up yet
+  const restNote = (() => {
+    for (let i = 0; i <= 3; i++) {
+      const d = addDays(today, -i);
+      const { y, m0, d: day } = parseDate(d);
+      const rest = holidaysOn(d).find(h => h.rest);
+      const name = rest ? rest.name : new Date(y, m0, day).getDay() === 6 ? 'שבת' : undefined;
+      if (name) return `שים לב: ${i === 0 ? 'היום' : dayLabel(d, today)} ${i === 0 ? 'זה' : 'היה'} ${name}, ואז הבנק לא מעדכן תנועות. ייתכן שחלק מהפער עוד יתעדכן.`;
+    }
+    return undefined;
+  })();
   const name = (id: string) => data.accounts.find(a => a.id === id)?.name ?? '';
 
   const compare = async () => {
@@ -81,7 +93,10 @@ export function BalanceCheck(props: {
           חזרה
         </button>
       </header>
-      <p class="muted small">הקלד כמה יש באמת, כמו שרואים באפליקציה של הבנק, והאפליקציה תשווה.</p>
+      <p class="muted small">
+        הקלד כמה יש באמת, כמו שרואים באפליקציה של הבנק, והאפליקציה תשווה.{' '}
+        {data.checkTolerance > 0 ? `פער עד ${formatMoney(data.checkTolerance)} נחשב שינוי מינורי (אפשר לשנות בהעדפות).` : 'כל פער נחשב חריגה (אפשר לקבוע טווח לשינוי מינורי בהעדפות).'}
+      </p>
 
       <div class="card">
         <h2>איפה בודקים?</h2>
@@ -114,6 +129,7 @@ export function BalanceCheck(props: {
               ) : (
                 <h2 class="exp">✗ יש פער של {formatMoney(Math.abs(gap))}</h2>
               )}
+              {restNote && <p class="small rest-note">{restNote}</p>}
               {mark === 'minor' && <p class="muted small">בתוך הטווח שהגדרת ({formatMoney(data.checkTolerance)}), אז הבדיקה נחשבת תקינה.</p>}
               <div class="line">
                 <span>באפליקציה</span>
@@ -178,16 +194,6 @@ export function BalanceCheck(props: {
             ['separate', 'לכל אחד בנפרד'],
           ]}
         />
-        <label class="field">
-          <span>פער שנחשב שינוי מינורי (לא נחשב חריגה): עד</span>
-          <MoneyInput
-            value={data.checkTolerance}
-            onChange={async v => {
-              await setMeta(props.db, 'checkTolerance', v);
-              props.onChange();
-            }}
-          />
-        </label>
         {data.checkMode === 'together' ? (
           <div class="check-every">
             <Segmented
