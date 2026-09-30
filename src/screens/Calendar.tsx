@@ -429,6 +429,8 @@ function DayAgenda(props: {
   // The month's list: only money (like a bank statement), or everything including the events
   const [show, setShow] = useState<'money' | 'all'>('money');
   const [comingOpen, setComingOpen] = useState(false);
+  // The day hour by hour: behind a button, so the home screen stays short
+  const [hoursOpen, setHoursOpen] = useState(false);
   // An event whose outcome was recorded is that transaction now: shown once, as the transaction
   const txIds = useMemo(() => new Set(data.transactions.map(t => t.id)), [data.transactions]);
   const stillEvent = (e: CalendarEvent) => !(e.settled?.txId && txIds.has(e.settled.txId));
@@ -493,10 +495,15 @@ function DayAgenda(props: {
         <>
           <HolidayLines date={props.date} />
           {events.length === 0 && dayRows.length === 0 && <p class="muted small">אין אירועים או פעולות ביום הזה</p>}
-          {events.map(e => (
+          {/* With the hours open, timed events are on the grid; closed, they're listed by time */}
+          {events.filter(e => !hoursOpen || !e.startTime).map(e => (
             <EventRow key={`e${e.id}`} data={data} event={e} onEdit={props.onEdit} />
           ))}
           <MoneyLines data={data} rows={dayRows} today={props.today} onEdit={props.onEditTx} />
+          <button class="link small hours-toggle" aria-expanded={hoursOpen} onClick={() => setHoursOpen(!hoursOpen)}>
+            פירוט לפי שעות <span class={`chevron ${hoursOpen ? 'open' : ''}`}>‹</span>
+          </button>
+          {hoursOpen && <HourGrid data={data} date={props.date} today={props.today} events={events} onEdit={props.onEdit} />}
         </>
       ) : (
         <>
@@ -585,13 +592,6 @@ function DayView(props: {
 }) {
   const allDay = props.events.filter(e => !e.startTime);
   const name = (id?: string) => props.data.categories.find(c => c.id === id)?.name ?? '';
-  const timed = layoutDay(props.events);
-  const [first, last] = dayHours(timed);
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const showNow = props.date === props.today && nowMinutes >= first * 60 && nowMinutes <= last * 60;
-  const y = (minutes: number) => ((minutes - first * 60) / 60) * HOUR_HEIGHT;
-  const hours = Array.from({ length: last - first }, (_, i) => first + i);
 
   return (
     <div class="card">
@@ -626,39 +626,62 @@ function DayView(props: {
           ))}
         </div>
       )}
-      <div class="cal-hours" style={{ height: `${(last - first) * HOUR_HEIGHT}px` }}>
-        {hours.map(h => (
-          <button
-            key={h}
-            class="cal-hour"
-            style={{ top: `${(h - first) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
-            aria-label={`אירוע חדש ב-${timeLabel(h * 60)}`}
-            onClick={() => props.onEdit(undefined, props.date, timeLabel(h * 60))}
-          >
-            <span class="cal-hour-label">{timeLabel(h * 60)}</span>
-          </button>
-        ))}
-        {showNow && <div class="cal-now" style={{ top: `${y(nowMinutes)}px` }} />}
-        {timed.map(t => (
-          <button
-            key={t.event.id}
-            class={`cal-event ${dotClass(t.event)}`}
-            style={{
-              top: `${y(t.start) + 1}px`,
-              height: `${Math.max(22, y(t.end) - y(t.start) - 2)}px`,
-              right: `calc(50px + (100% - 50px) * ${t.column / t.columns})`,
-              width: `calc((100% - 50px) / ${t.columns} - 3px)`,
-            }}
-            onClick={() => props.onEdit(t.event)}
-          >
-            <span class="cal-event-title">{t.event.title}</span>
-            <span class="cal-event-time">
-              {timeLabel(t.start)}–{timeLabel(t.end % (24 * 60))}
-            </span>
-            <EventMoney data={props.data} event={t.event} />
-          </button>
-        ))}
-      </div>
+      <HourGrid data={props.data} date={props.date} today={props.today} events={props.events} onEdit={props.onEdit} />
+    </div>
+  );
+}
+
+/**
+ * The day hour by hour: each timed event as a block as long as it lasts (overlapping ones side by side),
+ * a line at the time now on today. Tapping an empty hour starts a new event at that hour.
+ */
+function HourGrid(props: {
+  data: AppData;
+  date: string;
+  today: string;
+  events: CalendarEvent[];
+  onEdit: (event?: CalendarEvent, date?: string, time?: string) => void;
+}) {
+  const timed = layoutDay(props.events);
+  const [first, last] = dayHours(timed);
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const showNow = props.date === props.today && nowMinutes >= first * 60 && nowMinutes <= last * 60;
+  const y = (minutes: number) => ((minutes - first * 60) / 60) * HOUR_HEIGHT;
+  const hours = Array.from({ length: last - first }, (_, i) => first + i);
+  return (
+    <div class="cal-hours" style={{ height: `${(last - first) * HOUR_HEIGHT}px` }}>
+      {hours.map(h => (
+        <button
+          key={h}
+          class="cal-hour"
+          style={{ top: `${(h - first) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+          aria-label={`אירוע חדש ב-${timeLabel(h * 60)}`}
+          onClick={() => props.onEdit(undefined, props.date, timeLabel(h * 60))}
+        >
+          <span class="cal-hour-label">{timeLabel(h * 60)}</span>
+        </button>
+      ))}
+      {showNow && <div class="cal-now" style={{ top: `${y(nowMinutes)}px` }} />}
+      {timed.map(t => (
+        <button
+          key={t.event.id}
+          class={`cal-event ${dotClass(t.event)}`}
+          style={{
+            top: `${y(t.start) + 1}px`,
+            height: `${Math.max(22, y(t.end) - y(t.start) - 2)}px`,
+            right: `calc(50px + (100% - 50px) * ${t.column / t.columns})`,
+            width: `calc((100% - 50px) / ${t.columns} - 3px)`,
+          }}
+          onClick={() => props.onEdit(t.event)}
+        >
+          <span class="cal-event-title">{t.event.title}</span>
+          <span class="cal-event-time">
+            {timeLabel(t.start)}–{timeLabel(t.end % (24 * 60))}
+          </span>
+          <EventMoney data={props.data} event={t.event} />
+        </button>
+      ))}
     </div>
   );
 }
