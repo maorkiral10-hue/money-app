@@ -136,6 +136,17 @@ export async function relinkEditedRecurring(db: IDBDatabase) {
   return changed;
 }
 
+/**
+ * A standing order or fixed income that came before its day: recorded now, on the day it really came and
+ * with the real amount, as that time round (so nothing is recorded or asked again on its day).
+ */
+export async function recordEarly(db: IDBDatabase, rec: Recurring, occurrence: string, amount: number, date: string) {
+  await run(db, ['transactions', 'recurring'], 'readwrite', tx => {
+    tx.objectStore('transactions').put({ ...occurrenceTransaction(rec, occurrence, amount), date });
+    tx.objectStore('recurring').put({ ...rec, handledThrough: occurrence > rec.handledThrough ? occurrence : rec.handledThrough });
+  });
+}
+
 /** Variable items whose date has come: the user says how much it really was (or null: it didn't happen). */
 export async function resolveOccurrence(db: IDBDatabase, rec: Recurring, occurrence: string, amount: number | null) {
   await run(db, ['transactions', 'recurring'], 'readwrite', tx => {

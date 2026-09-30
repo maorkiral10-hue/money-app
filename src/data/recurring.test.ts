@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { summarize, upcomingItems, type Ledger } from './balance';
 import { getAll, openDb, putRecords, setMeta } from './db';
 import { estimateFor, occurrencesBetween, openOccurrences, scheduleDatesIn, expectedTransactions } from './recurring';
-import { deleteSetting, recordDueRecurring, relinkEditedRecurring, resolveOccurrence } from './store';
+import { deleteSetting, recordDueRecurring, recordEarly, relinkEditedRecurring, resolveOccurrence } from './store';
 import type { Account, PaymentMethod, Recurring, Transaction } from './types';
 
 const rec = (r: Partial<Recurring>): Recurring => ({
@@ -103,6 +103,22 @@ describe('recording', () => {
     await resolveOccurrence(db, r, '2026-10-01', 123_45);
     const [t] = await getAll<Transaction>(db, 'transactions');
     expect([t.amount, t.date, t.accountId]).toEqual([123_45, '2026-10-01', 'bank']);
+  });
+});
+
+describe('recording a fixed item that came early', () => {
+  const freshDb = () => openDb(`early-test-${Date.now()}-${Math.random()}`);
+  it('is recorded on the day it came, as that time round, and not again on its day', async () => {
+    const db = await freshDb();
+    const r = rec({ variable: true, estimate: 'set', type: 'income', accountId: 'bank', methodId: undefined, firstDate: '2026-10-01', handledThrough: '2026-09-30' });
+    await putRecords(db, 'recurring', [r]);
+    await recordEarly(db, r, '2026-10-01', 9_800_00, '2026-09-30');
+    const [t] = await getAll<Transaction>(db, 'transactions');
+    expect([t.amount, t.date, t.occurrence]).toEqual([9_800_00, '2026-09-30', '2026-10-01']);
+    const [saved] = await getAll<Recurring>(db, 'recurring');
+    // Nothing left to ask about on the 1st
+    expect(openOccurrences(saved, '2026-10-01', '2026-09-01')).toEqual([]);
+    expect(await recordDueRecurring(db, '2026-09-01', '2026-10-01')).toBe(false);
   });
 });
 

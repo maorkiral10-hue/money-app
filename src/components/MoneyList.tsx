@@ -25,6 +25,14 @@ export function onCardStandingOrder(tx: Transaction, methods: AppData['methods']
   return methods.find(m => m.id === tx.methodId)?.kind === 'credit';
 }
 
+/**
+ * Tapping a standing order or fixed income that hasn't come yet: ask the app to offer recording it now
+ * (it came early). The app listens for this and opens EarlyRecordCard.
+ */
+export const RECORD_EARLY_EVENT = 'record-early';
+export const askRecordEarly = (tx: Transaction) =>
+  window.dispatchEvent(new CustomEvent(RECORD_EARLY_EVENT, { detail: { recurringId: tx.recurringId, occurrence: tx.occurrence } }));
+
 /** A standing order that hasn't come round yet: shown on its day, but it isn't a record to open. */
 export const isExpected = (tx: Transaction) => tx.id.startsWith('expected:');
 
@@ -105,10 +113,9 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
         const charged = card?.kind === 'credit' && card.chargeDay ? nextChargeDate(tx.date, card.chargeDay) : undefined;
         const expected = isExpected(tx);
         const changing = expected && data.recurring.find(r => r.id === tx.recurringId)?.variable;
-        // A standing order still to come is shown, not opened (it's recorded on its day)
-        const Line = expected ? 'div' : 'button';
+        // A standing order still to come opens "came already?" (it's recorded on its day otherwise)
         return (
-          <Line key={tx.id} class="tx" onClick={expected ? undefined : () => props.onEdit(tx)}>
+          <button key={tx.id} class="tx" onClick={() => (expected ? askRecordEarly(tx) : props.onEdit(tx))}>
             <div>
               <div>
                 {tx.type !== 'transfer' && <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />}
@@ -140,7 +147,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
             ) : (
               <div class={`amount ${tx.type}`}>{formatMoney(tx.type === 'expense' ? -tx.amount : tx.amount, { sign: tx.type === 'income' })}</div>
             )}
-          </Line>
+          </button>
         );
       })}
     </>

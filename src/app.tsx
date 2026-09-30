@@ -17,6 +17,8 @@ import { GoalDetail, GoalForm, GoalsTab } from './screens/Goals';
 import { CalendarScreen, EventForm } from './screens/Calendar';
 import { EventDoneCard } from './components/EventDoneCard';
 import { VariableDueCard } from './components/VariableDueCard';
+import { EarlyRecordCard } from './components/EarlyRecordCard';
+import { RECORD_EARLY_EVENT } from './components/MoneyList';
 import { openOccurrences } from './data/recurring';
 import { awaitingActual, withAnswer } from './data/calendar';
 import { Dashboard } from './screens/Dashboard';
@@ -93,6 +95,13 @@ export function App() {
   const [laterIds, setLaterIds] = useState<string[]>([]);
   // Standing orders with a changing amount put off with "remind me in half an hour": until when
   const [snoozedUntil, setSnoozedUntil] = useState(0);
+  // A standing order or fixed income tapped before its day: offer to record it now (it came early)
+  const [early, setEarly] = useState<{ recurringId: string; occurrence: string } | null>(null);
+  useEffect(() => {
+    const onAsk = (e: Event) => setEarly((e as CustomEvent<{ recurringId: string; occurrence: string }>).detail);
+    window.addEventListener(RECORD_EARLY_EVENT, onAsk);
+    return () => window.removeEventListener(RECORD_EARLY_EVENT, onAsk);
+  }, []);
   const [menuSection, setMenuSection] = useState<MenuSection>('main');
   // Leaving the main screens (a new entry on opening the app, say) closes the menu
   useEffect(() => {
@@ -371,6 +380,14 @@ export function App() {
     .flatMap(rec => openOccurrences(rec, today, data.startDate).map(occurrence => ({ rec, occurrence })))
     .sort((a, b) => a.occurrence.localeCompare(b.occurrence));
   const askVariable = now.getTime() >= snoozedUntil ? variableDue[0] : undefined;
+  // Only the nearest time round can be recorded ahead, so no month is skipped by mistake
+  const earlyRec = early ? data.recurring.find(r => r.id === early.recurringId) : undefined;
+  const nearest = earlyRec ? openOccurrences(earlyRec, early!.occurrence, data.startDate)[0] : undefined;
+  const earlyAsk = earlyRec && nearest === early!.occurrence ? { rec: earlyRec, occurrence: early!.occurrence } : undefined;
+  if (early && earlyRec && nearest && nearest !== early.occurrence) {
+    setEarly(null);
+    alert(`אפשר לרשום מראש רק את הפעם הקרובה של "${earlyRec.name}" (${nearest.split('-').reverse().slice(0, 2).map(Number).join('.')}).`);
+  }
   return (
     <>
       <UpdateBanner />
@@ -408,7 +425,21 @@ export function App() {
               go({ name: 'entry', from: tab, ...(tab === 'home' && homeDay.current !== todayStr() && { preset: { date: homeDay.current } }) })
             }
           />
-          {askVariable && !menuOpen && (
+          {earlyAsk && (
+            <EarlyRecordCard
+              key={`${earlyAsk.rec.id}|${earlyAsk.occurrence}`}
+              db={db}
+              data={data}
+              rec={earlyAsk.rec}
+              occurrence={earlyAsk.occurrence}
+              onClose={() => setEarly(null)}
+              onDone={() => {
+                setEarly(null);
+                afterChange();
+              }}
+            />
+          )}
+          {askVariable && !menuOpen && !earlyAsk && (
             <VariableDueCard
               key={`${askVariable.rec.id}|${askVariable.occurrence}`}
               db={db}

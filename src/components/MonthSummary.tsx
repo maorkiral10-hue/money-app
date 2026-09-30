@@ -8,6 +8,7 @@ import { monthsSince, monthStats, periodEnd, periodKey, periodStart } from '../d
 import { dayLabel, parseDate, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import { expectedTransactions } from '../data/recurring';
+import { askRecordEarly } from './MoneyList';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 
@@ -135,9 +136,9 @@ export function MonthSummary(props: {
           <div class="bar-detail">
             {p.list.map(t => {
               const upcoming = t.id.startsWith('expected:');
-              const Line = upcoming ? 'div' : 'button';
+              const Line = 'button';
               return (
-                <Line key={t.id} class="tx" onClick={upcoming ? undefined : () => props.onEdit(t)}>
+                <Line key={t.id} class="tx" onClick={() => (upcoming ? askRecordEarly(t) : props.onEdit(t))}>
                   <div>
                     <div>{t.note}</div>
                     <div class="muted small">
@@ -237,9 +238,9 @@ export function MonthSummary(props: {
                 <div class="bar-detail">
                   {savings.map(t => {
                     const upcoming = t.id.startsWith('expected:');
-                    const Line = upcoming ? 'div' : 'button';
+                    const Line = 'button';
                     return (
-                      <Line key={t.id} class="tx" onClick={upcoming ? undefined : () => props.onEdit(t)}>
+                      <Line key={t.id} class="tx" onClick={() => (upcoming ? askRecordEarly(t) : props.onEdit(t))}>
                         <div>
                           <div>{t.recurringId ? t.note : name(t.categoryId ?? '')}</div>
                           <div class="muted small">
