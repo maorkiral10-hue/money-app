@@ -584,3 +584,6 @@ button.coming-toggle { display: block; margin: 4px 0 2px; }
 .part-title { font-weight: 700; font-size: 14px; margin: 12px 0 0; }
 .coming-part { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 4px; }
 button.hours-toggle { display: block; margin: 8px 0 0; }
+.panel-split { border-bottom: 1px solid rgba(127,127,127,.25); padding-bottom: 8px; margin-bottom: 8px; font-weight: 600; }
+.tap-hint { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
+.stat.on .tap-hint { color: inherit; opacity: .85; }

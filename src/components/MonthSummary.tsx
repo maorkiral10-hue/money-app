@@ -94,6 +94,7 @@ export function MonthSummary(props: {
     : [];
   const comingSpend = sum(coming.filter(t => t.type === 'expense' && t.categoryId !== savingsId));
   const comingIncome = sum(coming.filter(t => t.type === 'income'));
+  // The tiles show what really went out or came in so far; the breakdown adds what's sure to come (standing orders)
   const spendTotal = stats.expenses + comingSpend;
   const incomeTotal = stats.income + comingIncome;
 
@@ -189,21 +190,35 @@ export function MonthSummary(props: {
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>
           <div class="small inc">הכנסות</div>
           <div class="stat-value inc">
-            <AnimatedMoney value={incomeTotal} />
+            <AnimatedMoney value={stats.income} />
           </div>
+          <div class="tap-hint">{open === 'income' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
         </button>
         <button class={`stat tappable ${open === 'expenses' ? 'on exp-bg' : ''}`} onClick={() => toggle('expenses')} aria-expanded={open === 'expenses'}>
           <div class="small exp">הוצאות</div>
           <div class="stat-value exp">
-            <AnimatedMoney value={-spendTotal} />
+            <AnimatedMoney value={-stats.expenses} />
           </div>
+          <div class="tap-hint">{open === 'expenses' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
         </button>
       </div>
-      {!open && <p class="muted small center">לחץ על הכנסות או הוצאות לפירוט</p>}
 
       {open === 'expenses' && (
         <div class="card breakdown-panel exp-panel">
           {spendingRows.length === 0 && fixedSpend.length === 0 && savings.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
+          {comingSpend > 0 && (
+            // What really went out so far, and the standing orders still sure to go out this month
+            <div class="panel-split">
+              <div class="line">
+                <span>יצא עד היום</span>
+                <span class="exp">{formatMoney(-stats.expenses)}</span>
+              </div>
+              <div class="line">
+                <span>עוד יירד (קבועות)</span>
+                <span class="exp">{formatMoney(-comingSpend)}</span>
+              </div>
+            </div>
+          )}
           <FixedGroup type="expense" list={fixedSpend} total={spendTotal} />
           {savings.length > 0 && (
             <div>
@@ -276,6 +291,18 @@ export function MonthSummary(props: {
       {open === 'income' && (
         <div class="card breakdown-panel inc-panel">
           {incomeRows.length === 0 && fixedIncome.length === 0 && <p class="muted small">אין הכנסות בחודש הזה</p>}
+          {comingIncome > 0 && (
+            <div class="panel-split">
+              <div class="line">
+                <span>נכנס עד היום</span>
+                <span class="inc">{formatMoney(stats.income, { sign: true })}</span>
+              </div>
+              <div class="line">
+                <span>עוד ייכנס (קבועות)</span>
+                <span class="inc">{formatMoney(comingIncome, { sign: true })}</span>
+              </div>
+            </div>
+          )}
           <FixedGroup type="income" list={fixedIncome} total={incomeTotal} />
           {incomeRows.map(r => (
             <div key={r.categoryId}>
