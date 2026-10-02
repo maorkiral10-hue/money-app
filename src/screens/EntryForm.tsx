@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'preact/hooks';
+import { useState, useMemo, useEffect } from 'preact/hooks';
 import { ongoingEvents, timeRoundOf } from '../data/calendar';
 import { Chips } from '../components/inputs';
 import { cardUsage } from '../data/balance';
@@ -10,7 +10,7 @@ import { resolvePreset, type QuickPreset } from '../data/quick';
 import type { AppData } from '../data/store';
 import type { Transaction, TxType } from '../data/types';
 
-type Step = 'type' | 'amount' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'review';
+type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'review';
 
 // One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
 const STEPS: Record<TxType, Step[]> = {
@@ -100,25 +100,63 @@ export function EntryForm(props: {
   const [pasteMessage, setPasteMessage] = useState('');
 
   const amount = parseMoney(amountText) ?? 0;
-  const steps = STEPS[type];
+  const baseSteps = STEPS[type];
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === tx?.categoryId));
   const method = methods.find(m => m.id === methodId);
   const paidFromGoal = goalAccounts.some(g => g.id === methodId);
   // Events going on that day with an expected amount of this kind: what's recorded can go into one's pot
   const linkKey = (id: string, round: string) => `${id}|${round}`;
+  // The event this is tied to already (opened for it, or an edited transaction that's part of one)
+  const forced = props.eventLink ?? (tx?.eventId ? { eventId: tx.eventId, eventDate: tx.eventDate ?? tx.date } : undefined);
   const candidates = useMemo(() => {
-    if (tx || type === 'transfer') return [];
-    const list = ongoingEvents(data.events, date, type).map(e => ({ key: linkKey(e.id, timeRoundOf(e)), id: e.id, round: timeRoundOf(e), title: e.title }));
-    const forced = props.eventLink;
+    if (type === 'transfer') return [];
+    const list = ongoingEvents(data.events, date, type).map(e => ({
+      key: linkKey(e.id, timeRoundOf(e)),
+      id: e.id,
+      round: timeRoundOf(e),
+      title: e.title,
+      categoryId: e.categoryId,
+      startTime: e.startTime,
+      endTime: e.endTime,
+    }));
     if (forced && !list.some(c => c.key === linkKey(forced.eventId, forced.eventDate))) {
       const ev = data.events.find(e => e.id === forced.eventId);
-      if (ev) list.unshift({ key: linkKey(ev.id, forced.eventDate), id: ev.id, round: forced.eventDate, title: ev.title });
+      if (ev) list.unshift({ key: linkKey(ev.id, forced.eventDate), id: ev.id, round: forced.eventDate, title: ev.title, categoryId: ev.categoryId, startTime: ev.startTime, endTime: ev.endTime });
+    }
+    // Recording for today: the event going on now first, then all-day ones, then the nearest in time
+    if (date === today) {
+      const now = new Date().getHours() * 60 + new Date().getMinutes();
+      const mins = (t?: string) => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : 0);
+      const rank = (x: (typeof list)[number]) => {
+        if (!x.startTime) return 1;
+        const start = mins(x.startTime);
+        const end = x.endTime ? mins(x.endTime) : start + 60;
+        return now >= start && now < end ? 0 : 2 + Math.min(Math.abs(now - start), Math.abs(now - end));
+      };
+      list.sort((a, b) => rank(a) - rank(b));
     }
     return list;
-  }, [tx, type, date, data.events, props.eventLink]);
-  // undefined: the first one going on (or the one this was opened for); null: none
-  const [linkChoice, setLinkChoice] = useState<string | null | undefined>(props.eventLink ? linkKey(props.eventLink.eventId, props.eventLink.eventDate) : undefined);
+  }, [type, date, data.events, forced?.eventId, forced?.eventDate]);
+  // undefined: the best fit (or the one this was opened for); null: none
+  const [linkChoice, setLinkChoice] = useState<string | null | undefined>(forced ? linkKey(forced.eventId, forced.eventDate) : tx ? null : undefined);
   const linked = linkChoice === null ? undefined : candidates.find(c => c.key === linkChoice) ?? (linkChoice === undefined ? candidates[0] : undefined);
+  // Chosen, then the date moved to a day without it
+  const lostLink = typeof linkChoice === 'string' && !candidates.some(c => c.key === linkChoice);
+  // With events that day, a question of its own right after the amount
+  const steps: Step[] = candidates.length && !baseSteps.includes('event') ? [...baseSteps.slice(0, 2), 'event', ...baseSteps.slice(2)] : baseSteps;
+  // What's tied to an event starts in the event's category, until a category is picked by hand
+  const [categoryByHand, setCategoryByHand] = useState(!!tx || !!presetCategory);
+  const [autoCategory, setAutoCategory] = useState<string | undefined>();
+  useEffect(() => {
+    if (categoryByHand) return;
+    const next = linked?.categoryId;
+    if (!categoryId || categoryId === autoCategory) setCategoryId(next);
+    setAutoCategory(next);
+  }, [linked?.key, categoryByHand]);
+  const pickCategory = (id: string) => {
+    setCategoryId(id);
+    setCategoryByHand(true);
+  };
   const isCredit = type === 'expense' && method?.kind === 'credit';
   // What the card's limit will have left once this purchase is saved (a purchase dated later doesn't use it yet)
   const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
@@ -133,7 +171,19 @@ export function EntryForm(props: {
 
   // Choosing only marks the answer; "המשך" moves on in order, or straight back to the summary
   // when the step was opened by tapping one of the summary's rows
+  // The day the "part of an event?" question was answered for (an edited transaction: its own day)
+  const [askedOn, setAskedOn] = useState(tx || forced ? date : undefined);
+  useEffect(() => {
+    if (step === 'event') setAskedOn(date);
+  }, [step]);
   const next = () => {
+    // Moved to another day that has events: ask about them too, never link on its own
+    if (step === 'when' && candidates.length && askedOn !== date) {
+      setLinkChoice(undefined);
+      setFromSummary(true);
+      setStep('event');
+      return;
+    }
     const target = fromSummary ? 'review' : steps[steps.indexOf(step) + 1];
     setFromSummary(false);
     setStep(target);
@@ -154,6 +204,7 @@ export function EntryForm(props: {
     if (t === type) return;
     setType(t);
     setCategoryId(undefined);
+    setCategoryByHand(false);
     // A different type asks different questions: go through them in order
     setFromSummary(false);
   };
@@ -167,6 +218,7 @@ export function EntryForm(props: {
     from: !!accountId,
     to: !!toAccountId && toAccountId !== accountId,
     when: dateOk,
+    event: true,
   };
 
   const save = async () => {
@@ -190,7 +242,7 @@ export function EntryForm(props: {
       ...(type === 'income' && { categoryId, accountId }),
       ...(type === 'transfer' && { accountId, toAccountId }),
       // Added to an event's pot (an edited transaction keeps the event it was part of)
-      ...(linked ? { eventId: linked.id, eventDate: linked.round } : tx?.eventId ? { eventId: tx.eventId, eventDate: tx.eventDate } : {}),
+      ...(linked ? { eventId: linked.id, eventDate: linked.round } : {}),
     };
     // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
     try {
@@ -218,6 +270,7 @@ export function EntryForm(props: {
     from: 'מאיפה הכסף יצא?',
     to: 'לאן הוא עבר?',
     when: 'מתי?',
+    event: 'שייך לאירוע?',
     review: tx ? 'עריכה' : 'לסיום',
   };
 
@@ -267,7 +320,24 @@ export function EntryForm(props: {
         </div>
       )}
 
-      {step === 'category' && <Chips items={categories} value={categoryId} onChange={setCategoryId} />}
+      {step === 'event' && (
+        <div class="event-step">
+          <p class="muted small center">ביום הזה יש אירוע עם צפי. מה שתרשום לו ייצבר בקופה שלו.</p>
+          <div class="tiles">
+            {candidates.map(c => (
+              <button key={c.key} class={`tile event-tile ${linked?.key === c.key ? 'on' : ''}`} onClick={() => setLinkChoice(c.key)}>
+                {c.title}
+                <span class="small">{c.startTime ? `${c.startTime}${c.endTime ? ` עד ${c.endTime === '24:00' ? 'סוף היום' : c.endTime}` : ''}` : 'כל היום'}</span>
+              </button>
+            ))}
+            <button class={`tile ${!linked ? 'on' : ''}`} onClick={() => setLinkChoice(null)}>
+              לא שייך לאירוע
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'category' && <Chips items={categories} value={categoryId} onChange={pickCategory} />}
 
       {step === 'method' && (
         <>
@@ -347,24 +417,10 @@ export function EntryForm(props: {
             {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => change('from')} />}
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
             <ReviewRow label="מתי" value={dayLabel(date, today)} onClick={() => change('when')} />
+            {candidates.length > 0 && <ReviewRow label="אירוע" value={linked ? linked.title : 'לא שייך'} onClick={() => change('event')} />}
           </div>
+          {lostLink && <p class="small warn">ביום שנבחר אין את האירוע, אז השיוך הוסר.</p>}
 
-          {candidates.length > 0 && (
-            // Part of an event going on: it adds up in the event's pot (and keeps its own category)
-            <section class="event-link">
-              <p class="field-label">שייך לאירוע?</p>
-              <div class="chips">
-                {candidates.map(c => (
-                  <button key={c.key} type="button" class={`chip ${linked?.key === c.key ? 'on' : ''}`} onClick={() => setLinkChoice(c.key)}>
-                    {c.title}
-                  </button>
-                ))}
-                <button type="button" class={`chip ${!linked ? 'on' : ''}`} onClick={() => setLinkChoice(null)}>
-                  לא שייך
-                </button>
-              </div>
-            </section>
-          )}
 
           {isCredit && (
             <label class="field inline">

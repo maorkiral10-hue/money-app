@@ -126,6 +126,8 @@ export interface CalendarEvent {
   type: 'income' | 'expense' | 'none';
   /** Expected amount; 0 when there isn't one. */
   amount: number;
+  /** With an expected amount: the category its money goes under (what's recorded into it starts with it). */
+  categoryId?: string;
   note?: string;
   /** 'HH:MM'; missing for an all-day event. */
   startTime?: string;

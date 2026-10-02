@@ -741,6 +741,7 @@ function HourGrid(props: {
 /** A new calendar event, or editing one. */
 export function EventForm(props: {
   db: IDBDatabase;
+  data: AppData;
   event?: CalendarEvent;
   /** A repeating event opened from one of its days: that day, which can be taken out on its own. */
   occurrence?: string;
@@ -756,6 +757,13 @@ export function EventForm(props: {
   const [askScope, setAskScope] = useState(false);
   const [type, setType] = useState<CalendarEvent['type']>(e?.type ?? 'expense');
   const [amount, setAmount] = useState(e?.amount ?? 0);
+  const [categoryId, setCategoryId] = useState(e?.categoryId);
+  const eventCategories = props.data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === e?.categoryId));
+  // A category belongs to income or to spending: switching the kind clears one that doesn't fit
+  const pickType = (t: CalendarEvent['type']) => {
+    setType(t);
+    if (props.data.categories.find(c => c.id === categoryId)?.kind !== t) setCategoryId(undefined);
+  };
   const [note, setNote] = useState(e?.note ?? '');
   const [choice, setChoice] = useState<RepeatChoice>(
     e?.repeat === 'days' ? (sameDays(e.repeatDays, WORK_DAYS) ? 'workdays' : 'days') : (e?.repeat ?? 'none'),
@@ -796,7 +804,8 @@ export function EventForm(props: {
   const badTimes = (!allDay && !startTime) || (severalDays && (!endDate || endDate < date));
   const badUntil = repeat !== 'none' && !!repeatUntil && repeatUntil < date;
   const noDays = choice === 'days' && days.length === 0;
-  const valid = title.trim() && date && !badTimes && !badUntil && !noDays;
+  const noCategory = type !== 'none' && !categoryId;
+  const valid = title.trim() && date && !badTimes && !badUntil && !noDays && !noCategory;
 
   const save = async () => {
     if (!valid) return;
@@ -813,6 +822,7 @@ export function EventForm(props: {
     title: title.trim(),
     type,
     amount: type === 'none' ? 0 : amount,
+    categoryId: type === 'none' ? undefined : categoryId,
     note: note.trim() || undefined,
     ...timing(),
     settled: repeat === 'none' ? e?.settled : undefined,
@@ -845,6 +855,7 @@ export function EventForm(props: {
       title: title.trim(),
       type,
       amount: type === 'none' ? 0 : amount,
+      categoryId: type === 'none' ? undefined : categoryId,
       note: note.trim() || undefined,
       ...timing(),
       settled: answerFor(e, props.occurrence),
@@ -974,7 +985,7 @@ export function EventForm(props: {
         <h2>צפי כספי</h2>
         <Segmented
           value={type}
-          onChange={setType}
+          onChange={pickType}
           options={[
             ['expense', 'הוצאה צפויה'],
             ['income', 'הכנסה צפויה'],
@@ -986,6 +997,14 @@ export function EventForm(props: {
             <span>בערך כמה</span>
             <MoneyInput value={amount} onChange={setAmount} />
           </label>
+        )}
+        {type !== 'none' && (
+          <>
+            <p class="field-label">לאיזו קטגוריה</p>
+            <Chips items={eventCategories} value={categoryId} onChange={setCategoryId} />
+            <p class="muted small">כל מה שתרשום לאירוע ייכנס לקטגוריה הזו (אפשר לשנות בכל הוצאה).</p>
+            {noCategory && <p class="small warn">בחר קטגוריה</p>}
+          </>
         )}
         {type !== 'none' && (
           <p class="muted small">לא נכנס לתקציב וליתרה. כשהאירוע ייגמר, תקפוץ שאלה כמה זה עלה (או הכניס) בפועל, ותוכל לרשום את זה.</p>
