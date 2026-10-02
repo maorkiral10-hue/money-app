@@ -77,6 +77,13 @@ export interface Transaction {
   /** Credit card expenses split into monthly payments. */
   installments?: number;
   note?: string;
+  /**
+   * Spent (or received) as part of a calendar event with an expected amount: it adds up in the event's
+   * "pot" (its own category still shows where the money went). `eventDate` is the day that time round of
+   * the event started (a repeating event has one pot each time).
+   */
+  eventId?: string;
+  eventDate?: string;
   /** Set when the transaction was created from a recurring item, for that item's occurrence on `occurrence`. */
   recurringId?: string;
   occurrence?: string;

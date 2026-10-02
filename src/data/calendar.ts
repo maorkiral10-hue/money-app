@@ -144,7 +144,6 @@ export function dayHours(timed: TimedEvent[]): [number, number] {
  * answered after they ended ("how much in the end?") are compared; the rest are still expected.
  */
 export function eventBalance(events: CalendarEvent[], transactions: Transaction[], from: string, to: string) {
-  const txs = new Map(transactions.map(t => [t.id, t]));
   events = expandEvents(events, from, to);
   const signed = (e: CalendarEvent, amount: number) => (e.type === 'income' ? amount : -amount);
   let expected = 0;
@@ -157,8 +156,7 @@ export function eventBalance(events: CalendarEvent[], transactions: Transaction[
     if (e.settled) {
       answered++;
       expected += signed(e, e.amount);
-      const tx = e.settled.txId ? txs.get(e.settled.txId) : undefined;
-      actual += tx ? signed(e, tx.amount) : 0;
+      actual += signed(e, potTotal(e, transactions));
     } else {
       openCount++;
       open += signed(e, e.amount);
@@ -246,6 +244,36 @@ export const expandEvents = (events: CalendarEvent[], from: string, to: string):
       return days;
     });
   });
+
+/** The day this time round of an event started (a pot and an answer belong to it). */
+export const timeRoundOf = (e: CalendarEvent) => e.startedOn ?? e.date;
+
+/** The last day of this time round of an event. */
+export const lastDayOf = (e: CalendarEvent) => addDays(timeRoundOf(e), spanDays(e.base ?? e));
+
+/**
+ * What was recorded into an event's pot this time round: transactions tied to it while it went on, and
+ * the one recorded when it was answered (before pots, that was the only one).
+ */
+export function potOf(e: CalendarEvent, transactions: Transaction[]): Transaction[] {
+  const round = timeRoundOf(e);
+  return transactions.filter(t => (t.eventId === e.id && (t.eventDate ?? round) === round) || (!!e.settled?.txId && t.id === e.settled.txId));
+}
+export const potTotal = (e: CalendarEvent, transactions: Transaction[]) => potOf(e, transactions).reduce((a, t) => a + t.amount, 0);
+
+/**
+ * Events going on that day that a new expense (or income) can be added to: those with an expected amount
+ * of that kind, not yet closed. One per time round.
+ */
+export function ongoingEvents(events: CalendarEvent[], date: string, type: 'income' | 'expense'): CalendarEvent[] {
+  const seen = new Set<string>();
+  return expandEvents(events, date, date).filter(e => {
+    const key = `${e.id}|${timeRoundOf(e)}`;
+    if (e.type !== type || e.settled || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /** Sunday to Thursday. */
 export const WORK_DAYS = [0, 1, 2, 3, 4];

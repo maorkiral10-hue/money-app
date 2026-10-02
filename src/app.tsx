@@ -20,7 +20,7 @@ import { VariableDueCard } from './components/VariableDueCard';
 import { EarlyRecordCard } from './components/EarlyRecordCard';
 import { RECORD_EARLY_EVENT } from './components/MoneyList';
 import { openOccurrences } from './data/recurring';
-import { awaitingActual, withAnswer } from './data/calendar';
+import { awaitingActual, lastDayOf, potTotal, timeRoundOf, withAnswer } from './data/calendar';
 import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -30,7 +30,17 @@ import { MenuButton, SideMenu, SettingsPageScreen, type MenuSection, type MenuTa
 type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings' | 'calendar';
 type Screen =
   | { name: Place }
-  | { name: 'entry'; tx?: Transaction; preset?: QuickPreset; launch?: boolean; from: Place; eventId?: string; eventDate?: string }
+  | {
+      name: 'entry';
+      tx?: Transaction;
+      preset?: QuickPreset;
+      launch?: boolean;
+      from: Place;
+      /** Recorded for a calendar event (into its pot); `settleEvent`: it answers the event's question too. */
+      eventId?: string;
+      eventDate?: string;
+      settleEvent?: boolean;
+    }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
   | { name: 'settingsPage'; page: SettingsPage }
@@ -217,12 +227,13 @@ export function App() {
         data={data}
         tx={entry.tx}
         preset={entry.preset}
+        eventLink={entry.eventId && entry.eventDate ? { eventId: entry.eventId, eventDate: entry.eventDate } : undefined}
         onNewEvent={date => go({ name: 'eventForm', date, from: entry.from })}
         launch={entry.launch}
         onClose={back}
         onSaved={async saved => {
           // What a calendar event came to: the event is answered, tied to the transaction
-          const event = entry.eventId && saved ? data.events.find(e => e.id === entry.eventId) : undefined;
+          const event = entry.eventId && saved && entry.settleEvent ? data.events.find(e => e.id === entry.eventId) : undefined;
           if (event && saved) {
             await putRecords(db, 'events', [withAnswer(event, entry.eventDate ?? event.date, { at: new Date().toISOString(), txId: saved.id })]);
           }
@@ -461,6 +472,16 @@ export function App() {
               event={askEvent}
               series={data.events.find(e => e.id === askEvent.id) ?? askEvent}
               more={awaiting.length - 1}
+              pot={potTotal(askEvent, data.transactions)}
+              onAddMore={event =>
+                go({
+                  name: 'entry',
+                  from: tab,
+                  eventId: event.id,
+                  eventDate: timeRoundOf(event),
+                  preset: { type: event.type === 'income' ? 'income' : 'expense', date: lastDayOf(event) < todayStr() ? lastDayOf(event) : todayStr(), note: event.title },
+                })
+              }
               onLater={() => setLaterIds(ids => [...ids, `${askEvent.id}|${askEvent.date}`])}
               onDone={afterChange}
               onRecord={(event, amount) =>
@@ -468,8 +489,9 @@ export function App() {
                   name: 'entry',
                   from: tab,
                   eventId: event.id,
-                  eventDate: event.date,
-                  preset: { type: event.type === 'income' ? 'income' : 'expense', amount, date: event.date, note: event.title },
+                  eventDate: timeRoundOf(event),
+                  settleEvent: true,
+                  preset: { type: event.type === 'income' ? 'income' : 'expense', amount, date: lastDayOf(event) < todayStr() ? lastDayOf(event) : todayStr(), note: event.title },
                 })
               }
             />

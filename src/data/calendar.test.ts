@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { spanDays, awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { ongoingEvents, potTotal, spanDays, awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -121,5 +121,20 @@ describe('calendar', () => {
     expect(awaitingActual([night, trip], new Date(2026, 9, 14, 0, 0)).map(e => e.id)).toEqual(['night', 'trip']);
     // The expected amount counts once
     expect(eventBalance([trip], [], '2026-10-01', '2026-10-31').open).toBe(-3_000_00);
+  });
+
+  it('adds what was spent during an event into its pot, each time round on its own', () => {
+    const trip = { ...ev('2026-10-10', 'expense', 3_000_00), id: 'trip', endDate: '2026-10-12' };
+    const tx = (id: string, amount: number, eventId?: string, eventDate?: string) => ({ id, type: 'expense' as const, amount, date: '2026-10-11', eventId, eventDate, createdAt: '', updatedAt: '' });
+    const txs = [tx('a', 400_00, 'trip', '2026-10-10'), tx('b', 950_00, 'trip', '2026-10-10'), tx('c', 70_00)];
+    // Any day of it counts into the same pot
+    const middle = expandEvents([trip], '2026-10-11', '2026-10-11')[0];
+    expect(potTotal(middle, txs)).toBe(1_350_00);
+    // Going on that day, open to add to; closed, not any more
+    expect(ongoingEvents([trip], '2026-10-11', 'expense').map(e => e.id)).toEqual(['trip']);
+    expect(ongoingEvents([trip], '2026-10-11', 'income')).toEqual([]);
+    expect(ongoingEvents([{ ...trip, settled: { at: '' } }], '2026-10-11', 'expense')).toEqual([]);
+    // What it came to is the pot
+    expect(eventBalance([{ ...trip, settled: { at: '' } }], txs, '2026-10-01', '2026-10-31')).toMatchObject({ expected: -3_000_00, actual: -1_350_00 });
   });
 });

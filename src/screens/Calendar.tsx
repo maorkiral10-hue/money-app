@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
-import { answerFor, spanDays, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { answerFor, potOf, potTotal, spanDays, timeRoundOf, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -462,7 +462,7 @@ function DayAgenda(props: {
   const [hoursOpen, setHoursOpen] = useState(false);
   // An event whose outcome was recorded is that transaction now: shown once, as the transaction
   const txIds = useMemo(() => new Set(data.transactions.map(t => t.id)), [data.transactions]);
-  const stillEvent = (e: CalendarEvent) => !(e.settled?.txId && txIds.has(e.settled.txId));
+  const stillEvent = (e: CalendarEvent) => !(e.settled && (potOf(e, data.transactions).length > 0 || (e.settled.txId && txIds.has(e.settled.txId))));
   const events = props.events.filter(stillEvent).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const dayRows = useMemo(() => moneyRows(data, props.date, props.date, props.today), [data, props.date, props.today]);
   // The financial month the chosen day is in, as set in the settings (e.g. the 1st to the end of the month)
@@ -573,12 +573,23 @@ function DayAgenda(props: {
   );
 }
 
+const dateParts = (s: string): [number, number, number] => {
+  const { y, m0, d } = parseDate(s);
+  return [y, m0, d];
+};
+
 /** When an event is on its day: its hours, all day, or which part of a longer event this day is. */
 function eventTimeText(e: CalendarEvent) {
   const end = (t?: string) => (t === '24:00' ? 'סוף היום' : t);
-  if (e.part === 'first') return e.startTime ? `מ־${e.startTime} · נמשך גם מחר` : 'כל היום · היום הראשון';
-  if (e.part === 'middle') return 'כל היום · באמצע';
-  if (e.part === 'last') return e.base?.startTime ? `עד ${end(e.base.endTime) ?? 'סוף היום'}` : 'כל היום · היום האחרון';
+  // A longer event: which of its days this is
+  if (e.part) {
+    const total = spanDays(e.base ?? e) + 1;
+    const n = Math.round((Date.UTC(...dateParts(e.date)) - Date.UTC(...dateParts(timeRoundOf(e)))) / 86_400_000) + 1;
+    const day = `יום ${n} מתוך ${total}`;
+    if (e.part === 'first') return e.startTime ? `${day} · מ־${e.startTime}` : day;
+    if (e.part === 'last') return e.base?.startTime ? `${day} · עד ${end(e.base.endTime) ?? 'סוף היום'}` : day;
+    return day;
+  }
   return e.startTime ? `${e.startTime}${e.endTime ? `–${end(e.endTime)}` : ''}` : 'כל היום';
 }
 
@@ -605,12 +616,14 @@ const HOUR_HEIGHT = 48;
 function EventMoney(props: { data: AppData; event: CalendarEvent }) {
   const e = props.event;
   if (e.type === 'none') return null;
-  const tx = e.settled?.txId ? props.data.transactions.find(t => t.id === e.settled!.txId) : undefined;
+  const pot = potTotal(e, props.data.transactions);
   const sign = e.type === 'income' ? 1 : -1;
   return (
     <span class="cal-money">
       {e.amount > 0 && <span class={e.type === 'income' ? 'inc' : 'exp'}>צפי {formatMoney(sign * e.amount, { sign: true })}</span>}
-      {e.settled && <span class="muted"> · ✓ {tx ? `בפועל ${formatMoney(sign * tx.amount, { sign: true })}` : 'בלי כסף'}</span>}
+      {/* The pot so far, and once it's closed what it came to */}
+      {!e.settled && pot > 0 && <span class="muted"> · עד עכשיו {formatMoney(sign * pot, { sign: true })}</span>}
+      {e.settled && <span class="muted"> · ✓ {pot ? `בפועל ${formatMoney(sign * pot, { sign: true })}` : 'בלי כסף'}</span>}
     </span>
   );
 }

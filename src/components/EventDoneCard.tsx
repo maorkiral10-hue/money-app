@@ -3,6 +3,7 @@ import { withAnswer } from '../data/calendar';
 import { dayLabel, todayStr } from '../data/dates';
 import { putRecords } from '../data/db';
 import type { CalendarEvent } from '../data/types';
+import { formatMoney } from '../data/money';
 import { MoneyInput } from './inputs';
 
 /**
@@ -18,6 +19,10 @@ export function EventDoneCard(props: {
   series: CalendarEvent;
   more: number;
   onRecord: (event: CalendarEvent, amount: number) => void;
+  /** What was recorded into the event while it went on (0: nothing). */
+  pot: number;
+  /** Record another expense (or income) into the pot. */
+  onAddMore: (event: CalendarEvent) => void;
   onLater: () => void;
   onDone: () => void;
 }) {
@@ -40,18 +45,38 @@ export function EventDoneCard(props: {
           לוח זמנים · {dayLabel(e.date, todayStr())}
           {props.more > 0 && ` · ועוד ${props.more} ממתינים`}
         </div>
-        <h2>
-          {e.title} נגמר: כמה {income ? 'נכנס' : 'הוצאת'} בסוף?
-        </h2>
-        <MoneyInput value={amount} onChange={setAmount} />
-        <div class="hero-buttons">
-          <button disabled={busy || amount <= 0} onClick={() => props.onRecord(e, amount)}>
-            לרשום
-          </button>
-          <button class="secondary" disabled={busy} onClick={nothing}>
-            {income ? 'לא נכנס כלום' : 'לא הוצאתי כלום'}
-          </button>
-        </div>
+        {props.pot > 0 ? (
+          <>
+            <h2>
+              {e.title} נגמר: {income ? 'נכנס' : 'יצא'} בסך הכל {formatMoney(props.pot)}
+            </h2>
+            {e.amount > 0 && <p class="muted small">הצפי היה {formatMoney(e.amount)}</p>}
+            <div class="hero-buttons">
+              {/* Closing it keeps what's in the pot as what it came to */}
+              <button disabled={busy} onClick={nothing}>
+                זה הכל
+              </button>
+              <button class="secondary" disabled={busy} onClick={() => props.onAddMore(e)}>
+                להוסיף עוד {income ? 'הכנסה' : 'הוצאה'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2>
+              {e.title} נגמר: כמה {income ? 'נכנס' : 'הוצאת'} בסוף?
+            </h2>
+            <MoneyInput value={amount} onChange={setAmount} />
+            <div class="hero-buttons">
+              <button disabled={busy || amount <= 0} onClick={() => props.onRecord(e, amount)}>
+                לרשום
+              </button>
+              <button class="secondary" disabled={busy} onClick={nothing}>
+                {income ? 'לא נכנס כלום' : 'לא הוצאתי כלום'}
+              </button>
+            </div>
+          </>
+        )}
         <button class="link small event-popup-later" onClick={props.onLater}>
           אחר כך
         </button>

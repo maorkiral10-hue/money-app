@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { useState, useMemo } from 'preact/hooks';
+import { ongoingEvents, timeRoundOf } from '../data/calendar';
 import { Chips } from '../components/inputs';
 import { cardUsage } from '../data/balance';
 import { deleteRecord, putRecords, setMeta } from '../data/db';
@@ -22,6 +23,8 @@ const TYPE_NAMES: Record<TxType, string> = { expense: 'הוצאה', income: 'ה�
 const INSTALLMENTS = Array.from({ length: 36 }, (_, i) => i + 1);
 
 export function EntryForm(props: {
+  /** Recorded for this event (its question at the end, or "add more"): tied to its pot from the start. */
+  eventLink?: { eventId: string; eventDate: string };
   /** Opens a new calendar event on this day instead ("אירוע" on the first screen). */
   onNewEvent?: (date: string) => void;
   db: IDBDatabase;
@@ -101,6 +104,21 @@ export function EntryForm(props: {
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === tx?.categoryId));
   const method = methods.find(m => m.id === methodId);
   const paidFromGoal = goalAccounts.some(g => g.id === methodId);
+  // Events going on that day with an expected amount of this kind: what's recorded can go into one's pot
+  const linkKey = (id: string, round: string) => `${id}|${round}`;
+  const candidates = useMemo(() => {
+    if (tx || type === 'transfer') return [];
+    const list = ongoingEvents(data.events, date, type).map(e => ({ key: linkKey(e.id, timeRoundOf(e)), id: e.id, round: timeRoundOf(e), title: e.title }));
+    const forced = props.eventLink;
+    if (forced && !list.some(c => c.key === linkKey(forced.eventId, forced.eventDate))) {
+      const ev = data.events.find(e => e.id === forced.eventId);
+      if (ev) list.unshift({ key: linkKey(ev.id, forced.eventDate), id: ev.id, round: forced.eventDate, title: ev.title });
+    }
+    return list;
+  }, [tx, type, date, data.events, props.eventLink]);
+  // undefined: the first one going on (or the one this was opened for); null: none
+  const [linkChoice, setLinkChoice] = useState<string | null | undefined>(props.eventLink ? linkKey(props.eventLink.eventId, props.eventLink.eventDate) : undefined);
+  const linked = linkChoice === null ? undefined : candidates.find(c => c.key === linkChoice) ?? (linkChoice === undefined ? candidates[0] : undefined);
   const isCredit = type === 'expense' && method?.kind === 'credit';
   // What the card's limit will have left once this purchase is saved (a purchase dated later doesn't use it yet)
   const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
@@ -171,6 +189,8 @@ export function EntryForm(props: {
           : { categoryId, methodId, installments: isCredit && installments > 1 ? installments : undefined })),
       ...(type === 'income' && { categoryId, accountId }),
       ...(type === 'transfer' && { accountId, toAccountId }),
+      // Added to an event's pot (an edited transaction keeps the event it was part of)
+      ...(linked ? { eventId: linked.id, eventDate: linked.round } : tx?.eventId ? { eventId: tx.eventId, eventDate: tx.eventDate } : {}),
     };
     // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
     try {
@@ -328,6 +348,23 @@ export function EntryForm(props: {
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
             <ReviewRow label="מתי" value={dayLabel(date, today)} onClick={() => change('when')} />
           </div>
+
+          {candidates.length > 0 && (
+            // Part of an event going on: it adds up in the event's pot (and keeps its own category)
+            <section class="event-link">
+              <p class="field-label">שייך לאירוע?</p>
+              <div class="chips">
+                {candidates.map(c => (
+                  <button key={c.key} type="button" class={`chip ${linked?.key === c.key ? 'on' : ''}`} onClick={() => setLinkChoice(c.key)}>
+                    {c.title}
+                  </button>
+                ))}
+                <button type="button" class={`chip ${!linked ? 'on' : ''}`} onClick={() => setLinkChoice(null)}>
+                  לא שייך
+                </button>
+              </div>
+            </section>
+          )}
 
           {isCredit && (
             <label class="field inline">
