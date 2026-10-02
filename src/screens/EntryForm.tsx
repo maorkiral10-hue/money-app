@@ -110,7 +110,7 @@ export function EntryForm(props: {
   const forced = props.eventLink ?? (tx?.eventId ? { eventId: tx.eventId, eventDate: tx.eventDate ?? tx.date } : undefined);
   const candidates = useMemo(() => {
     if (type === 'transfer') return [];
-    const list = ongoingEvents(data.events, date, type).map(e => ({
+    const list = ongoingEvents(data.events, date, type, true).map(e => ({
       key: linkKey(e.id, timeRoundOf(e)),
       id: e.id,
       round: timeRoundOf(e),
@@ -118,16 +118,19 @@ export function EntryForm(props: {
       categoryId: e.categoryId,
       startTime: e.startTime,
       endTime: e.endTime,
+      closed: !!e.settled,
     }));
     if (forced && !list.some(c => c.key === linkKey(forced.eventId, forced.eventDate))) {
       const ev = data.events.find(e => e.id === forced.eventId);
-      if (ev) list.unshift({ key: linkKey(ev.id, forced.eventDate), id: ev.id, round: forced.eventDate, title: ev.title, categoryId: ev.categoryId, startTime: ev.startTime, endTime: ev.endTime });
+      if (ev) list.unshift({ key: linkKey(ev.id, forced.eventDate), id: ev.id, round: forced.eventDate, title: ev.title, categoryId: ev.categoryId, startTime: ev.startTime, endTime: ev.endTime, closed: false });
     }
     // Recording for today: the event going on now first, then all-day ones, then the nearest in time
     if (date === today) {
       const now = new Date().getHours() * 60 + new Date().getMinutes();
       const mins = (t?: string) => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : 0);
       const rank = (x: (typeof list)[number]) => {
+        // Closed ones are there for something remembered late, never the first choice
+        if (x.closed) return 1e6;
         if (!x.startTime) return 1;
         const start = mins(x.startTime);
         const end = x.endTime ? mins(x.endTime) : start + 60;
@@ -139,7 +142,7 @@ export function EntryForm(props: {
   }, [type, date, data.events, forced?.eventId, forced?.eventDate]);
   // undefined: the best fit (or the one this was opened for); null: none
   const [linkChoice, setLinkChoice] = useState<string | null | undefined>(forced ? linkKey(forced.eventId, forced.eventDate) : tx ? null : undefined);
-  const linked = linkChoice === null ? undefined : candidates.find(c => c.key === linkChoice) ?? (linkChoice === undefined ? candidates[0] : undefined);
+  const linked = linkChoice === null ? undefined : candidates.find(c => c.key === linkChoice) ?? (linkChoice === undefined ? candidates.find(c => !c.closed) : undefined);
   // Chosen, then the date moved to a day without it
   const lostLink = typeof linkChoice === 'string' && !candidates.some(c => c.key === linkChoice);
   // With events that day, a question of its own right after the amount
@@ -327,7 +330,7 @@ export function EntryForm(props: {
             {candidates.map(c => (
               <button key={c.key} class={`tile event-tile ${linked?.key === c.key ? 'on' : ''}`} onClick={() => setLinkChoice(c.key)}>
                 {c.title}
-                <span class="small">{c.startTime ? `${c.startTime}${c.endTime ? ` עד ${c.endTime === '24:00' ? 'סוף היום' : c.endTime}` : ''}` : 'כל היום'}</span>
+                <span class="small">{c.startTime ? `${c.startTime}${c.endTime ? ` עד ${c.endTime === '24:00' ? 'סוף היום' : c.endTime}` : ''}` : 'כל היום'}{c.closed ? ' · נסגר' : ''}</span>
               </button>
             ))}
             <button class={`tile ${!linked ? 'on' : ''}`} onClick={() => setLinkChoice(null)}>

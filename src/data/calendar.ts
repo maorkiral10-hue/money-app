@@ -263,16 +263,18 @@ export const potTotal = (e: CalendarEvent, transactions: Transaction[]) => potOf
 
 /**
  * Events going on that day that a new expense (or income) can be added to: those with an expected amount
- * of that kind, not yet closed. One per time round.
+ * of that kind, not yet closed (with `withClosed`, also the closed ones, after them: something remembered
+ * late still goes into its pot). One per time round.
  */
-export function ongoingEvents(events: CalendarEvent[], date: string, type: 'income' | 'expense'): CalendarEvent[] {
+export function ongoingEvents(events: CalendarEvent[], date: string, type: 'income' | 'expense', withClosed = false): CalendarEvent[] {
   const seen = new Set<string>();
-  return expandEvents(events, date, date).filter(e => {
+  const list = expandEvents(events, date, date).filter(e => {
     const key = `${e.id}|${timeRoundOf(e)}`;
-    if (e.type !== type || e.settled || seen.has(key)) return false;
+    if (e.type !== type || (e.settled && !withClosed) || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+  return [...list.filter(e => !e.settled), ...list.filter(e => e.settled)];
 }
 
 /**

@@ -134,6 +134,9 @@ describe('calendar', () => {
     expect(ongoingEvents([trip], '2026-10-11', 'expense').map(e => e.id)).toEqual(['trip']);
     expect(ongoingEvents([trip], '2026-10-11', 'income')).toEqual([]);
     expect(ongoingEvents([{ ...trip, settled: { at: '' } }], '2026-10-11', 'expense')).toEqual([]);
+    // Remembered late: a closed one can still be chosen, after the open ones
+    const party = { ...trip, id: 'party' };
+    expect(ongoingEvents([{ ...trip, settled: { at: '' } }, party], '2026-10-11', 'expense', true).map(e => e.id)).toEqual(['party', 'trip']);
     // What it came to is the pot
     expect(eventBalance([{ ...trip, settled: { at: '' } }], txs, '2026-10-01', '2026-10-31')).toMatchObject({ expected: -3_000_00, actual: -1_350_00 });
   });
