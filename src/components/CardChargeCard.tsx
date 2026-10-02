@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import type { Statement } from '../data/balance';
-import { chargeWindow, saveCardCheck } from '../data/cardCheck';
+import { chargeWindow, edgeItems, movedTo, saveCardCheck } from '../data/cardCheck';
 import { addDays, dayLabel, todayStr } from '../data/dates';
 import { putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -26,6 +26,8 @@ export function CardChargeCard(props: {
   more: number;
   onLater: () => void;
   onDone: () => void;
+  /** Something changed that the charge is made of (it stays open). */
+  onChanged: () => void;
   onEdit: (tx: Transaction) => void;
   onAdd: (type: 'expense' | 'income', date: string) => void;
 }) {
@@ -76,6 +78,41 @@ export function CardChargeCard(props: {
     await saveCardCheck(props.db, { methodId: card.id, date: charge.date, actual, done: true, at: now });
     props.onDone();
   };
+  // Bought close to the charge day: in this charge or the next?
+  const edges = edgeItems(data, card, charge);
+  const move = async (tx: Transaction, to: string) => {
+    setBusy(true);
+    await putRecords(props.db, 'transactions', [movedTo(tx, to)]);
+    setBusy(false);
+    props.onChanged();
+  };
+  // A gap that one edge purchase explains exactly: offer to move it
+  const explains = gap !== 0 && !asking ? edges.find(e => (gap < 0 ? e.inThis && e.share === -gap : !e.inThis && e.share === gap)) : undefined;
+  const edgeList = edges.length > 0 && (
+    <div class="edge-list">
+      <p class="field-label">קניות קרובות ליום החיוב</p>
+      <p class="muted small">לפעמים הן נכנסות לחיוב הזה ולפעמים לחיוב הבא, לפי מתי העסק מעביר אותן. איפה כל אחת?</p>
+      {edges.map(e => (
+        <div key={e.tx.id} class="edge-item">
+          <div class="line">
+            <span>
+              {e.tx.type === 'income' ? 'זיכוי · ' : ''}
+              {data.categories.find(c => c.id === e.tx.categoryId)?.name ?? ''} · {short(e.tx.date)}
+            </span>
+            <span>{formatMoney(Math.abs(e.share))}</span>
+          </div>
+          <div class="segmented small-seg">
+            <button class={e.inThis ? 'on' : ''} disabled={busy} onClick={() => !e.inThis && move(e.tx, e.edge.early)}>
+              בחיוב הזה
+            </button>
+            <button class={!e.inThis ? 'on' : ''} disabled={busy} onClick={() => e.inThis && move(e.tx, e.edge.late)}>
+              בחיוב הבא ({short(e.edge.late)})
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
   const gapCategories = data.categories.filter(c => c.kind === (gap > 0 ? 'expense' : 'income') && c.name.trim() && !c.archived);
 
   return (
@@ -114,6 +151,7 @@ export function CardChargeCard(props: {
                 </button>
               </div>
             )}
+            {edgeList}
           </>
         ) : gap === 0 ? (
           <>
@@ -148,6 +186,18 @@ export function CardChargeCard(props: {
                 : 'חויב פחות ממה שרשמת: אולי היה זיכוי, קנייה נרשמה פעמיים, או שסכום נרשם גבוה מדי.'}{' '}
               לחיוב הזה נכנסות קניות מ־{short(win.from)} עד {short(win.to)}.
             </p>
+            {explains && (
+              <div class="edge-hint">
+                <p>
+                  נראה ש{explains.tx.type === 'income' ? 'הזיכוי' : 'הקנייה'} של {formatMoney(Math.abs(explains.share))} מ־{short(explains.tx.date)}{' '}
+                  {explains.inThis ? 'עברה לחיוב הבא' : 'נכנסה לחיוב הזה'}. להעביר?
+                </p>
+                <button disabled={busy} onClick={() => move(explains.tx, explains.inThis ? explains.edge.late : explains.edge.early)}>
+                  כן, להעביר
+                </button>
+              </div>
+            )}
+            {!explains && edgeList}
             {recordGap ? (
               <>
                 <p class="field-label">{gap > 0 ? 'לרשום הוצאה של' : 'לרשום זיכוי של'} {formatMoney(Math.abs(gap))} על מה?</p>

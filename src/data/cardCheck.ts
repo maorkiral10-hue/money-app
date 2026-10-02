@@ -1,8 +1,8 @@
-import { cardStatements, type Statement } from './balance';
+import { cardStatements, chargeOf, edgeCharges, splitInstallments, type Statement } from './balance';
 import { addDays } from './dates';
 import { getMeta, setMeta } from './db';
 import type { AppData } from './store';
-import type { PaymentMethod } from './types';
+import type { PaymentMethod, Transaction } from './types';
 
 /**
  * What a card was really charged on one of its charge days, as the user said. `done` once it matches what
@@ -48,6 +48,25 @@ export function chargeWindow(card: PaymentMethod, charge: Statement) {
   const from = `${before.getFullYear()}-${String(before.getMonth() + 1).padStart(2, '0')}-${String(Math.min(card.chargeDay!, last)).padStart(2, '0')}`;
   return { from, to: prev };
 }
+
+/**
+ * Purchases (and refunds) on the edge of this charge — bought up to a few days before it, or on its day —
+ * that may be in it or in the next one: where each is now, and how much of it that charge holds.
+ */
+export function edgeItems(data: Pick<AppData, 'transactions'>, card: PaymentMethod, charge: Statement) {
+  return data.transactions
+    .filter(t => t.methodId === card.id && t.type !== 'transfer')
+    .flatMap(tx => {
+      const edge = edgeCharges(tx.date, card.chargeDay!);
+      if (!edge || edge.early !== charge.date) return [];
+      const share = splitInstallments(tx.amount, Math.max(1, tx.installments ?? 1))[0] * (tx.type === 'income' ? -1 : 1);
+      return [{ tx, edge, inThis: chargeOf(tx, card.chargeDay!) === charge.date, share }];
+    })
+    .sort((a, b) => b.tx.date.localeCompare(a.tx.date));
+}
+
+/** One edge purchase moved: into this charge, or into the next one. */
+export const movedTo = (tx: Transaction, charge: string): Transaction => ({ ...tx, chargeDate: charge });
 
 export async function saveCardCheck(db: IDBDatabase, check: CardCheck) {
   const all = (await getMeta<CardCheck[]>(db, 'cardChecks')) ?? [];

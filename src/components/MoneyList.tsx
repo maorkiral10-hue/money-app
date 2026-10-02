@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { cardStatements, nextChargeDate, type Statement } from '../data/balance';
+import { cardStatements, chargeOf, edgeCharges, type Statement } from '../data/balance';
 import { categoryColor } from '../data/colors';
 import { dayLabel, parseDate } from '../data/dates';
 import { expectedTransactions } from '../data/recurring';
@@ -110,7 +110,12 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
         const tx = row.tx;
         const card = tx.type !== 'transfer' && tx.methodId ? methods.get(tx.methodId) : undefined;
         // A card purchase: when the bank pays for it
-        const charged = card?.kind === 'credit' && card.chargeDay ? nextChargeDate(tx.date, card.chargeDay) : undefined;
+        const charged = card?.kind === 'credit' && card.chargeDay ? chargeOf(tx, card.chargeDay) : undefined;
+        // Close to the charge day and not settled yet: it may turn out to be in the other charge
+        const edge = charged && !tx.chargeDate && charged > props.today ? edgeCharges(tx.date, card!.chargeDay!) : undefined;
+        const otherCharge = edge && (charged === edge.early ? edge.late : edge.early);
+        // Only while that other charge is still to come
+        const other = otherCharge && otherCharge > props.today ? otherCharge : undefined;
         const expected = isExpected(tx);
         const changing = expected && data.recurring.find(r => r.id === tx.recurringId)?.variable;
         // A standing order still to come opens "came already?" (it's recorded on its day otherwise)
@@ -130,7 +135,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
                         ? `יורד מהחיוב של ${shortDate(charged)}`
                         : `ירד מהחיוב של ${shortDate(charged)}`
                       : charged > props.today
-                        ? `תיגבה ב־${shortDate(charged)}`
+                        ? `תיגבה ב־${shortDate(charged)}${other ? ` (או ב־${shortDate(other)})` : ''}`
                         : `נגבתה ב־${shortDate(charged)}`),
                   tx.recurringId &&
                     (changing

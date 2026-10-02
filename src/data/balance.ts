@@ -1,4 +1,4 @@
-import { dayInMonth, endOfNextMonth } from './dates';
+import { addDays, dayInMonth, endOfNextMonth } from './dates';
 import { expectedTransactions } from './recurring';
 import { isGoal, type Account, type PaymentMethod, type Recurring, type Transaction } from './types';
 
@@ -27,6 +27,22 @@ export function nextChargeDate(after: string, chargeDay: number) {
   return thisMonth > after ? thisMonth : dayInMonth(after, 1, chargeDay);
 }
 
+/** The charge a card purchase (or refund) goes into: the one the user said, or the next one after it. */
+export const chargeOf = (tx: Pick<Transaction, 'date' | 'chargeDate'>, chargeDay: number) => tx.chargeDate ?? nextChargeDate(tx.date, chargeDay);
+
+/** How many days before a charge day a purchase may still go into the charge after it. */
+export const EDGE_DAYS = 3;
+
+/**
+ * A purchase close to the card's charge day — up to EDGE_DAYS before it, or on the day itself — can land in
+ * that charge or in the one after, depending on when the shop passes it on. Returns the two, or nothing.
+ */
+export function edgeCharges(date: string, chargeDay: number): { early: string; late: string } | undefined {
+  if (dayInMonth(date, 0, chargeDay) === date) return { early: date, late: nextChargeDate(date, chargeDay) };
+  const next = nextChargeDate(date, chargeDay);
+  return addDays(date, EDGE_DAYS) >= next ? { early: next, late: nextChargeDate(next, chargeDay) } : undefined;
+}
+
 /** Splits an amount into n monthly payments; any leftover agorot go on the first one. */
 export function splitInstallments(amount: number, n: number) {
   const base = Math.floor(amount / n);
@@ -41,7 +57,7 @@ export function transactionEffects(tx: Transaction, methods: Map<string, Payment
     // A refund to a credit card takes that much off the card's next charge
     const card = tx.methodId ? methods.get(tx.methodId) : undefined;
     if (card?.kind === 'credit' && card.chargeDay) {
-      return [{ accountId: card.accountId, date: nextChargeDate(tx.date, card.chargeDay), amount: tx.amount, kind: 'credit', txId, methodId: card.id }];
+      return [{ accountId: card.accountId, date: chargeOf(tx, card.chargeDay), amount: tx.amount, kind: 'credit', txId, methodId: card.id }];
     }
     return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: tx.amount, kind: 'income', txId }] : [];
   }
@@ -57,7 +73,7 @@ export function transactionEffects(tx: Transaction, methods: Map<string, Payment
   if (!method) return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: -tx.amount, kind: 'expense', txId }] : [];
   if (method.kind === 'credit' && method.chargeDay) {
     // The purchase is recorded on its own date, but the bank only pays it on the card's charge days
-    const first = nextChargeDate(tx.date, method.chargeDay);
+    const first = chargeOf(tx, method.chargeDay);
     return splitInstallments(tx.amount, Math.max(1, tx.installments ?? 1)).map((amount, i) => ({
       accountId: method.accountId,
       date: dayInMonth(first, i, method.chargeDay!),
@@ -179,12 +195,12 @@ export function cardStatements(ledger: Ledger, methodId: string): Statement[] {
   for (const tx of ledger.transactions) {
     if (tx.methodId !== methodId || tx.date < ledger.startDate) continue;
     if (tx.type === 'income') {
-      add(nextChargeDate(tx.date, card.chargeDay), { tx, amount: -tx.amount });
+      add(chargeOf(tx, card.chargeDay), { tx, amount: -tx.amount });
       continue;
     }
     if (tx.type !== 'expense') continue;
     const of = Math.max(1, tx.installments ?? 1);
-    const first = nextChargeDate(tx.date, card.chargeDay);
+    const first = chargeOf(tx, card.chargeDay);
     splitInstallments(tx.amount, of).forEach((amount, i) =>
       add(dayInMonth(first, i, card.chargeDay!), { tx, amount, installment: of > 1 ? { n: i + 1, of } : undefined }),
     );

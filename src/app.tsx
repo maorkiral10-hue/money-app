@@ -482,6 +482,7 @@ export function App() {
               more={cardsDue.length - 1}
               onLater={() => setLaterIds(ids => [...ids, `card|${askCard.card.id}|${askCard.charge.date}`])}
               onDone={afterChange}
+              onChanged={afterChange}
               onEdit={tx => go({ name: 'entry', tx, from: tab })}
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />

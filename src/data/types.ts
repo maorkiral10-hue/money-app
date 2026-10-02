@@ -76,6 +76,11 @@ export interface Transaction {
   toAccountId?: string;
   /** Credit card expenses split into monthly payments. */
   installments?: number;
+  /**
+   * Credit card purchases (and refunds) bought close to the card's charge day: the charge it really went
+   * into, as the user said (otherwise the next charge after the purchase). With payments, the first one.
+   */
+  chargeDate?: string;
   note?: string;
   /**
    * Spent (or received) as part of a calendar event with an expected amount: it adds up in the event's

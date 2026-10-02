@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cardStatements, cardUsage, summarize } from './balance';
-import { cardChecksDue, chargeWindow, type CardCheck } from './cardCheck';
+import { cardStatements, cardUsage, edgeCharges, summarize } from './balance';
+import { cardChecksDue, chargeWindow, edgeItems, movedTo, type CardCheck } from './cardCheck';
 import type { Account, PaymentMethod, Transaction } from './types';
 
 const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 10_000_00, order: 0 };
@@ -48,5 +48,26 @@ describe('more refunded than bought', () => {
   it("shows nothing used, and the refund as what's coming", () => {
     const [u] = cardUsage(ledger([refund('r', '2026-10-02', 30_00)]), '2026-10-02');
     expect(u).toMatchObject({ used: 0, available: 5_000_00, nextCharge: { date: '2026-11-02', amount: -30_00 } });
+  });
+});
+
+describe('purchases close to the charge day', () => {
+  it('a few days before it, or on the day itself, may be in that charge or the next', () => {
+    expect(edgeCharges('2026-09-29', 2)).toEqual({ early: '2026-10-02', late: '2026-11-02' });
+    expect(edgeCharges('2026-10-02', 2)).toEqual({ early: '2026-10-02', late: '2026-11-02' });
+    expect(edgeCharges('2026-09-28', 2)).toBeUndefined();
+    expect(edgeCharges('2026-10-03', 2)).toBeUndefined();
+  });
+
+  it('are listed at the check of the charge, and moving one moves its money', () => {
+    const txs = [buy('a', '2026-09-10', 200_00), buy('edge', '2026-10-01', 80_00), buy('day', '2026-10-02', 40_00)];
+    const [due] = cardChecksDue(ledger(txs), '2026-10-02');
+    expect(due.charge.amount).toBe(280_00);
+    const edges = edgeItems({ transactions: txs }, visa, due.charge);
+    expect(edges.map(e => [e.tx.id, e.inThis])).toEqual([['day', false], ['edge', true]]);
+    // The bank charged 200: the purchase of the 1st went into November's
+    const moved = txs.map(t => (t.id === 'edge' ? movedTo(t, '2026-11-02') : t));
+    expect(cardStatements(ledger(moved), 'visa').map(s => [s.date, s.amount])).toEqual([['2026-10-02', 200_00], ['2026-11-02', 120_00]]);
+    expect(cardUsage(ledger(moved), '2026-10-02')[0].used).toBe(120_00);
   });
 });

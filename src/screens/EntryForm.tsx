@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'preact/hooks';
 import { ongoingEvents, timeRoundOf } from '../data/calendar';
 import { Chips } from '../components/inputs';
-import { cardUsage, nextChargeDate, splitInstallments } from '../data/balance';
+import { cardUsage, chargeOf, splitInstallments } from '../data/balance';
 import { dayInMonth } from '../data/dates';
 import { deleteRecord, putRecords, setMeta } from '../data/db';
 import { addDays, dayLabel, todayStr } from '../data/dates';
@@ -167,12 +167,12 @@ export function EntryForm(props: {
   const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
   // What of a purchase still takes up the limit: the payments the card hasn't been charged for yet (one recorded late,
   // for a charge that already went out, takes up nothing)
-  const unpaid = (on: string, sum: number, payments = 1) => {
+  const unpaid = (on: string, sum: number, payments = 1, chargeDate?: string) => {
     if (!method?.chargeDay) return sum;
-    const first = nextChargeDate(on, method.chargeDay);
+    const first = chargeOf({ date: on, chargeDate }, method.chargeDay);
     return splitInstallments(sum, Math.max(1, payments)).filter((_, i) => dayInMonth(first, i, method.chargeDay!) > today).reduce((a, p) => a + p, 0);
   };
-  const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? unpaid(tx.date, tx.amount, tx.installments) : 0;
+  const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? unpaid(tx.date, tx.amount, tx.installments, tx.chargeDate) : 0;
   const limitLeft = usage?.available !== undefined && date <= today ? usage.available + alreadyCounted - unpaid(date, amount, isCredit ? installments : 1) : undefined;
   const name = (id?: string) => [...accounts, ...methods, ...categories].find(x => x.id === id)?.name ?? '';
   // Cards a refund can go back to (they need a charge day: that's when it comes off)
@@ -258,6 +258,8 @@ export function EntryForm(props: {
       ...(type === 'transfer' && { accountId, toAccountId }),
       // Added to an event's pot (an edited transaction keeps the event it was part of)
       ...(linked ? { eventId: linked.id, eventDate: linked.round } : {}),
+      // Which card charge it went into, as said at the charge's check: kept while it's the same purchase on the same card
+      ...(tx?.chargeDate && tx.date === date && tx.methodId === (type === 'expense' ? methodId : refundCard?.id) && { chargeDate: tx.chargeDate }),
     };
     // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
     try {
