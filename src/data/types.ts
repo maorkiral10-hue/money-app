@@ -122,8 +122,22 @@ export interface CalendarEvent {
   note?: string;
   /** 'HH:MM'; missing for an all-day event. */
   startTime?: string;
-  /** 'HH:MM'; missing when only the start is known. */
+  /** 'HH:MM' ('24:00' = until the end of the day); missing when only the start is known. */
   endTime?: string;
+  /**
+   * An event that goes on past its first day: the day it ends (`endTime` is then on that day). Set for
+   * several days (a holiday), and for one that runs past midnight (20:00 to 04:00 the next day).
+   */
+  endDate?: string;
+  /**
+   * Shown in the calendar only, never saved: one day of an event that spans several, and which part —
+   * its first day (from its start), a middle day (all of it), or its last day (until its end).
+   */
+  part?: 'first' | 'middle' | 'last';
+  /** Shown in the calendar only: the day this time round of the event started (its answers are kept by it). */
+  startedOn?: string;
+  /** Shown in the calendar only: the event as saved (its own times and days). */
+  base?: CalendarEvent;
   /** Once it's over: the user said what it came to (the transaction recorded), or that there was nothing. */
   settled?: EventAnswer;
   /**

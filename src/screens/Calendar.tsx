@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
-import { answerFor, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { answerFor, spanDays, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { formatMoney } from '../data/money';
@@ -406,6 +406,35 @@ const REPEATS: { id: RepeatChoice; name: string }[] = [
 ];
 const sameDays = (a: number[] = [], b: number[]) => a.length === b.length && b.every(d => a.includes(d));
 
+const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
+/** A time in steps of five minutes: an hour wheel and a minutes wheel (00, 05 … 55). */
+function TimePicker(props: { value: string; onChange: (t: string) => void }) {
+  const [h, m] = (props.value || '09:00').split(':');
+  // A time saved before the five-minute steps keeps its own minutes in the list
+  const minutes = MINUTES.includes(m) ? MINUTES : [...MINUTES, m].sort();
+  return (
+    <div class="time-picker" dir="ltr">
+      <select value={h} onChange={ev => props.onChange(`${ev.currentTarget.value}:${m}`)} aria-label="שעה">
+        {HOURS.map(x => (
+          <option key={x} value={x}>
+            {x}
+          </option>
+        ))}
+      </select>
+      <span>:</span>
+      <select value={m} onChange={ev => props.onChange(`${h}:${ev.currentTarget.value}`)} aria-label="דקות">
+        {minutes.map(x => (
+          <option key={x} value={x}>
+            {x}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** An hour after 'HH:MM' (stopping at 23:59). */
 const plusHour = (t: string) => {
   const [h, m] = t.split(':').map(Number);
@@ -544,6 +573,15 @@ function DayAgenda(props: {
   );
 }
 
+/** When an event is on its day: its hours, all day, or which part of a longer event this day is. */
+function eventTimeText(e: CalendarEvent) {
+  const end = (t?: string) => (t === '24:00' ? 'סוף היום' : t);
+  if (e.part === 'first') return e.startTime ? `מ־${e.startTime} · נמשך גם מחר` : 'כל היום · היום הראשון';
+  if (e.part === 'middle') return 'כל היום · באמצע';
+  if (e.part === 'last') return e.base?.startTime ? `עד ${end(e.base.endTime) ?? 'סוף היום'}` : 'כל היום · היום האחרון';
+  return e.startTime ? `${e.startTime}${e.endTime ? `–${end(e.endTime)}` : ''}` : 'כל היום';
+}
+
 /** One event in a list: its dot, title and time, and its money (expected, and what it came to). */
 function EventRow(props: { data: AppData; event: CalendarEvent; onEdit: (event?: CalendarEvent) => void }) {
   const e = props.event;
@@ -553,7 +591,7 @@ function EventRow(props: { data: AppData; event: CalendarEvent; onEdit: (event?:
         <div>
           <span class={`cal-dot ${dotClass(e)}`} /> {e.title}
         </div>
-        <div class="muted small agenda-time">{e.startTime ? `${e.startTime}${e.endTime ? `–${e.endTime}` : ''}` : 'כל היום'}</div>
+        <div class="muted small agenda-time">{eventTimeText(e)}</div>
       </div>
       <EventMoney data={props.data} event={e} />
     </button>
@@ -677,7 +715,7 @@ function HourGrid(props: {
         >
           <span class="cal-event-title">{t.event.title}</span>
           <span class="cal-event-time">
-            {timeLabel(t.start)}–{timeLabel(t.end % (24 * 60))}
+            {timeLabel(t.start)}–{timeLabel(t.end)}
           </span>
           <EventMoney data={props.data} event={t.event} />
         </button>
@@ -722,13 +760,26 @@ export function EventForm(props: {
   const nextHour = Math.min(22, new Date().getHours() + 1) * 60;
   const [allDay, setAllDay] = useState(e ? !e.startTime : false);
   const [startTime, setStartTime] = useState(e?.startTime ?? props.time ?? timeLabel(nextHour));
-  const [endTime, setEndTime] = useState(e?.endTime ?? plusHour(e?.startTime ?? props.time ?? timeLabel(nextHour)));
-  // Moving the start keeps the end after it
+  // Ends at a set time, or at the end of the day
+  const [endsAtDayEnd, setEndsAtDayEnd] = useState(e?.endTime === '24:00');
+  const [endTime, setEndTime] = useState(e?.endTime && e.endTime !== '24:00' ? e.endTime : plusHour(e?.startTime ?? props.time ?? timeLabel(nextHour)));
+  // Goes on for several days (a holiday): until which day. A set end before the start is the next day.
+  const savedEndDate = e && e.endDate && !(e.startTime && e.endTime && e.endTime <= e.startTime && spanDays(e) === 1) ? e.endDate : '';
+  const [severalDays, setSeveralDays] = useState(!!savedEndDate);
+  const [endDate, setEndDate] = useState(savedEndDate);
+  // Moving the start keeps the end after it (an hour later) unless it's clearly meant for the next day
   const changeStart = (t: string) => {
     setStartTime(t);
-    if (t && endTime <= t) setEndTime(plusHour(t));
+    if (t && endTime === startTime) setEndTime(plusHour(t));
   };
-  const badTimes = !allDay && (!startTime || !endTime || endTime <= startTime);
+  const overnight = !allDay && !endsAtDayEnd && !severalDays && endTime <= startTime;
+  /** When it ends, as saved: times, and the last day when it's not the first one. */
+  const timing = (): Pick<CalendarEvent, 'startTime' | 'endTime' | 'endDate'> => {
+    const last = severalDays && endDate > date ? endDate : overnight ? addDays(date, 1) : undefined;
+    if (allDay) return { startTime: undefined, endTime: undefined, endDate: last };
+    return { startTime, endTime: endsAtDayEnd ? '24:00' : endTime, endDate: last };
+  };
+  const badTimes = (!allDay && !startTime) || (severalDays && (!endDate || endDate < date));
   const badUntil = repeat !== 'none' && !!repeatUntil && repeatUntil < date;
   const noDays = choice === 'days' && days.length === 0;
   const valid = title.trim() && date && !badTimes && !badUntil && !noDays;
@@ -751,8 +802,7 @@ export function EventForm(props: {
       type,
       amount: type === 'none' ? 0 : amount,
       note: note.trim() || undefined,
-      startTime: allDay ? undefined : startTime,
-      endTime: allDay ? undefined : endTime,
+      ...timing(),
       settled: repeat === 'none' ? e?.settled : undefined,
       repeat: repeat === 'none' ? undefined : repeat,
       repeatUntil: repeat !== 'none' && repeatUntil ? repeatUntil : undefined,
@@ -776,8 +826,7 @@ export function EventForm(props: {
       type,
       amount: type === 'none' ? 0 : amount,
       note: note.trim() || undefined,
-      startTime: allDay ? undefined : startTime,
-      endTime: allDay ? undefined : endTime,
+      ...timing(),
       settled: answerFor(e, props.occurrence),
       createdAt: new Date().toISOString(),
     };
@@ -827,18 +876,40 @@ export function EventForm(props: {
           />
         </div>
         {!allDay && (
-          <div class="cal-times">
-            <label class="field">
-              <span>משעה</span>
-              <input type="time" value={startTime} onChange={ev => changeStart(ev.currentTarget.value)} />
-            </label>
-            <label class="field">
-              <span>עד שעה</span>
-              <input type="time" value={endTime} onChange={ev => setEndTime(ev.currentTarget.value)} />
-            </label>
-          </div>
+          <>
+            <p class="field-label">משעה</p>
+            <TimePicker value={startTime} onChange={changeStart} />
+            <p class="field-label">עד</p>
+            <Segmented
+              value={endsAtDayEnd ? 'dayEnd' : 'time'}
+              onChange={v => setEndsAtDayEnd(v === 'dayEnd')}
+              options={[
+                ['time', 'שעה'],
+                ['dayEnd', 'סוף היום'],
+              ]}
+            />
+            {!endsAtDayEnd && <TimePicker value={endTime} onChange={setEndTime} />}
+            {overnight && <p class="muted small">נגמר למחרת ב־{endTime}</p>}
+          </>
         )}
-        {badTimes && <p class="small warn">שעת הסיום צריכה להיות אחרי שעת ההתחלה</p>}
+        <label class="toggle-row several-days">
+          <span>נמשך כמה ימים</span>
+          <input
+            type="checkbox"
+            checked={severalDays}
+            onChange={ev => {
+              setSeveralDays(ev.currentTarget.checked);
+              if (ev.currentTarget.checked && !endDate) setEndDate(addDays(date, 1));
+            }}
+          />
+        </label>
+        {severalDays && (
+          <label class="field">
+            <span>{allDay ? 'עד תאריך (כולל)' : 'עד תאריך (בשעת הסיום שלמעלה)'}</span>
+            <input type="date" value={endDate} min={date} onChange={ev => setEndDate(ev.currentTarget.value)} />
+          </label>
+        )}
+        {severalDays && endDate && endDate < date && <p class="small warn">תאריך הסיום צריך להיות אחרי תאריך ההתחלה</p>}
       </section>
 
       <section>

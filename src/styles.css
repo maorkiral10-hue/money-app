@@ -587,3 +587,8 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .panel-split { border-bottom: 1px solid rgba(127,127,127,.25); padding-bottom: 8px; margin-bottom: 8px; font-weight: 600; }
 .tap-hint { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
 .stat.on .tap-hint { color: inherit; opacity: .85; }
+
+/* event times: wheels in steps of five minutes; several days */
+.time-picker { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin: 6px 0 4px; }
+.time-picker select { width: auto; min-width: 72px; margin: 0; font-size: 18px; text-align: center; padding: 8px 10px; }
+.toggle-row.several-days { margin-top: 12px; }

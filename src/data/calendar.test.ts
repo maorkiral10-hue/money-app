@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { spanDays, awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -98,5 +98,28 @@ describe('calendar', () => {
     expect(occurrencesIn(sick, '2026-09-27', '2026-10-01')).toEqual(['2026-09-27', '2026-09-28', '2026-09-30', '2026-10-01']);
     const gym = { ...ev('2026-09-01', 'none', 0), repeat: 'weekly' as const, skipDates: ['2026-09-08'] };
     expect(occurrencesIn(gym, '2026-09-01', '2026-09-15')).toEqual(['2026-09-01', '2026-09-15']);
+  });
+
+  it('an event over several days, or past midnight, shows on each of its days and is asked about once', () => {
+    const night = { ...ev('2026-10-05', 'expense', 200_00), id: 'night', startTime: '20:00', endTime: '04:00', endDate: '2026-10-06' };
+    const trip = { ...ev('2026-10-10', 'expense', 3_000_00), id: 'trip', endDate: '2026-10-13' };
+    expect(spanDays(trip)).toBe(3);
+    const days = expandEvents([night, trip], '2026-10-01', '2026-10-31');
+    expect(days.map(e => [e.id, e.date, e.part, e.startTime ?? '', e.endTime ?? ''])).toEqual([
+      ['night', '2026-10-05', 'first', '20:00', '24:00'],
+      ['night', '2026-10-06', 'last', '00:00', '04:00'],
+      ['trip', '2026-10-10', 'first', '', ''],
+      ['trip', '2026-10-11', 'middle', '', ''],
+      ['trip', '2026-10-12', 'middle', '', ''],
+      ['trip', '2026-10-13', 'last', '', ''],
+    ]);
+    // A view starting in the middle still shows the days it covers
+    expect(expandEvents([trip], '2026-10-12', '2026-10-31').map(e => e.date)).toEqual(['2026-10-12', '2026-10-13']);
+    // Over only once its last day is done, and asked about once
+    expect(eventEnd(days[0])).toEqual(new Date(2026, 9, 6, 4, 0));
+    expect(awaitingActual([night, trip], new Date(2026, 9, 6, 3, 0))).toEqual([]);
+    expect(awaitingActual([night, trip], new Date(2026, 9, 14, 0, 0)).map(e => e.id)).toEqual(['night', 'trip']);
+    // The expected amount counts once
+    expect(eventBalance([trip], [], '2026-10-01', '2026-10-31').open).toBe(-3_000_00);
   });
 });

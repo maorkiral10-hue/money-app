@@ -69,11 +69,21 @@ export function eventSpan(e: CalendarEvent): [number, number] | null {
   return [start, Math.max(end, start + 15)];
 }
 
-/** When an event is over: its end time, an hour after its start, or (all day) the end of its day. */
+/** Whole days from an event's first day to its last (0 for an event within one day). */
+export const spanDays = (e: Pick<CalendarEvent, 'date' | 'endDate'>) =>
+  e.endDate && e.endDate > e.date ? Math.round((Date.UTC(...ymdParts(e.endDate)) - Date.UTC(...ymdParts(e.date))) / 86_400_000) : 0;
+
+/**
+ * When an event is over: on its last day, at its end time (an hour after its start when it has none), or
+ * at the end of that day when it's all day. For one day of a longer event, the whole event's end.
+ */
 export function eventEnd(e: CalendarEvent): Date {
-  const { y, m0, d } = parseDate(e.date);
-  const span = eventSpan(e);
-  return span ? new Date(y, m0, d, 0, span[1]) : new Date(y, m0, d + 1);
+  const ev = e.base ?? e;
+  const lastDay = addDays(e.startedOn ?? e.date, spanDays(ev));
+  const { y, m0, d } = parseDate(lastDay);
+  if (!ev.startTime) return new Date(y, m0, d + 1);
+  const end = ev.endTime ? toMinutes(ev.endTime) : spanDays(ev) ? 24 * 60 : toMinutes(ev.startTime) + 60;
+  return new Date(y, m0, d, 0, end);
 }
 
 /** Events with an expected amount that are over and still wait for "how much was it in the end?", oldest first. */
@@ -81,7 +91,7 @@ export function awaitingActual(events: CalendarEvent[], now: Date) {
   const today = ymd(now.getFullYear(), now.getMonth(), now.getDate());
   // A repeating event is asked about for the last year of its repeats at most
   return expandEvents(events.filter(e => e.type !== 'none'), addDays(today, -366), today)
-    .filter(e => !e.settled && eventEnd(e) <= now)
+    .filter(e => (!e.part || e.part === 'first') && !e.settled && eventEnd(e) <= now)
     .sort((a, b) => eventEnd(a).getTime() - eventEnd(b).getTime());
 }
 
@@ -143,7 +153,7 @@ export function eventBalance(events: CalendarEvent[], transactions: Transaction[
   let open = 0;
   let openCount = 0;
   for (const e of events) {
-    if (e.type === 'none' || e.date < from || e.date > to) continue;
+    if (e.type === 'none' || e.date < from || e.date > to || (e.part && e.part !== 'first')) continue;
     if (e.settled) {
       answered++;
       expected += signed(e, e.amount);
@@ -212,7 +222,30 @@ export const withAnswer = (e: CalendarEvent, date: string, answer: EventAnswer):
  * with that day's date and answer. Editing one goes back to the event itself (same id).
  */
 export const expandEvents = (events: CalendarEvent[], from: string, to: string): CalendarEvent[] =>
-  events.flatMap(e => occurrencesIn(e, from, to).map(date => (e.repeat ? { ...e, date, settled: answerFor(e, date) } : e)));
+  events.flatMap(e => {
+    const span = spanDays(e);
+    // A longer event shows on each of its days: from its start, whole middle days, until its end
+    return occurrencesIn(e, addDays(from, -span), to).flatMap(start => {
+      const time: CalendarEvent = e.repeat ? { ...e, date: start, settled: answerFor(e, start) } : e;
+      if (!span) return start >= from ? [time] : [];
+      const days: CalendarEvent[] = [];
+      for (let k = 0; k <= span; k++) {
+        const date = addDays(start, k);
+        if (date < from || date > to) continue;
+        const part = k === 0 ? 'first' : k === span ? 'last' : 'middle';
+        days.push({
+          ...time,
+          date,
+          part,
+          startedOn: start,
+          base: e,
+          startTime: e.startTime && (part === 'first' ? e.startTime : part === 'last' ? '00:00' : undefined),
+          endTime: e.startTime && (part === 'last' ? e.endTime : part === 'first' ? '24:00' : undefined),
+        });
+      }
+      return days;
+    });
+  });
 
 /** Sunday to Thursday. */
 export const WORK_DAYS = [0, 1, 2, 3, 4];
