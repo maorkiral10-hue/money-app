@@ -598,3 +598,10 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .event-step .tiles { margin-top: 8px; }
 .tile.event-tile.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .tile.event-tile .small { opacity: .85; }
+
+/* A card's charge checked against what was really charged */
+.card-charge .card-gap { margin: 8px 0; }
+.card-charge .card-gap .line { display: flex; justify-content: space-between; padding: 2px 0; }
+.card-charge .gap-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.card-charge .statement { max-height: 40vh; overflow-y: auto; }
+.card-charge .row-links { margin-top: 6px; text-align: center; }

@@ -6,6 +6,10 @@ import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 import { StatementItems } from './StatementItems';
 
+/** The next charge, or a refund when more came back than was bought. */
+const chargeText = (c: { date: string; amount: number }, today: string) =>
+  c.amount < 0 ? `זיכוי ${dayLabel(c.date, today)}: ${formatMoney(-c.amount)}` : `חיוב ${dayLabel(c.date, today)}: ${formatMoney(c.amount)}`;
+
 /**
  * One credit card: what's free on its limit, how much is used, and its next charge. When given the card's
  * statements, tapping it opens what the next charge is made of (and a line for the charges after it).
@@ -43,12 +47,12 @@ export function CardLine(props: {
           </div>
           <div class="muted small">
             נוצל {formatMoney(usage.used)} מתוך {formatMoney(limit)}
-            {usage.nextCharge && ` · חיוב ${dayLabel(usage.nextCharge.date, today)}: ${formatMoney(usage.nextCharge.amount)}`}
+            {usage.nextCharge && ` · ${chargeText(usage.nextCharge, today)}`}
           </div>
         </>
       ) : (
         <div class="muted small">
-          {usage.nextCharge ? `חיוב ${dayLabel(usage.nextCharge.date, today)}: ${formatMoney(usage.nextCharge.amount)} · ` : ''}
+          {usage.nextCharge ? `${chargeText(usage.nextCharge, today)} · ` : ''}
           לא הוגדרה מסגרת
         </div>
       )}

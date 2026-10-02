@@ -75,7 +75,8 @@ export function EntryForm(props: {
   const [categoryId, setCategoryId] = useState(tx?.categoryId ?? presetCategory?.id);
   // How it was paid: a payment method, or a savings goal the money comes straight out of
   const [methodId, setMethodId] = useState(tx?.methodId ?? (tx?.type === 'expense' ? tx.accountId : undefined) ?? presetMethod?.id ?? defaultMethod?.id);
-  const [accountId, setAccountId] = useState(tx?.accountId ?? presetAccount?.id);
+  // Income: an account, or a credit card it was refunded to
+  const [accountId, setAccountId] = useState(tx?.accountId ?? (tx?.type === 'income' ? tx.methodId : undefined) ?? presetAccount?.id ?? (initialType === 'income' && preset?.method ? data.methods.find(m => m.kind === 'credit' && !m.archived && m.name.trim() === preset.method!.trim())?.id : undefined));
   const [toAccountId, setToAccountId] = useState(tx?.toAccountId);
   const [date, setDate] = useState(tx?.date ?? preset?.date ?? today);
   const future = date > today;
@@ -166,6 +167,9 @@ export function EntryForm(props: {
   const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? tx.amount : 0;
   const limitLeft = usage?.available !== undefined && date <= today ? usage.available + alreadyCounted - amount : undefined;
   const name = (id?: string) => [...accounts, ...methods, ...categories].find(x => x.id === id)?.name ?? '';
+  // Cards a refund can go back to (they need a charge day: that's when it comes off)
+  const refundCards = methods.filter(m => m.kind === 'credit' && m.chargeDay);
+  const refundCard = type === 'income' ? refundCards.find(m => m.id === accountId) : undefined;
 
   const valid =
     dateOk &&
@@ -242,7 +246,7 @@ export function EntryForm(props: {
         (paidFromGoal
           ? { categoryId, accountId: methodId }
           : { categoryId, methodId, installments: isCredit && installments > 1 ? installments : undefined })),
-      ...(type === 'income' && { categoryId, accountId }),
+      ...(type === 'income' && (refundCard ? { categoryId, methodId: refundCard.id } : { categoryId, accountId })),
       ...(type === 'transfer' && { accountId, toAccountId }),
       // Added to an event's pot (an edited transaction keeps the event it was part of)
       ...(linked ? { eventId: linked.id, eventDate: linked.round } : {}),
@@ -354,7 +358,18 @@ export function EntryForm(props: {
         </>
       )}
 
-      {step === 'account' && <Chips items={liquidAccounts} value={accountId} onChange={setAccountId} />}
+      {step === 'account' && (
+        <>
+          <Chips items={liquidAccounts} value={accountId} onChange={setAccountId} />
+          {refundCards.length > 0 && (
+            <>
+              <p class="field-label">זיכוי לכרטיס אשראי</p>
+              <Chips items={refundCards} value={accountId} onChange={setAccountId} />
+              <p class="muted small">למשל החזרת מוצר: הסכום יורד מהחיוב הבא של הכרטיס ומשחרר מסגרת.</p>
+            </>
+          )}
+        </>
+      )}
 
       {step === 'from' && (
         <>
@@ -416,7 +431,7 @@ export function EntryForm(props: {
             <ReviewRow label="סכום" value={formatMoney(amount)} onClick={() => change('amount')} />
             {type !== 'transfer' && <ReviewRow label={type === 'expense' ? 'על מה' : 'מה נכנס'} value={name(categoryId)} onClick={() => change('category')} />}
             {type === 'expense' && <ReviewRow label="איך שילמת" value={name(methodId)} onClick={() => change('method')} />}
-            {type === 'income' && <ReviewRow label="לאן נכנס" value={name(accountId)} onClick={() => change('account')} />}
+            {type === 'income' && <ReviewRow label="לאן נכנס" value={refundCard ? `זיכוי ל${refundCard.name}` : name(accountId)} onClick={() => change('account')} />}
             {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => change('from')} />}
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
             <ReviewRow label="מתי" value={dayLabel(date, today)} onClick={() => change('when')} />

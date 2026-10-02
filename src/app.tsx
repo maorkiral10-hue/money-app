@@ -18,6 +18,8 @@ import { CalendarScreen, EventForm } from './screens/Calendar';
 import { EventDoneCard } from './components/EventDoneCard';
 import { VariableDueCard } from './components/VariableDueCard';
 import { EarlyRecordCard } from './components/EarlyRecordCard';
+import { CardChargeCard } from './components/CardChargeCard';
+import { cardChecksDue } from './data/cardCheck';
 import { RECORD_EARLY_EVENT } from './components/MoneyList';
 import { openOccurrences } from './data/recurring';
 import { awaitingActual, lastDayOf, potTotal, timeRoundOf, withAnswer } from './data/calendar';
@@ -392,6 +394,9 @@ export function App() {
     .flatMap(rec => openOccurrences(rec, today, data.startDate).map(occurrence => ({ rec, occurrence })))
     .sort((a, b) => a.occurrence.localeCompare(b.occurrence));
   const askVariable = now.getTime() >= snoozedUntil ? variableDue[0] : undefined;
+  // Card charges to check against what the card company really charged (after the changing amounts)
+  const cardsDue = cardChecksDue(data, today).filter(d => !laterIds.includes(`card|${d.card.id}|${d.charge.date}`));
+  const askCard = cardsDue[0];
   // Only the nearest time round can be recorded ahead, so no month is skipped by mistake
   const earlyRec = early ? data.recurring.find(r => r.id === early.recurringId) : undefined;
   const nearest = earlyRec ? openOccurrences(earlyRec, early!.occurrence, data.startDate)[0] : undefined;
@@ -466,7 +471,22 @@ export function App() {
               onDone={afterChange}
             />
           )}
-          {!askVariable && askEvent && !menuOpen && (
+          {!askVariable && askCard && !menuOpen && !earlyAsk && (
+            <CardChargeCard
+              key={`${askCard.card.id}|${askCard.charge.date}|${askCard.actual ?? ''}`}
+              db={db}
+              data={data}
+              card={askCard.card}
+              charge={askCard.charge}
+              actual={askCard.actual}
+              more={cardsDue.length - 1}
+              onLater={() => setLaterIds(ids => [...ids, `card|${askCard.card.id}|${askCard.charge.date}`])}
+              onDone={afterChange}
+              onEdit={tx => go({ name: 'entry', tx, from: tab })}
+              onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
+            />
+          )}
+          {!askVariable && !askCard && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

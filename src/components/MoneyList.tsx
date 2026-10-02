@@ -108,7 +108,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
           );
         }
         const tx = row.tx;
-        const card = tx.type === 'expense' && tx.methodId ? methods.get(tx.methodId) : undefined;
+        const card = tx.type !== 'transfer' && tx.methodId ? methods.get(tx.methodId) : undefined;
         // A card purchase: when the bank pays for it
         const charged = card?.kind === 'credit' && card.chargeDay ? nextChargeDate(tx.date, card.chargeDay) : undefined;
         const expected = isExpected(tx);
@@ -123,8 +123,15 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
               </div>
               <div class="muted small">
                 {[
-                  tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? name.get(tx.accountId!) : 'העברה',
-                  charged && (charged > props.today ? `תיגבה ב־${shortDate(charged)}` : `נגבתה ב־${shortDate(charged)}`),
+                  tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? (tx.methodId ? `זיכוי ל${name.get(tx.methodId)}` : name.get(tx.accountId!)) : 'העברה',
+                  charged &&
+                    (tx.type === 'income'
+                      ? charged > props.today
+                        ? `יורד מהחיוב של ${shortDate(charged)}`
+                        : `ירד מהחיוב של ${shortDate(charged)}`
+                      : charged > props.today
+                        ? `תיגבה ב־${shortDate(charged)}`
+                        : `נגבתה ב־${shortDate(charged)}`),
                   tx.recurringId &&
                     (changing
                       ? 'סכום משתנה · יתעדכן ביום'

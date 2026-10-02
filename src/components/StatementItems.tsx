@@ -5,7 +5,7 @@ import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 
-/** What a card charge is made of: each purchase or installment, and what was on the card at the start. */
+/** What a card charge is made of: each purchase or installment, refunds, and what was on the card at the start. */
 export function StatementItems(props: { data: AppData; items: StatementItem[]; today: string; onEdit: (tx: Transaction) => void }) {
   const { data } = props;
   const catName = (id?: string) => data.categories.find(c => c.id === id)?.name ?? '';
@@ -23,6 +23,7 @@ export function StatementItems(props: { data: AppData; items: StatementItem[]; t
               <div class="muted small">
                 {[
                   dayLabel(item.tx.date, props.today),
+                  item.tx.type === 'income' && 'זיכוי',
                   item.tx.recurringId && 'הוראת קבע',
                   item.installment && `תשלום ${item.installment.n} מתוך ${item.installment.of}`,
                   !item.tx.recurringId && item.tx.note,
@@ -31,7 +32,7 @@ export function StatementItems(props: { data: AppData; items: StatementItem[]; t
                   .join(' · ')}
               </div>
             </div>
-            <div class="amount expense">{formatMoney(-item.amount)}</div>
+            <div class={`amount ${item.amount < 0 ? 'income' : 'expense'}`}>{formatMoney(-item.amount, { sign: item.amount < 0 })}</div>
           </button>
         ) : (
           <div key={`opening-${i}`} class="tx">

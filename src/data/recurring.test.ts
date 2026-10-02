@@ -133,7 +133,7 @@ describe('deleting a category or payment method', () => {
     ];
     const txs: Transaction[] = [{ id: 't', type: 'expense', amount: 1, date: '2026-09-25', methodId: 'used', categoryId: 'c', createdAt: '', updatedAt: '' }];
     await putRecords(db, 'methods', methods);
-    const data = { accounts: [], methods, categories: [], transactions: txs, recurring: [], events: [], setupDone: true, startDate: '2026-09-24', openOnEntry: true, monthStartDay: 1, balanceChecks: [], checkEvery: 'never' as const, checkMode: 'together' as const, checkEveryByAccount: {}, checkTolerance: 0 };
+    const data = { accounts: [], methods, categories: [], transactions: txs, recurring: [], events: [], setupDone: true, startDate: '2026-09-24', openOnEntry: true, monthStartDay: 1, balanceChecks: [], checkEvery: 'never' as const, checkMode: 'together' as const, checkEveryByAccount: {}, checkTolerance: 0, cardChecks: [] };
     for (const id of ['used', 'unused', 'card']) await deleteSetting(db, data, 'methods', id);
     const left = await getAll<PaymentMethod>(db, 'methods');
     expect(left.map(m => [m.id, m.archived]).sort()).toEqual([['card', true], ['used', true]]);

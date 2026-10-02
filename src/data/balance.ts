@@ -38,6 +38,11 @@ export function splitInstallments(amount: number, n: number) {
 export function transactionEffects(tx: Transaction, methods: Map<string, PaymentMethod>): Effect[] {
   const txId = tx.id;
   if (tx.type === 'income') {
+    // A refund to a credit card takes that much off the card's next charge
+    const card = tx.methodId ? methods.get(tx.methodId) : undefined;
+    if (card?.kind === 'credit' && card.chargeDay) {
+      return [{ accountId: card.accountId, date: nextChargeDate(tx.date, card.chargeDay), amount: tx.amount, kind: 'credit', txId, methodId: card.id }];
+    }
     return tx.accountId ? [{ accountId: tx.accountId, date: tx.date, amount: tx.amount, kind: 'income', txId }] : [];
   }
   if (tx.type === 'transfer') {
@@ -140,9 +145,10 @@ export function summarize(ledger: Ledger, today: string): Summary {
   return { liquid, byAccount, goals, upcoming };
 }
 
-/** One line of a card's bill: a purchase (or one of its installments), or what was on the card at the start. */
+/** One line of a card's bill: a purchase (or one of its installments), a refund, or what was on the card at the start. */
 export interface StatementItem {
   tx?: Transaction;
+  /** Negative for a refund (זיכוי). */
   amount: number;
   installment?: { n: number; of: number };
   opening?: boolean;
@@ -171,7 +177,12 @@ export function cardStatements(ledger: Ledger, methodId: string): Statement[] {
     byDate.set(date, s);
   };
   for (const tx of ledger.transactions) {
-    if (tx.type !== 'expense' || tx.methodId !== methodId || tx.date < ledger.startDate) continue;
+    if (tx.methodId !== methodId || tx.date < ledger.startDate) continue;
+    if (tx.type === 'income') {
+      add(nextChargeDate(tx.date, card.chargeDay), { tx, amount: -tx.amount });
+      continue;
+    }
+    if (tx.type !== 'expense') continue;
     const of = Math.max(1, tx.installments ?? 1);
     const first = nextChargeDate(tx.date, card.chargeDay);
     splitInstallments(tx.amount, of).forEach((amount, i) =>
@@ -210,7 +221,8 @@ export function cardUsage(ledger: Ledger, today: string, now = today): CardUsage
     .filter(m => m.kind === 'credit')
     .map(card => {
       const own = pending.filter(e => e.methodId === card.id);
-      const used = -own.reduce((a, e) => a + e.amount, 0);
+      // More refunded than bought: nothing is used (the refund waits for the next charge)
+      const used = Math.max(0, -own.reduce((a, e) => a + e.amount, 0));
       const first = own.map(e => e.date).sort()[0];
       const lastEntry = ledger.transactions
         .filter(t => t.type === 'expense' && t.methodId === card.id && t.date <= today)

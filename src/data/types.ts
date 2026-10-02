@@ -68,7 +68,7 @@ export interface Transaction {
   amount: number;
   date: string;
   categoryId?: string;
-  /** Expenses: how it was paid. */
+  /** Expenses: how it was paid. Income: the credit card it was refunded to (זיכוי), instead of an account. */
   methodId?: string;
   /** Income: account it went into. Transfers: account it left. Expenses paid straight from a savings goal: the goal. */
   accountId?: string;
