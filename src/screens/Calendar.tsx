@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
-import { answerFor, potOf, potTotal, spanDays, timeRoundOf, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
+import { answerFor, splitSeries, potOf, potTotal, spanDays, timeRoundOf, dayHours, eventBalance, expandEvents, layoutDay, skipDay, weekday, WORK_DAYS, monthGrid, monthStart, periodRange, shiftPeriod, timeLabel, WEEKDAYS, weekStart, ZOOMS, type Zoom } from '../data/calendar';
 import { addDays, dayLabel, parseDate, toDateStr, todayStr, ymd } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
+import { moveEventLinks } from '../data/store';
 import { formatMoney } from '../data/money';
 import { MoneyLines, moneyRows, onCardStandingOrder, plannedMoney, type MoneyRow } from '../components/MoneyList';
 import { statsTransactions } from '../data/budget';
@@ -805,26 +806,32 @@ export function EventForm(props: {
     }
     await saveSeries();
   };
+  /** The event as the form now says, under an id and first day. */
+  const built = (id: string, start: string): CalendarEvent => ({
+    id,
+    date: start,
+    title: title.trim(),
+    type,
+    amount: type === 'none' ? 0 : amount,
+    note: note.trim() || undefined,
+    ...timing(),
+    settled: repeat === 'none' ? e?.settled : undefined,
+    repeat: repeat === 'none' ? undefined : repeat,
+    repeatUntil: repeat !== 'none' && repeatUntil ? repeatUntil : undefined,
+    repeatDays: repeat === 'days' ? repeatDays : undefined,
+    skipDates: repeat === 'none' ? undefined : e?.skipDates,
+    settledDates: repeat === 'none' ? undefined : e?.settledDates,
+    createdAt: e?.createdAt ?? new Date().toISOString(),
+  });
   const saveSeries = async () => {
     // A series keeps its first day unless the date was changed here
     const start = e?.repeat && props.occurrence && date === props.occurrence ? e.date : date;
-    const event: CalendarEvent = {
-      id: e?.id ?? crypto.randomUUID(),
-      date: start,
-      title: title.trim(),
-      type,
-      amount: type === 'none' ? 0 : amount,
-      note: note.trim() || undefined,
-      ...timing(),
-      settled: repeat === 'none' ? e?.settled : undefined,
-      repeat: repeat === 'none' ? undefined : repeat,
-      repeatUntil: repeat !== 'none' && repeatUntil ? repeatUntil : undefined,
-      repeatDays: repeat === 'days' ? repeatDays : undefined,
-      skipDates: repeat === 'none' ? undefined : e?.skipDates,
-      settledDates: repeat === 'none' ? undefined : e?.settledDates,
-      createdAt: e?.createdAt ?? new Date().toISOString(),
-    };
+    const event = built(e?.id ?? crypto.randomUUID(), start);
     await putRecords(props.db, 'events', [event]);
+    // A one-off event moved to another day takes the money already tied to it along
+    if (e && !e.repeat && e.date !== start) {
+      await moveEventLinks(props.db, t => (t.eventId === e.id && (t.eventDate ?? e.date) === e.date ? { eventId: e.id, eventDate: start } : undefined));
+    }
     // Back on the calendar, a one-off event's day is the one showing
     if (repeat === 'none' || !e) lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
     props.onDone(date);
@@ -844,6 +851,22 @@ export function EventForm(props: {
       createdAt: new Date().toISOString(),
     };
     await putRecords(props.db, 'events', [skipDay(e, props.occurrence), single]);
+    // The money tied to that time round goes with it
+    const round = props.occurrence;
+    await moveEventLinks(props.db, t => (t.eventId === e.id && t.eventDate === round ? { eventId: single.id, eventDate: single.date } : undefined));
+    lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
+    props.onDone(date);
+  };
+  // From this time on: the past stays as it was, the change applies from this time round
+  const saveFromHere = async () => {
+    if (!e || !props.occurrence) return;
+    const from = props.occurrence;
+    // From its very first time round, it's simply the whole series
+    if (from <= e.date) return saveSeries();
+    const [old, fresh] = splitSeries(e, from, built(crypto.randomUUID(), date));
+    await putRecords(props.db, 'events', [old, fresh]);
+    const shift = (d: string) => addDays(d, Math.round((Date.UTC(...dateParts(date)) - Date.UTC(...dateParts(from))) / 86_400_000));
+    await moveEventLinks(props.db, t => (t.eventId === e.id && (t.eventDate ?? '') >= from ? { eventId: fresh.id, eventDate: shift(t.eventDate!) } : undefined));
     lastView = { zoom: lastView?.zoom === 'week' ? 'week' : 'month', selected: date };
     props.onDone(date);
   };
@@ -978,13 +1001,14 @@ export function EventForm(props: {
         <div class="event-popup" role="dialog" aria-modal="true">
           <div class="event-popup-backdrop" onClick={() => setAskScope(false)} />
           <div class="card pending event-popup-card">
-            <h2>לשנות רק את הפעם הזו, או את כל החזרות?</h2>
+            <h2>לשנות רק את הפעם הזו, או מעכשיו והלאה?</h2>
             <div class="scope-buttons">
               <button onClick={saveOne}>רק הפעם הזו ({dayLabel(props.occurrence, todayStr())})</button>
-              <button class="secondary" onClick={saveSeries}>
-                כל החזרות
+              <button class="secondary" onClick={saveFromHere}>
+                מהפעם הזו והלאה
               </button>
             </div>
+            <p class="muted small">הפעמים שכבר היו נשארות כמו שהן.</p>
             <button class="link small event-popup-later" onClick={() => setAskScope(false)}>
               ביטול
             </button>

@@ -275,6 +275,22 @@ export function ongoingEvents(events: CalendarEvent[], date: string, type: 'inco
   });
 }
 
+/**
+ * Changing a repeating event from one time round on: the old series stops the day before (keeping its
+ * past days, answers and skipped days), and the changed one carries on from `fresh.date`, taking the
+ * answers and skipped days from then on (moved along if its first day moved).
+ */
+export function splitSeries(old: CalendarEvent, from: string, fresh: CalendarEvent): [CalendarEvent, CalendarEvent] {
+  const shift = Math.round((Date.UTC(...ymdParts(fresh.date)) - Date.UTC(...ymdParts(from))) / 86_400_000);
+  const pick = <T>(rec: Record<string, T> | undefined, later: boolean) =>
+    rec && Object.fromEntries(Object.entries(rec).filter(([d]) => (d >= from) === later).map(([d, v]) => [later ? addDays(d, shift) : d, v]));
+  const list = (days: string[] | undefined, later: boolean) => days?.filter(d => (d >= from) === later).map(d => (later ? addDays(d, shift) : d));
+  return [
+    { ...old, repeatUntil: addDays(from, -1), settledDates: pick(old.settledDates, false), skipDates: list(old.skipDates, false) },
+    { ...fresh, settledDates: fresh.repeat ? pick(old.settledDates, true) : undefined, skipDates: fresh.repeat ? list(old.skipDates, true) : undefined },
+  ];
+}
+
 /** Sunday to Thursday. */
 export const WORK_DAYS = [0, 1, 2, 3, 4];
 

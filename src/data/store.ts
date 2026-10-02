@@ -147,6 +147,23 @@ export async function recordEarly(db: IDBDatabase, rec: Recurring, occurrence: s
   });
 }
 
+/**
+ * Moves the money tied to calendar events (their pots) when an event changes: `change` says, for each
+ * transaction, which event and time round it now belongs to (nothing: leave it). One transaction for all.
+ */
+export async function moveEventLinks(db: IDBDatabase, change: (t: Transaction) => Pick<Transaction, 'eventId' | 'eventDate'> | undefined) {
+  await run(db, 'transactions', 'readwrite', tx => {
+    const store = tx.objectStore('transactions');
+    const req = store.getAll();
+    req.onsuccess = () => {
+      for (const t of req.result as Transaction[]) {
+        const moved = t.eventId ? change(t) : undefined;
+        if (moved) store.put({ ...t, ...moved });
+      }
+    };
+  });
+}
+
 /** Variable items whose date has come: the user says how much it really was (or null: it didn't happen). */
 export async function resolveOccurrence(db: IDBDatabase, rec: Recurring, occurrence: string, amount: number | null) {
   await run(db, ['transactions', 'recurring'], 'readwrite', tx => {

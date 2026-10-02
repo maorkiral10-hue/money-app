@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ongoingEvents, potTotal, spanDays, awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
+import { splitSeries, ongoingEvents, potTotal, spanDays, awaitingActual, dayHours, eventBalance, expandEvents, occurrencesIn, skipDay, withAnswer, WORK_DAYS, eventEnd, eventTotals, layoutDay, monthGrid, periodRange, shiftPeriod, weekStart } from './calendar';
 import { migrateSnapshot } from './migrations';
 import type { Snapshot } from './snapshot';
 import type { CalendarEvent } from './types';
@@ -136,5 +136,17 @@ describe('calendar', () => {
     expect(ongoingEvents([{ ...trip, settled: { at: '' } }], '2026-10-11', 'expense')).toEqual([]);
     // What it came to is the pot
     expect(eventBalance([{ ...trip, settled: { at: '' } }], txs, '2026-10-01', '2026-10-31')).toMatchObject({ expected: -3_000_00, actual: -1_350_00 });
+  });
+
+  it('changing a repeating event from one time on leaves its past as it was', () => {
+    // A class every Tuesday from 1 September, answered for the 8th; the 22nd taken out
+    const gym = { ...ev('2026-09-01', 'expense', 30_00), id: 'gym', repeat: 'weekly' as const, settledDates: { '2026-09-08': { at: '' } }, skipDates: ['2026-09-22'] };
+    // From 6 October it moves to Wednesdays (the 7th)
+    const [old, fresh] = splitSeries(gym, '2026-10-06', { ...gym, id: 'gym2', date: '2026-10-07', settledDates: undefined, skipDates: undefined });
+    expect(old.repeatUntil).toBe('2026-10-05');
+    expect(expandEvents([old, fresh], '2026-09-01', '2026-10-21').map(e => e.date)).toEqual(['2026-09-01', '2026-09-08', '2026-09-15', '2026-09-29', '2026-10-07', '2026-10-14', '2026-10-21']);
+    // Nothing past is asked about again
+    expect(awaitingActual([old, fresh], new Date(2026, 9, 6, 12)).map(e => e.date)).toEqual(['2026-09-01', '2026-09-15', '2026-09-29']);
+    expect(old.settledDates).toEqual({ '2026-09-08': { at: '' } });
   });
 });
