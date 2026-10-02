@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'preact/hooks';
 import { ongoingEvents, timeRoundOf } from '../data/calendar';
 import { Chips } from '../components/inputs';
-import { cardUsage } from '../data/balance';
+import { cardUsage, nextChargeDate, splitInstallments } from '../data/balance';
+import { dayInMonth } from '../data/dates';
 import { deleteRecord, putRecords, setMeta } from '../data/db';
 import { addDays, dayLabel, todayStr } from '../data/dates';
 import { formatMoney, moneyInputText, parseMoney } from '../data/money';
@@ -164,8 +165,15 @@ export function EntryForm(props: {
   const isCredit = type === 'expense' && method?.kind === 'credit';
   // What the card's limit will have left once this purchase is saved (a purchase dated later doesn't use it yet)
   const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
-  const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? tx.amount : 0;
-  const limitLeft = usage?.available !== undefined && date <= today ? usage.available + alreadyCounted - amount : undefined;
+  // What of a purchase still takes up the limit: the payments the card hasn't been charged for yet (one recorded late,
+  // for a charge that already went out, takes up nothing)
+  const unpaid = (on: string, sum: number, payments = 1) => {
+    if (!method?.chargeDay) return sum;
+    const first = nextChargeDate(on, method.chargeDay);
+    return splitInstallments(sum, Math.max(1, payments)).filter((_, i) => dayInMonth(first, i, method.chargeDay!) > today).reduce((a, p) => a + p, 0);
+  };
+  const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? unpaid(tx.date, tx.amount, tx.installments) : 0;
+  const limitLeft = usage?.available !== undefined && date <= today ? usage.available + alreadyCounted - unpaid(date, amount, isCredit ? installments : 1) : undefined;
   const name = (id?: string) => [...accounts, ...methods, ...categories].find(x => x.id === id)?.name ?? '';
   // Cards a refund can go back to (they need a charge day: that's when it comes off)
   const refundCards = methods.filter(m => m.kind === 'credit' && m.chargeDay);
