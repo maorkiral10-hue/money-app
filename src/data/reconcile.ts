@@ -49,6 +49,12 @@ const KEEP = 60;
 export const appBalance = (ledger: Ledger, accountId: string, today: string) =>
   summarize(ledger, today).byAccount.find(b => b.account.id === accountId)?.balance ?? 0;
 
+/** Takes one check out of the history (by its place in it, newest first): done by mistake, or just a try. */
+export async function deleteCheck(db: IDBDatabase, index: number) {
+  const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+  await setMeta(db, 'balanceChecks', all.filter((_, i) => i !== index));
+}
+
 export async function logCheck(db: IDBDatabase, check: BalanceCheck) {
   const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
   await setMeta(db, 'balanceChecks', [check, ...all].slice(0, KEEP));
@@ -160,7 +166,10 @@ export async function correctBalance(
   await run(db, ['categories', 'transactions', 'meta'], 'readwrite', tx => {
     tx.objectStore('categories').put(category);
     tx.objectStore('transactions').put(gapTx);
-    tx.objectStore('meta').put([check, ...all].slice(0, KEEP), 'balanceChecks');
+    // The comparison just logged becomes this record, not a second line for the same check
+    const same = all.findIndex(c => c.accountId === account.id && c.date === today && c.real === real && c.app === app && c.result === 'gap');
+    const rest = same >= 0 ? all.filter((_, i) => i !== same) : all;
+    tx.objectStore('meta').put([check, ...rest].slice(0, KEEP), 'balanceChecks');
   });
 }
 

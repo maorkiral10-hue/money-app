@@ -5,7 +5,7 @@ import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, checkMark, checkStatus, correctBalance, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { appBalance, checkMark, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -258,6 +258,18 @@ export function BalanceCheck(props: {
                 const m = checkMark(c.real, c.app, data.checkTolerance);
                 return <div class={m === 'exact' ? 'inc' : m === 'minor' ? 'minor' : 'exp'}>{m === 'exact' ? '✓' : m === 'minor' ? '✓✗' : '✗'}</div>;
               })()}
+              <button
+                class="link small check-delete"
+                aria-label="מחיקת הבדיקה"
+                onClick={async () => {
+                  const note = c.result === 'corrected' ? '\nהפעולה "לא מזוהה" שנרשמה בה נשארת ברשימה (אפשר למחוק אותה שם).' : '';
+                  if (!confirm(`למחוק מההיסטוריה את הבדיקה של ${name(c.accountId)} מ${dayLabel(c.date, today)}?${note}`)) return;
+                  await deleteCheck(props.db, i);
+                  props.onChange();
+                }}
+              >
+                ✕
+              </button>
             </div>
           ))}
         </div>

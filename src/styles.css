@@ -617,3 +617,6 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 /* Recording something from before a check: part of its unexplained gap? */
 .gap-ask { margin: 10px 0; }
 .gap-ask p { margin: 0 0 8px; }
+
+/* Taking a check out of the history */
+.check-delete { margin: 0 8px 0 0; padding: 4px 6px; color: var(--muted, #888); }
