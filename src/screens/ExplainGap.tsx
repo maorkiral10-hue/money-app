@@ -48,7 +48,7 @@ export function ExplainGap(props: {
       updatedAt: now,
     };
     try {
-      await explainGap(props.db, gap, t);
+      await explainGap(props.db, gap, t.amount, { put: t });
       props.onSaved(t);
     } catch (e) {
       setBusy(false);

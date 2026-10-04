@@ -9,7 +9,7 @@ import { formatMoney, moneyInputText, parseMoney } from '../data/money';
 import { summarize } from '../data/balance';
 import { resolvePreset, type QuickPreset } from '../data/quick';
 import type { AppData } from '../data/store';
-import { explainGap, gapFor } from '../data/reconcile';
+import { explainGap, gapForChange } from '../data/reconcile';
 import type { Transaction, TxType } from '../data/types';
 
 type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'review';
@@ -259,8 +259,9 @@ export function EntryForm(props: {
       // Which card charge it went into, as said at the charge's check: kept while it's the same purchase on the same card
       ...(tx?.chargeDate && tx.date === date && tx.methodId === (type === 'expense' ? methodId : refundCard?.id) && { chargeDate: tx.chargeDate }),
   });
-  // Something new from before a check that left an unexplained gap: is it part of that gap?
-  const gap = !tx && valid && step === 'review' ? gapFor(data, build('')) : undefined;
+  // Something new, or a corrected amount, from before a check that left an unexplained gap: does it explain part of it?
+  const gapMatch = valid && step === 'review' ? gapForChange(data, tx, build('')) : undefined;
+  const gap = gapMatch?.gap;
   const [gapAnswer, setGapAnswer] = useState<{ id: string; yes: boolean }>();
   const partOfGap = gap && gapAnswer?.id === gap.id ? gapAnswer.yes : undefined;
   const gapPlace = gap && data.accounts.find(a => a.id === (gap.methodId ? data.methods.find(m => m.id === gap.methodId)?.accountId : gap.accountId))?.name;
@@ -272,7 +273,7 @@ export function EntryForm(props: {
     const record = build(now);
     // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
     try {
-      if (gap && partOfGap) await explainGap(props.db, gap, record);
+      if (gapMatch && partOfGap) await explainGap(props.db, gapMatch.gap, gapMatch.by, { put: record });
       else await putRecords(props.db, 'transactions', [record]);
       if (type === 'expense' && methodId && !paidFromGoal) await setMeta(props.db, 'lastMethodId', methodId);
       await props.onSaved(record);
@@ -282,9 +283,17 @@ export function EntryForm(props: {
     }
   };
 
-  const remove = async () => {
-    if (!tx || !confirm('למחוק את התנועה?')) return;
-    await deleteRecord(props.db, 'transactions', tx.id);
+  // Deleting something from before a check (recorded twice, say) may explain its gap: then it's asked
+  const [askRemove, setAskRemove] = useState(false);
+  const removeGap = tx ? gapForChange(data, tx, undefined) : undefined;
+  const remove = async (fromGap?: boolean) => {
+    if (!tx) return;
+    if (fromGap === undefined) {
+      if (removeGap) return setAskRemove(true);
+      if (!confirm('למחוק את התנועה?')) return;
+    }
+    if (fromGap && removeGap) await explainGap(props.db, removeGap.gap, removeGap.by, { remove: tx.id });
+    else await deleteRecord(props.db, 'transactions', tx.id);
     props.onSaved();
   };
 
@@ -461,7 +470,8 @@ export function EntryForm(props: {
           {gap && (
             <div class="card gap-ask">
               <p>
-                יש פער לא מזוהה של <strong>{formatMoney(gap.amount)}</strong> מהבדיקה מול {gapPlace} ({dayLabel(gap.date, today)}). {type === 'expense' ? 'ההוצאה' : 'ההכנסה'} הזו חלק ממנו?
+                יש פער לא מזוהה של <strong>{formatMoney(gap.amount)}</strong> מהבדיקה מול {gapPlace} ({dayLabel(gap.date, today)}).{' '}
+                {tx ? `התיקון (${formatMoney(gapMatch!.by)}) מסביר חלק ממנו?` : `${type === 'expense' ? 'ההוצאה' : 'ההכנסה'} הזו חלק ממנו?`}
               </p>
               <div class="scope-buttons">
                 <button class={partOfGap === true ? '' : 'secondary'} onClick={() => setGapAnswer({ id: gap.id, yes: true })}>
@@ -473,11 +483,11 @@ export function EntryForm(props: {
               </div>
               <p class="muted small">
                 {partOfGap === true
-                  ? gap.amount - amount > 0
-                    ? `הפער יקטן ל־${formatMoney(gap.amount - amount)}, והיתרה תישאר כמו בבנק.`
+                  ? gap.amount - gapMatch!.by > 0
+                    ? `הפער יקטן ל־${formatMoney(gap.amount - gapMatch!.by)}, והיתרה תישאר כמו בבנק.`
                     : 'הפער ייסגר לגמרי, והיתרה תישאר כמו בבנק.'
                   : partOfGap === false
-                    ? `תירשם כרגיל, והיתרה באפליקציה תרד ב־${formatMoney(amount)}.`
+                    ? `${tx ? 'יישמר' : 'תירשם'} כרגיל, והיתרה באפליקציה ${gap.type === 'expense' ? 'תרד' : 'תעלה'} ב־${formatMoney(gapMatch!.by)}.`
                     : 'אם כן, הסכום יורד מה"לא מזוהה" ולא נספר פעמיים.'}
               </p>
             </div>
@@ -510,9 +520,27 @@ export function EntryForm(props: {
             שמור
           </button>
           {tx && (
-            <button class="danger" onClick={remove}>
+            <button class="danger" onClick={() => remove()}>
               מחק תנועה
             </button>
+          )}
+          {askRemove && removeGap && (
+            <div class="card gap-ask">
+              <p>
+                יש פער לא מזוהה של <strong>{formatMoney(removeGap.gap.amount)}</strong> מהבדיקה מול{' '}
+                {data.accounts.find(a => a.id === (removeGap.gap.methodId ? data.methods.find(m => m.id === removeGap.gap.methodId)?.accountId : removeGap.gap.accountId))?.name} (
+                {dayLabel(removeGap.gap.date, today)}). המחיקה מסבירה חלק ממנו (למשל, נרשם פעמיים)?
+              </p>
+              <div class="scope-buttons">
+                <button onClick={() => remove(true)}>כן, למחוק ולהקטין את הפער</button>
+                <button class="secondary" onClick={() => remove(false)}>
+                  למחוק בלי לגעת בפער
+                </button>
+              </div>
+              <button class="link small" onClick={() => setAskRemove(false)}>
+                ביטול
+              </button>
+            </div>
           )}
         </>
       )}

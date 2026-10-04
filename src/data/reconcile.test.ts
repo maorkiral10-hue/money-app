@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, checkDue, checkMark, checkStatus, correctBalance, explainGap, gapFor, type BalanceCheck } from './reconcile';
+import { appBalance, checkDue, checkMark, checkStatus, correctBalance, explainGap, gapFor, gapForChange, type BalanceCheck } from './reconcile';
 import type { Account, Category, Transaction } from './types';
 
 let n = 0;
@@ -40,13 +40,20 @@ describe('checking the balance against the bank', () => {
     expect(gapFor(await data(), { ...dentist, date: '2026-10-05' })).toBeUndefined();
     expect(gapFor(await data(), { ...dentist, methodId: 'cash' })).toBeUndefined();
     expect(gapFor(await data(), { ...dentist, amount: 400_00 })).toBeUndefined();
-    await explainGap(db, gap, dentist);
+    // A corrected amount, or something deleted, only when it moves the balance the gap's way
+    const shop: Transaction = { ...dentist, id: 's', amount: 100_00 };
+    expect(gapForChange(await data(), shop, { ...shop, amount: 120_00 })).toMatchObject({ gap: { id: gap.id }, by: 20_00 });
+    expect(gapForChange(await data(), shop, { ...shop, amount: 80_00 })).toBeUndefined();
+    expect(gapForChange(await data(), shop, undefined)).toBeUndefined();
+    const salary: Transaction = { ...dentist, id: 'pay', type: 'income', methodId: undefined, accountId: 'bank', amount: 100_00 };
+    expect(gapForChange(await data(), salary, undefined)?.by).toBe(100_00);
+    await explainGap(db, gap, 50_00, { put: dentist });
     let txs = (await data()).transactions;
     expect(txs.find(t => t.id === gap.id)?.amount).toBe(300_00);
     const ledger: Ledger = { accounts: [bank], methods, startDate: '2026-09-01', transactions: txs };
     expect(appBalance(ledger, 'bank', '2026-10-04')).toBe(650_00);
     // The rest explained: the gap is gone
-    await explainGap(db, txs.find(t => t.id === gap.id)!, { ...dentist, id: 'rent', amount: 300_00 });
+    await explainGap(db, txs.find(t => t.id === gap.id)!, 300_00, { put: { ...dentist, id: 'rent', amount: 300_00 } });
     txs = (await data()).transactions;
     expect(txs.map(t => t.id).sort()).toEqual(['d', 'rent']);
   });

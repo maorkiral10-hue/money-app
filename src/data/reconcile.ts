@@ -73,31 +73,52 @@ function touches(t: Transaction, methods: PaymentMethod[]): { accountId: string;
   return { accountId: m.accountId, date: t.date };
 }
 
-/**
- * Something remembered after a check left an unexplained gap: if it's the same direction (money out for a
- * gap of missing money), from the same account, from before that check, and fits in the gap — the gap it
- * may be part of (the first check after it). Otherwise nothing: it's simply new.
- */
-export function gapFor(data: { transactions: Transaction[]; categories: Category[]; methods: PaymentMethod[] }, t: Transaction) {
-  if (isGapTx(t, data.categories)) return undefined;
-  const where = touches(t, data.methods);
-  if (!where) return undefined;
-  return data.transactions
-    .filter(g => g.id !== t.id && g.type === t.type && isGapTx(g, data.categories) && g.date >= where.date && t.amount <= g.amount)
-    .filter(g => touches(g, data.methods)?.accountId === where.accountId)
-    .sort((a, b) => a.date.localeCompare(b.date))[0];
-}
+/** What a transaction does to its account's balance: money out is negative. */
+const signed = (t: Transaction) => (t.type === 'expense' ? -t.amount : t.amount);
 
 /**
- * Part of an unexplained gap turned out to be `t`: it's recorded, and the gap shrinks by it (gone once
- * nothing's left), so the balance stays as the bank showed and only the explanation changes.
+ * A change remembered after a check left an unexplained gap — something new (`before` missing), a
+ * corrected amount, or a deletion (`after` missing, e.g. recorded twice): if it moves the same account's
+ * balance the way the gap did (less money for a gap of missing money, more for extra), from before that
+ * check, and by no more than the gap — the gap it may explain (the first check after it) and by how much.
  */
-export async function explainGap(db: IDBDatabase, gap: Transaction, t: Transaction) {
+export function gapForChange(
+  data: { transactions: Transaction[]; categories: Category[]; methods: PaymentMethod[] },
+  before: Transaction | undefined,
+  after: Transaction | undefined,
+): { gap: Transaction; by: number } | undefined {
+  if ((before && isGapTx(before, data.categories)) || (after && isGapTx(after, data.categories))) return undefined;
+  const was = before && touches(before, data.methods);
+  const now = after && touches(after, data.methods);
+  if ((before && !was) || (after && !now) || (was && now && was.accountId !== now.accountId)) return undefined;
+  const where = (now ?? was)!;
+  if (!where) return undefined;
+  const latest = was && now && was.date > now.date ? was.date : where.date;
+  const change = (after ? signed(after) : 0) - (before ? signed(before) : 0);
+  if (change === 0) return undefined;
+  const by = Math.abs(change);
+  const gap = data.transactions
+    .filter(g => isGapTx(g, data.categories) && g.date >= latest && by <= g.amount && (change < 0) === (g.type === 'expense'))
+    .filter(g => touches(g, data.methods)?.accountId === where.accountId)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  return gap && { gap, by };
+}
+
+/** Something new that may be part of a gap (see gapForChange). */
+export const gapFor = (data: Parameters<typeof gapForChange>[0], t: Transaction) => gapForChange(data, undefined, t)?.gap;
+
+/**
+ * Part of an unexplained gap turned out to be a change (something new or corrected, `put`, or something
+ * deleted, `remove`): it's saved, and the gap shrinks by `by` (gone once nothing's left), so the balance
+ * stays as the bank showed and only the explanation changes.
+ */
+export async function explainGap(db: IDBDatabase, gap: Transaction, by: number, change: { put?: Transaction; remove?: string }) {
   await run(db, 'transactions', 'readwrite', tx => {
     const store = tx.objectStore('transactions');
-    store.put(t);
-    if (t.amount >= gap.amount) store.delete(gap.id);
-    else store.put({ ...gap, amount: gap.amount - t.amount, updatedAt: new Date().toISOString() });
+    if (change.put) store.put(change.put);
+    if (change.remove) store.delete(change.remove);
+    if (by >= gap.amount) store.delete(gap.id);
+    else store.put({ ...gap, amount: gap.amount - by, updatedAt: new Date().toISOString() });
   });
 }
 
