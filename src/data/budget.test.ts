@@ -59,6 +59,12 @@ describe('budget', () => {
     expect(statsTransactions(data).find(t => t.categoryId === 'saving')!.type).toBe('transfer');
   });
 
+  it('a category marked as savings is kept out of spending, without the budget', () => {
+    const data = base({ transactions: txs, categories: [{ id: 'saving', name: 'קופת גמל', kind: 'expense', order: 0, savings: true }] });
+    expect(statsTransactions(data).find(t => t.categoryId === 'saving')!.type).toBe('transfer');
+    expect(statsTransactions(data).filter(t => t.type === 'expense').every(t => t.categoryId !== 'saving')).toBe(true);
+  });
+
   it('suggests limits from the finished months', () => {
     const u = usualSpending(base({ transactions: txs }), '2026-09-21');
     expect([u.basedOnFinishedMonths, u.overall, u.byCategory.food]).toEqual([1, 1_400_00, 400_00]);

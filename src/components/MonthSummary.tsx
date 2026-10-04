@@ -2,7 +2,7 @@ import { useMemo, useState } from 'preact/hooks';
 import { AnimatedMoney } from './AnimatedMoney';
 import { CardLine } from './CardLine';
 import { cardStatements, cardUsage } from '../data/balance';
-import { statsTransactions } from '../data/budget';
+import { isSaving, savingsCategoryIds, statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
 import { monthsSince, monthStats, periodEnd, periodKey, periodStart } from '../data/dashboard';
 import { dayLabel, parseDate, todayStr } from '../data/dates';
@@ -27,7 +27,7 @@ export function periodTitle(key: string, startDay: number, withYear = true) {
     : `${shortDate(periodStart(key, startDay))}–${shortDate(periodEnd(key, startDay))}`;
 }
 
-type Open = 'income' | 'expenses' | null;
+type Open = 'income' | 'expenses' | 'savings' | null;
 
 /** Share of a total, "<1%" rather than a misleading 0% for a small real amount. */
 const pct = (part: number, total: number) => {
@@ -72,7 +72,7 @@ export function MonthSummary(props: {
 
   // Standing orders and fixed income: the ones recorded this month, and the ones still to come in it. They
   // happen for sure (recorded automatically on their day), so they count in the month's totals already.
-  const savingsId = data.budget?.savingsMode === 'separate' ? data.budget.savingsCategoryId : undefined;
+  const savingsIds = useMemo(() => savingsCategoryIds(data), [data]);
   const coming = useMemo(
     () => (end > today ? expectedTransactions(data.recurring, data.transactions, today, end, data.startDate).filter(t => t.date >= start) : []),
     [data, today, start, end],
@@ -80,20 +80,20 @@ export function MonthSummary(props: {
   const fixedOf = (type: 'income' | 'expense') =>
     [
       ...txs.filter(t => t.type === type && t.recurringId && t.date >= start && t.date <= end),
-      ...coming.filter(t => t.type === type && !(type === 'expense' && t.categoryId === savingsId)),
+      ...coming.filter(t => t.type === type && !isSaving(t, savingsIds)),
     ].sort((a, b) => a.date.localeCompare(b.date));
   const fixedSpend = fixedOf('expense');
   const fixedIncome = fixedOf('income');
   const sum = (list: Transaction[]) => list.reduce((a, t) => a + t.amount, 0);
-  // Money put into savings (when the budget keeps savings apart): not spending, so not in the totals, but
-  // shown so it's never missed — standing orders like a pension fund and one-off deposits alike
-  const savings = savingsId
-    ? [
-        ...data.transactions.filter(t => t.type === 'expense' && t.categoryId === savingsId && t.date >= start && t.date <= end),
-        ...coming.filter(t => t.type === 'expense' && t.categoryId === savingsId),
-      ].sort((a, b) => a.date.localeCompare(b.date))
-    : [];
-  const comingSpend = sum(coming.filter(t => t.type === 'expense' && t.categoryId !== savingsId));
+  // Money put into savings: not spending, so not in its totals, but a tile of its own so it's never missed —
+  // standing orders like a provident fund and one-off deposits alike
+  const savedSoFar = sum(data.transactions.filter(t => isSaving(t, savingsIds) && t.date >= start && t.date <= end));
+  const savings = [
+    ...data.transactions.filter(t => isSaving(t, savingsIds) && t.date >= start && t.date <= end),
+    ...coming.filter(t => isSaving(t, savingsIds)),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  const comingSaving = sum(coming.filter(t => isSaving(t, savingsIds)));
+  const comingSpend = sum(coming.filter(t => t.type === 'expense' && !isSaving(t, savingsIds)));
   const comingIncome = sum(coming.filter(t => t.type === 'income'));
   // The tiles show what really went out or came in so far; the breakdown adds what's sure to come (standing orders)
   const spendTotal = stats.expenses + comingSpend;
@@ -187,7 +187,7 @@ export function MonthSummary(props: {
       </div>
       )}
 
-      <div class="stat-row two">
+      <div class={`stat-row ${savingsIds.size ? '' : 'two'}`}>
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>
           <div class="small inc">הכנסות</div>
           <div class="stat-value inc">
@@ -202,11 +202,53 @@ export function MonthSummary(props: {
           </div>
           <div class="tap-hint">{open === 'expenses' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
         </button>
+        {savingsIds.size > 0 && (
+          <button class={`stat tappable ${open === 'savings' ? 'on sav-bg' : ''}`} onClick={() => toggle('savings')} aria-expanded={open === 'savings'}>
+            <div class="small sav">חיסכון</div>
+            <div class="stat-value sav">
+              <AnimatedMoney value={savedSoFar} />
+            </div>
+            <div class="tap-hint">{open === 'savings' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
+          </button>
+        )}
       </div>
+
+      {open === 'savings' && (
+        <div class="card breakdown-panel sav-panel">
+          {savings.length === 0 && <p class="muted small">לא עבר כסף לחיסכון בחודש הזה</p>}
+          {comingSaving > 0 && (
+            <div class="panel-split">
+              <div class="line">
+                <span>עבר עד היום</span>
+                <span class="sav">{formatMoney(savedSoFar)}</span>
+              </div>
+              <div class="line">
+                <span>עוד יעבור (קבועות)</span>
+                <span class="sav">{formatMoney(comingSaving)}</span>
+              </div>
+            </div>
+          )}
+          {savings.map(t => {
+            const upcoming = t.id.startsWith('expected:');
+            return (
+              <button key={t.id} class="tx" onClick={() => (upcoming ? askRecordEarly(t) : props.onEdit(t))}>
+                <div>
+                  <div>{t.recurringId ? t.note : name(t.categoryId ?? '')}</div>
+                  <div class="muted small">
+                    {[t.recurringId && 'הוראת קבע', upcoming ? `יעבור ב־${shortDate(t.date)}` : dayLabel(t.date, today), !t.recurringId && t.note].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <span class="sav">{formatMoney(t.amount)}</span>
+              </button>
+            );
+          })}
+          <p class="muted small">כסף שעבר לחיסכון יורד מהחשבון, אבל הוא עדיין שלך: הוא לא נספר בהוצאות.</p>
+        </div>
+      )}
 
       {open === 'expenses' && (
         <div class="card breakdown-panel exp-panel">
-          {spendingRows.length === 0 && fixedSpend.length === 0 && savings.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
+          {spendingRows.length === 0 && fixedSpend.length === 0 && <p class="muted small">אין הוצאות בחודש הזה</p>}
           {comingSpend > 0 && (
             // What really went out so far, and the standing orders still sure to go out this month
             <div class="panel-split">
@@ -221,40 +263,6 @@ export function MonthSummary(props: {
             </div>
           )}
           <FixedGroup type="expense" list={fixedSpend} total={spendTotal} />
-          {savings.length > 0 && (
-            <div>
-              <button class="bar-row" onClick={() => setOpenCategory(openCategory === 'savings' ? null : 'savings')} aria-expanded={openCategory === 'savings'}>
-                <div class="line">
-                  <span>
-                    <span class="fixed-title">חיסכון</span> <span class="tag">לא נספר בהוצאות</span>
-                  </span>
-                  <span class="muted">{formatMoney(sum(savings))}</span>
-                </div>
-                <div class="bar">
-                  <span class="savings-bar" style={{ width: `${Math.min(1, sum(savings) / maxSpend) * 100}%` }} />
-                </div>
-              </button>
-              {openCategory === 'savings' && (
-                <div class="bar-detail">
-                  {savings.map(t => {
-                    const upcoming = t.id.startsWith('expected:');
-                    const Line = 'button';
-                    return (
-                      <Line key={t.id} class="tx" onClick={() => (upcoming ? askRecordEarly(t) : props.onEdit(t))}>
-                        <div>
-                          <div>{t.recurringId ? t.note : name(t.categoryId ?? '')}</div>
-                          <div class="muted small">
-                            {[t.recurringId && 'הוראת קבע', upcoming ? `יירד ב־${shortDate(t.date)}` : dayLabel(t.date, today), !t.recurringId && t.note].filter(Boolean).join(' · ')}
-                          </div>
-                        </div>
-                        <span class="small muted">{formatMoney(t.amount)}</span>
-                      </Line>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
           {spendingRows.map(c => (
             <div key={c.categoryId}>
               <button class="bar-row" onClick={() => setOpenCategory(openCategory === c.categoryId ? null : c.categoryId)}>

@@ -620,3 +620,12 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 
 /* Taking a check out of the history */
 .check-delete { margin: 0 8px 0 0; padding: 4px 6px; color: var(--muted, #888); }
+
+/* Savings: neither spending (red) nor income (green) */
+:root { --sav: #c2660a; --sav-soft: #fdf1e3; }
+@media (prefers-color-scheme: dark) { :root { --sav: #f5a14a; --sav-soft: #2e2214; } }
+.sav { color: var(--sav); }
+.stat.on.sav-bg { background: var(--sav-soft); border-color: var(--sav); }
+.sav-panel { background: var(--sav-soft); border-color: var(--sav); }
+.savings-toggle { margin: 0; padding: 4px 10px; font-size: .8em; width: auto; background: none; color: var(--muted, #888); border: 1px solid var(--line); border-radius: 999px; font-weight: 500; }
+.savings-toggle.on { background: var(--sav-soft); color: var(--sav); border-color: var(--sav); }

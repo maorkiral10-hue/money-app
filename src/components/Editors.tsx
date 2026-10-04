@@ -169,8 +169,23 @@ export function CategoriesEditor(props: {
               onClick={() => set(c.id, { color: nextColor(categoryColor(c.id, props.items)) })}
             />
             <input type="text" value={c.name} onInput={e => set(c.id, { name: e.currentTarget.value })} />
+            {props.kind === 'expense' && (
+              <button
+                type="button"
+                class={`savings-toggle ${c.savings ? 'on' : ''}`}
+                aria-pressed={!!c.savings}
+                onClick={() => set(c.id, { savings: !c.savings })}
+              >
+                חיסכון
+              </button>
+            )}
           </Row>
         ))}
+      {props.kind === 'expense' && (
+        <p class="muted small">
+          קטגוריה שמסומנת "חיסכון" (למשל קופת גמל או פיקדון) לא נספרת בהוצאות. בסיכום החודש היא מופיעה בנפרד, בכתום.
+        </p>
+      )}
       <button
         type="button"
         class="secondary"

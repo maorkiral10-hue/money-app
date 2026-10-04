@@ -59,6 +59,11 @@ export interface Category {
   archived?: boolean;
   /** Chosen color; when missing, one is given by the category's place in its list (see data/colors.ts). */
   color?: string;
+  /**
+   * Expense categories: money put into savings (a pension or provident fund, a deposit). It leaves the
+   * account like any expense, but isn't spending: the month shows it apart, as savings.
+   */
+  savings?: boolean;
 }
 
 export type TxType = 'expense' | 'income' | 'transfer';

@@ -2,7 +2,7 @@ import { monthsSince, monthStats, periodEnd, periodKey, periodStart } from './da
 import { estimateFor, scheduleDatesIn } from './recurring';
 import { addDays } from './dates';
 import type { AppData } from './store';
-import type { Recurring, Transaction } from './types';
+import type { Category, Recurring, Transaction } from './types';
 
 /** Set in the budget tab's questionnaire; kept in meta so it travels with backups. */
 export interface Budget {
@@ -24,22 +24,32 @@ export interface Budget {
   fixedMode?: 'included' | 'separate';
 }
 
-/**
- * Transactions as the spending numbers should see them. With savings kept apart, money put into
- * savings is taken out of spending (treated like a transfer); balances still use the real list.
- */
-export function statsTransactions(data: Pick<AppData, 'transactions' | 'budget'>): Transaction[] {
+type SavingsSource = Pick<AppData, 'budget'> & { categories?: Category[] };
+
+/** The expense categories that stand for money put into savings: marked so, or the budget's own one. */
+export function savingsCategoryIds(data: SavingsSource): Set<string> {
+  const ids = new Set((data.categories ?? []).filter(c => c.kind === 'expense' && c.savings).map(c => c.id));
   const b = data.budget;
-  if (!b || b.savingsMode !== 'separate' || !b.savingsCategoryId) return data.transactions;
-  return data.transactions.map(t => (t.type === 'expense' && t.categoryId === b.savingsCategoryId ? { ...t, type: 'transfer' as const } : t));
+  if (b?.savingsMode === 'separate' && b.savingsCategoryId) ids.add(b.savingsCategoryId);
+  return ids;
 }
 
-export function savedIn(data: Pick<AppData, 'transactions' | 'budget'>, from: string, to: string) {
-  const b = data.budget;
-  if (!b || b.savingsMode !== 'separate' || !b.savingsCategoryId) return 0;
-  return data.transactions
-    .filter(t => t.type === 'expense' && t.categoryId === b.savingsCategoryId && t.date >= from && t.date <= to)
-    .reduce((a, t) => a + t.amount, 0);
+/** Money put into savings: an expense in a savings category. */
+export const isSaving = (t: Pick<Transaction, 'type' | 'categoryId'>, ids: Set<string>) => t.type === 'expense' && ids.has(t.categoryId ?? '');
+
+/**
+ * Transactions as the spending numbers should see them: money put into savings is taken out of spending
+ * (treated like a transfer); balances still use the real list.
+ */
+export function statsTransactions(data: Pick<AppData, 'transactions'> & SavingsSource): Transaction[] {
+  const ids = savingsCategoryIds(data);
+  if (!ids.size) return data.transactions;
+  return data.transactions.map(t => (isSaving(t, ids) ? { ...t, type: 'transfer' as const } : t));
+}
+
+export function savedIn(data: Pick<AppData, 'transactions'> & SavingsSource, from: string, to: string) {
+  const ids = savingsCategoryIds(data);
+  return data.transactions.filter(t => isSaving(t, ids) && t.date >= from && t.date <= to).reduce((a, t) => a + t.amount, 0);
 }
 
 export interface BudgetLine {
@@ -78,9 +88,9 @@ export interface BudgetStatus {
  * Money moved to savings (when kept apart) isn't one.
  */
 export function monthCommitments(data: AppData, from: string, to: string, today: string): Commitment[] {
-  const b = data.budget;
+  const saving = savingsCategoryIds(data);
   return data.recurring
-    .filter(r => r.type === 'expense' && !(b?.savingsMode === 'separate' && r.categoryId === b.savingsCategoryId))
+    .filter(r => r.type === 'expense' && !saving.has(r.categoryId ?? ''))
     .map(rec => {
       const dates = scheduleDatesIn(rec, from, to);
       const estimate = estimateFor(rec, data.transactions);
