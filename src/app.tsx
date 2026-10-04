@@ -10,6 +10,8 @@ import { presetFromParams, type QuickPreset } from './data/quick';
 import type { Account, CalendarEvent, Recurring, Transaction } from './data/types';
 import { DataScreen } from './screens/DataScreen';
 import { EntryForm } from './screens/EntryForm';
+import { ExplainGap } from './screens/ExplainGap';
+import { isGapTx } from './data/reconcile';
 import { TabBar, TABS, SwipeTabs, type Tab } from './components/TabBar';
 import { BalanceCheck } from './screens/BalanceCheck';
 import { BudgetSetup, BudgetTab } from './screens/Budget';
@@ -42,6 +44,8 @@ type Screen =
       eventId?: string;
       eventDate?: string;
       settleEvent?: boolean;
+      /** An unexplained gap's line opened as an ordinary transaction, not as "remembered what it was?". */
+      plain?: boolean;
     }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
@@ -219,6 +223,23 @@ export function App() {
   let content;
   if (!data.setupDone) {
     content = <Onboarding db={db} onDone={afterChange} />;
+  } else if (screen.name === 'entry' && screen.tx && !screen.plain && isGapTx(screen.tx, data.categories)) {
+    const entry = screen;
+    const gap = screen.tx;
+    content = (
+      <ExplainGap
+        db={db}
+        data={data}
+        gap={gap}
+        onClose={() => go({ name: entry.from })}
+        onPlain={() => go({ ...entry, plain: true })}
+        onSaved={async saved => {
+          await refresh();
+          setToast({ text: `נרשם: ${formatMoney(saved.amount)}. הפער ${saved.amount >= gap.amount ? 'נסגר' : 'קטן'}` });
+          go({ name: entry.from });
+        }}
+      />
+    );
   } else if (screen.name === 'entry') {
     const entry = screen;
     const back = () => go({ name: entry.from });

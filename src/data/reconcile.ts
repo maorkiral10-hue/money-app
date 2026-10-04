@@ -1,4 +1,4 @@
-import { summarize, type Ledger } from './balance';
+import { chargeOf, summarize, type Ledger } from './balance';
 import { addDays } from './dates';
 import { getMeta, run, setMeta } from './db';
 import type { Account, Category, PaymentMethod, Transaction } from './types';
@@ -56,6 +56,50 @@ export async function logCheck(db: IDBDatabase, check: BalanceCheck) {
 
 /** The category a gap no one could explain goes under. */
 export const UNKNOWN_CATEGORY = 'לא מזוהה';
+const GAP_NOTE = 'פער בבדיקה מול';
+
+/** A gap a balance check recorded as unexplained. */
+export const isGapTx = (t: Transaction, categories: Category[]) =>
+  !!t.note?.startsWith(GAP_NOTE) && categories.some(c => c.id === t.categoryId && c.name.trim() === UNKNOWN_CATEGORY);
+
+/** The account a transaction's money comes out of (or goes into) directly, and on which day. */
+function touches(t: Transaction, methods: PaymentMethod[]): { accountId: string; date: string } | undefined {
+  if (t.type === 'transfer') return undefined;
+  if (!t.methodId) return t.accountId ? { accountId: t.accountId, date: t.date } : undefined;
+  const m = methods.find(x => x.id === t.methodId);
+  if (!m) return undefined;
+  // A card purchase reaches the bank only on its charge day
+  if (m.kind === 'credit') return m.chargeDay ? { accountId: m.accountId, date: chargeOf(t, m.chargeDay) } : undefined;
+  return { accountId: m.accountId, date: t.date };
+}
+
+/**
+ * Something remembered after a check left an unexplained gap: if it's the same direction (money out for a
+ * gap of missing money), from the same account, from before that check, and fits in the gap — the gap it
+ * may be part of (the first check after it). Otherwise nothing: it's simply new.
+ */
+export function gapFor(data: { transactions: Transaction[]; categories: Category[]; methods: PaymentMethod[] }, t: Transaction) {
+  if (isGapTx(t, data.categories)) return undefined;
+  const where = touches(t, data.methods);
+  if (!where) return undefined;
+  return data.transactions
+    .filter(g => g.id !== t.id && g.type === t.type && isGapTx(g, data.categories) && g.date >= where.date && t.amount <= g.amount)
+    .filter(g => touches(g, data.methods)?.accountId === where.accountId)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+}
+
+/**
+ * Part of an unexplained gap turned out to be `t`: it's recorded, and the gap shrinks by it (gone once
+ * nothing's left), so the balance stays as the bank showed and only the explanation changes.
+ */
+export async function explainGap(db: IDBDatabase, gap: Transaction, t: Transaction) {
+  await run(db, 'transactions', 'readwrite', tx => {
+    const store = tx.objectStore('transactions');
+    store.put(t);
+    if (t.amount >= gap.amount) store.delete(gap.id);
+    else store.put({ ...gap, amount: gap.amount - t.amount, updatedAt: new Date().toISOString() });
+  });
+}
 
 /**
  * Makes the app agree with the bank when the gap couldn't be explained: it's recorded today as an expense
@@ -88,7 +132,7 @@ export async function correctBalance(
     date: today,
     categoryId: category.id,
     ...(kind === 'income' ? { accountId: account.id } : method ? { methodId: method.id } : { accountId: account.id }),
-    note: `פער בבדיקה מול ${account.name}`,
+    note: `${GAP_NOTE} ${account.name}`,
     createdAt: now,
     updatedAt: now,
   };

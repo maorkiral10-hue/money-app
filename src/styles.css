@@ -613,3 +613,7 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .card-charge .small-seg button { font-size: .85em; padding: 6px 8px; }
 .card-charge .edge-hint { background: var(--soft, #f2f7f5); border-radius: 10px; padding: 10px; margin: 10px 0; }
 .card-charge .edge-hint p { margin: 0 0 8px; }
+
+/* Recording something from before a check: part of its unexplained gap? */
+.gap-ask { margin: 10px 0; }
+.gap-ask p { margin: 0 0 8px; }

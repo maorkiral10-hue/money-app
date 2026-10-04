@@ -9,6 +9,7 @@ import { formatMoney, moneyInputText, parseMoney } from '../data/money';
 import { summarize } from '../data/balance';
 import { resolvePreset, type QuickPreset } from '../data/quick';
 import type { AppData } from '../data/store';
+import { explainGap, gapFor } from '../data/reconcile';
 import type { Transaction, TxType } from '../data/types';
 
 type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'review';
@@ -236,12 +237,9 @@ export function EntryForm(props: {
     event: true,
   };
 
-  const save = async () => {
-    if (!valid || saving) return;
-    setSaving(true);
-    const now = new Date().toISOString();
-    const record: Transaction = {
-      id: tx?.id ?? crypto.randomUUID(),
+  const [newId] = useState(() => crypto.randomUUID());
+  const build = (now: string): Transaction => ({
+      id: tx?.id ?? newId,
       type,
       amount,
       date,
@@ -260,10 +258,22 @@ export function EntryForm(props: {
       ...(linked ? { eventId: linked.id, eventDate: linked.round } : {}),
       // Which card charge it went into, as said at the charge's check: kept while it's the same purchase on the same card
       ...(tx?.chargeDate && tx.date === date && tx.methodId === (type === 'expense' ? methodId : refundCard?.id) && { chargeDate: tx.chargeDate }),
-    };
+  });
+  // Something new from before a check that left an unexplained gap: is it part of that gap?
+  const gap = !tx && valid && step === 'review' ? gapFor(data, build('')) : undefined;
+  const [gapAnswer, setGapAnswer] = useState<{ id: string; yes: boolean }>();
+  const partOfGap = gap && gapAnswer?.id === gap.id ? gapAnswer.yes : undefined;
+  const gapPlace = gap && data.accounts.find(a => a.id === (gap.methodId ? data.methods.find(m => m.id === gap.methodId)?.accountId : gap.accountId))?.name;
+
+  const save = async () => {
+    if (!valid || saving || (gap && partOfGap === undefined)) return;
+    setSaving(true);
+    const now = new Date().toISOString();
+    const record = build(now);
     // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
     try {
-      await putRecords(props.db, 'transactions', [record]);
+      if (gap && partOfGap) await explainGap(props.db, gap, record);
+      else await putRecords(props.db, 'transactions', [record]);
       if (type === 'expense' && methodId && !paidFromGoal) await setMeta(props.db, 'lastMethodId', methodId);
       await props.onSaved(record);
     } catch (e) {
@@ -448,6 +458,30 @@ export function EntryForm(props: {
             {candidates.length > 0 && <ReviewRow label="אירוע" value={linked ? linked.title : 'לא שייך'} onClick={() => change('event')} />}
           </div>
           {lostLink && <p class="small warn">ביום שנבחר אין את האירוע, אז השיוך הוסר.</p>}
+          {gap && (
+            <div class="card gap-ask">
+              <p>
+                יש פער לא מזוהה של <strong>{formatMoney(gap.amount)}</strong> מהבדיקה מול {gapPlace} ({dayLabel(gap.date, today)}). {type === 'expense' ? 'ההוצאה' : 'ההכנסה'} הזו חלק ממנו?
+              </p>
+              <div class="scope-buttons">
+                <button class={partOfGap === true ? '' : 'secondary'} onClick={() => setGapAnswer({ id: gap.id, yes: true })}>
+                  כן, זה מהפער
+                </button>
+                <button class={partOfGap === false ? '' : 'secondary'} onClick={() => setGapAnswer({ id: gap.id, yes: false })}>
+                  לא, משהו אחר
+                </button>
+              </div>
+              <p class="muted small">
+                {partOfGap === true
+                  ? gap.amount - amount > 0
+                    ? `הפער יקטן ל־${formatMoney(gap.amount - amount)}, והיתרה תישאר כמו בבנק.`
+                    : 'הפער ייסגר לגמרי, והיתרה תישאר כמו בבנק.'
+                  : partOfGap === false
+                    ? `תירשם כרגיל, והיתרה באפליקציה תרד ב־${formatMoney(amount)}.`
+                    : 'אם כן, הסכום יורד מה"לא מזוהה" ולא נספר פעמיים.'}
+              </p>
+            </div>
+          )}
 
 
           {isCredit && (
@@ -472,7 +506,7 @@ export function EntryForm(props: {
 
           <input type="text" class="note-input" placeholder="הערה (לא חובה)" value={note} onInput={e => setNote(e.currentTarget.value)} />
 
-          <button disabled={!valid || saving} onClick={save}>
+          <button disabled={!valid || saving || (!!gap && partOfGap === undefined)} onClick={save}>
             שמור
           </button>
           {tx && (

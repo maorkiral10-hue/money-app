@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, checkDue, checkMark, checkStatus, correctBalance, type BalanceCheck } from './reconcile';
+import { appBalance, checkDue, checkMark, checkStatus, correctBalance, explainGap, gapFor, type BalanceCheck } from './reconcile';
 import type { Account, Category, Transaction } from './types';
 
 let n = 0;
@@ -25,6 +25,30 @@ describe('checking the balance against the bank', () => {
     expect(txs[0]).toMatchObject({ type: 'expense', amount: 50_00, date: '2026-09-28', methodId: 'b', categoryId: unknown.id });
     expect(appBalance({ ...ledger, transactions: [...ledger.transactions, ...txs] }, 'bank', '2026-09-28')).toBe(750_00);
     expect((await getMeta<BalanceCheck[]>(db, 'balanceChecks'))![0]).toMatchObject({ real: 750_00, app: 800_00, result: 'corrected' });
+  });
+
+  it('something remembered later can explain part of the gap, without counting it twice', async () => {
+    const db = await openDb(`reconcile-${++n}`);
+    const methods = [{ id: 'b', name: 'b', kind: 'bank' as const, accountId: 'bank', order: 0 }, { id: 'cash', name: 'מזומן', kind: 'cash' as const, accountId: 'wallet', order: 1 }];
+    await correctBalance(db, { categories: [], methods }, bank, 650_00, 1_000_00, '2026-10-04');
+    const categories = await getAll<Category>(db, 'categories');
+    const data = () => getAll<Transaction>(db, 'transactions').then(transactions => ({ transactions, categories, methods }));
+    const [gap] = (await data()).transactions;
+    const dentist: Transaction = { id: 'd', type: 'expense', amount: 50_00, date: '2026-10-01', methodId: 'b', categoryId: 'health', createdAt: '', updatedAt: '' };
+    expect(gapFor(await data(), dentist)?.id).toBe(gap.id);
+    // Not when it's after the check, from another account, or bigger than the gap
+    expect(gapFor(await data(), { ...dentist, date: '2026-10-05' })).toBeUndefined();
+    expect(gapFor(await data(), { ...dentist, methodId: 'cash' })).toBeUndefined();
+    expect(gapFor(await data(), { ...dentist, amount: 400_00 })).toBeUndefined();
+    await explainGap(db, gap, dentist);
+    let txs = (await data()).transactions;
+    expect(txs.find(t => t.id === gap.id)?.amount).toBe(300_00);
+    const ledger: Ledger = { accounts: [bank], methods, startDate: '2026-09-01', transactions: txs };
+    expect(appBalance(ledger, 'bank', '2026-10-04')).toBe(650_00);
+    // The rest explained: the gap is gone
+    await explainGap(db, txs.find(t => t.id === gap.id)!, { ...dentist, id: 'rent', amount: 300_00 });
+    txs = (await data()).transactions;
+    expect(txs.map(t => t.id).sort()).toEqual(['d', 'rent']);
   });
 
   it('the quiet reminder comes due by the chosen interval', () => {
