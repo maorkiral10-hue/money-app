@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, checkDue, checkMark, checkStatus, correctBalance, explainGap, gapFor, gapForChange, type BalanceCheck } from './reconcile';
+import { appBalance, canDeleteCheck, checkDue, checkMark, checkStatus, correctBalance, explainGap, logCheck, gapFor, gapForChange, type BalanceCheck } from './reconcile';
 import type { Account, Category, Transaction } from './types';
 
 let n = 0;
@@ -56,6 +56,18 @@ describe('checking the balance against the bank', () => {
     await explainGap(db, txs.find(t => t.id === gap.id)!, 300_00, { put: { ...dentist, id: 'rent', amount: 300_00 } });
     txs = (await data()).transactions;
     expect(txs.map(t => t.id).sort()).toEqual(['d', 'rent']);
+  });
+
+  it('only an extra check (done before it was due) can be deleted, also once recorded as unexplained', async () => {
+    const base: BalanceCheck = { date: '2026-10-04', accountId: 'bank', real: 900_00, app: 1_000_00, result: 'gap' };
+    expect(canDeleteCheck(base)).toBe(false);
+    expect(canDeleteCheck({ ...base, keepSchedule: true })).toBe(true);
+    const db = await openDb(`reconcile-${++n}`);
+    await logCheck(db, { ...base, early: true });
+    await correctBalance(db, { categories: [], methods: [] }, bank, 900_00, 1_000_00, '2026-10-04');
+    const history = (await getMeta<BalanceCheck[]>(db, 'balanceChecks'))!;
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ result: 'corrected', early: true });
   });
 
   it('the quiet reminder comes due by the chosen interval', () => {

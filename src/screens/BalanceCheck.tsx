@@ -5,7 +5,7 @@ import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, checkMark, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { appBalance, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -73,7 +73,7 @@ export function BalanceCheck(props: {
     setEarly(!due && checkedBefore && everyFor(data, account) !== 'never' ? 'ask' : null);
     setChecked(true);
     setDone('');
-    await logCheck(props.db, { date: today, accountId: account.id, real, app, result: gap === 0 ? 'match' : 'gap' });
+    await logCheck(props.db, { date: today, accountId: account.id, real, app, result: gap === 0 ? 'match' : 'gap', ...(!due && { early: true }) });
     props.onChange();
   };
 
@@ -249,6 +249,7 @@ export function BalanceCheck(props: {
                         ? `שינוי מינורי של ${formatMoney(Math.abs(c.real - c.app))}`
                         : `פער של ${formatMoney(Math.abs(c.real - c.app))}`,
                     c.result === 'corrected' && 'נרשם כלא מזוהה',
+                    canDeleteCheck(c) && 'בדיקה נוספת',
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -258,6 +259,7 @@ export function BalanceCheck(props: {
                 const m = checkMark(c.real, c.app, data.checkTolerance);
                 return <div class={m === 'exact' ? 'inc' : m === 'minor' ? 'minor' : 'exp'}>{m === 'exact' ? '✓' : m === 'minor' ? '✓✗' : '✗'}</div>;
               })()}
+              {canDeleteCheck(c) && (
               <button
                 class="link small check-delete"
                 aria-label="מחיקת הבדיקה"
@@ -270,6 +272,7 @@ export function BalanceCheck(props: {
               >
                 ✕
               </button>
+              )}
             </div>
           ))}
         </div>

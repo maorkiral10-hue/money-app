@@ -18,7 +18,15 @@ export interface BalanceCheck {
    * counted from the check before, as if this one hadn't moved it.
    */
   keepSchedule?: boolean;
+  /**
+   * Done before it was due (an extra check, not the regular one): it can be taken out of the history.
+   * Missing on checks from before version 82, where only keepSchedule tells.
+   */
+  early?: boolean;
 }
+
+/** A regular check stays in the history for good; only an extra one can be deleted. */
+export const canDeleteCheck = (c: BalanceCheck) => !!(c.early || c.keepSchedule);
 
 /** How a check came out: exactly right, a gap small enough to count as minor (the user's own limit), or off. */
 export function checkMark(real: number, app: number, tolerance: number): 'exact' | 'minor' | 'off' {
@@ -169,6 +177,7 @@ export async function correctBalance(
     // The comparison just logged becomes this record, not a second line for the same check
     const same = all.findIndex(c => c.accountId === account.id && c.date === today && c.real === real && c.app === app && c.result === 'gap');
     const rest = same >= 0 ? all.filter((_, i) => i !== same) : all;
+    if (same >= 0 && all[same].early) check.early = true;
     tx.objectStore('meta').put([check, ...rest].slice(0, KEEP), 'balanceChecks');
   });
 }
