@@ -128,7 +128,7 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
               </div>
               <div class="muted small">
                 {[
-                  tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : `מהיעד ${name.get(tx.accountId!)}`) : tx.type === 'income' ? (tx.methodId ? `זיכוי ל${name.get(tx.methodId)}` : name.get(tx.accountId!)) : 'העברה',
+                  tx.type === 'expense' ? (tx.methodId ? name.get(tx.methodId) : data.accounts.find(a => a.id === tx.accountId)?.kind === 'goal' ? `מהיעד ${name.get(tx.accountId!)}` : name.get(tx.accountId!)) : tx.type === 'income' ? (tx.methodId ? `זיכוי ל${name.get(tx.methodId)}` : name.get(tx.accountId!)) : 'העברה',
                   charged &&
                     (tx.type === 'income'
                       ? charged > props.today

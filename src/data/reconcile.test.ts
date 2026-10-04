@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
 import { appBalance, checkDue, checkMark, checkStatus, correctBalance, type BalanceCheck } from './reconcile';
-import type { Account } from './types';
+import type { Account, Category, Transaction } from './types';
 
 let n = 0;
 const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 1_000_00, order: 0 };
 
 describe('checking the balance against the bank', () => {
-  it('correcting sets today\'s balance to the real one and records it', async () => {
+  it('correcting records the gap as unexplained, so today\'s balance is the real one and the month counts it', async () => {
     const db = await openDb(`reconcile-${++n}`);
     await putRecords(db, 'accounts', [bank]);
     const ledger: Ledger = {
@@ -17,9 +17,13 @@ describe('checking the balance against the bank', () => {
     };
     const app = appBalance(ledger, 'bank', '2026-09-28');
     expect(app).toBe(800_00);
-    await correctBalance(db, bank, 750_00, app, '2026-09-28');
-    const [saved] = await getAll<Account>(db, 'accounts');
-    expect(appBalance({ ...ledger, accounts: [saved] }, 'bank', '2026-09-28')).toBe(750_00);
+    await correctBalance(db, { categories: [], methods: ledger.methods }, bank, 750_00, app, '2026-09-28');
+    const txs = await getAll<Transaction>(db, 'transactions');
+    const [unknown] = await getAll<Category>(db, 'categories');
+    expect(unknown).toMatchObject({ name: 'לא מזוהה', kind: 'expense' });
+    expect(txs).toHaveLength(1);
+    expect(txs[0]).toMatchObject({ type: 'expense', amount: 50_00, date: '2026-09-28', methodId: 'b', categoryId: unknown.id });
+    expect(appBalance({ ...ledger, transactions: [...ledger.transactions, ...txs] }, 'bank', '2026-09-28')).toBe(750_00);
     expect((await getMeta<BalanceCheck[]>(db, 'balanceChecks'))![0]).toMatchObject({ real: 750_00, app: 800_00, result: 'corrected' });
   });
 

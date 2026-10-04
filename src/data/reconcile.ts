@@ -1,7 +1,7 @@
 import { summarize, type Ledger } from './balance';
 import { addDays } from './dates';
 import { getMeta, run, setMeta } from './db';
-import type { Account } from './types';
+import type { Account, Category, PaymentMethod, Transaction } from './types';
 
 /** One comparison of an account with what the bank (or wallet) really shows. */
 export interface BalanceCheck {
@@ -11,7 +11,7 @@ export interface BalanceCheck {
   real: number;
   /** What the app had. */
   app: number;
-  /** "corrected": the app's balance was set to the real one. */
+  /** "corrected": the gap was recorded as an unexplained expense or income (before version 78: the start balance was moved). */
   result: 'match' | 'gap' | 'corrected';
   /**
    * Checked before it was due, and the user chose to stay on the regular schedule: the next reminder is
@@ -54,16 +54,47 @@ export async function logCheck(db: IDBDatabase, check: BalanceCheck) {
   await setMeta(db, 'balanceChecks', [check, ...all].slice(0, KEEP));
 }
 
+/** The category a gap no one could explain goes under. */
+export const UNKNOWN_CATEGORY = 'לא מזוהה';
+
 /**
- * Makes the app agree with the bank without inventing a transaction: the account's start-day balance moves
- * by the gap, so today's balance becomes the real one and no spending or income figure changes.
- * Done in one transaction together with its record in the check history.
+ * Makes the app agree with the bank when the gap couldn't be explained: it's recorded today as an expense
+ * (less money than the app thought) or income (more) under "לא מזוהה", so it counts in the month like any
+ * money that went out or came in, and it's always visible how much got away unexplained. The category is
+ * made the first time. Done in one transaction together with its record in the check history.
  */
-export async function correctBalance(db: IDBDatabase, account: Account, real: number, app: number, today: string) {
+export async function correctBalance(
+  db: IDBDatabase,
+  data: { categories: Category[]; methods: PaymentMethod[] },
+  account: Account,
+  real: number,
+  app: number,
+  today: string,
+) {
   const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
   const check: BalanceCheck = { date: today, accountId: account.id, real, app, result: 'corrected' };
-  await run(db, ['accounts', 'meta'], 'readwrite', tx => {
-    tx.objectStore('accounts').put({ ...account, openingBalance: account.openingBalance + (real - app) });
+  const kind = real < app ? 'expense' : 'income';
+  const existing = data.categories.find(c => c.kind === kind && c.name.trim() === UNKNOWN_CATEGORY);
+  const category: Category = existing
+    ? { ...existing, archived: false }
+    : { id: crypto.randomUUID(), name: UNKNOWN_CATEGORY, kind, order: Math.max(0, ...data.categories.map(c => c.order)) + 1 };
+  // Out of the account the way money leaves it (its bank transfer or cash method), or straight from it
+  const method = data.methods.find(m => m.accountId === account.id && m.kind !== 'credit' && !m.archived);
+  const now = new Date().toISOString();
+  const gapTx: Transaction = {
+    id: crypto.randomUUID(),
+    type: kind,
+    amount: Math.abs(real - app),
+    date: today,
+    categoryId: category.id,
+    ...(kind === 'income' ? { accountId: account.id } : method ? { methodId: method.id } : { accountId: account.id }),
+    note: `פער בבדיקה מול ${account.name}`,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await run(db, ['categories', 'transactions', 'meta'], 'readwrite', tx => {
+    tx.objectStore('categories').put(category);
+    tx.objectStore('transactions').put(gapTx);
     tx.objectStore('meta').put([check, ...all].slice(0, KEEP), 'balanceChecks');
   });
 }

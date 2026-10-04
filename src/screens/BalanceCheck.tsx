@@ -78,10 +78,11 @@ export function BalanceCheck(props: {
   };
 
   const correct = async () => {
-    if (!account || !confirm(`לעדכן את היתרה של ${account.name} באפליקציה ל-${formatMoney(real)}?\nזה לא משנה הוצאות או הכנסות, רק את היתרה.`)) return;
-    await correctBalance(props.db, account, real, app, today);
+    const what = gap < 0 ? 'הוצאה' : 'הכנסה';
+    if (!account || !confirm(`לרשום ${what} "לא מזוהה" של ${formatMoney(Math.abs(gap))}?\nהיתרה של ${account.name} באפליקציה תהיה ${formatMoney(real)}, והסכום ייספר בחודש.`)) return;
+    await correctBalance(props.db, data, account, real, app, today);
     if (early === 'regular') await keepRegularSchedule(props.db, account.id, today);
-    setDone(`היתרה של ${account.name} עודכנה ל-${formatMoney(real)}.`);
+    setDone(`נרשמה ${what} "לא מזוהה" של ${formatMoney(Math.abs(gap))}. היתרה של ${account.name} עכשיו ${formatMoney(real)}.`);
     props.onChange();
   };
 
@@ -148,8 +149,11 @@ export function BalanceCheck(props: {
                 {gap < 0 ? `להוסיף הוצאה של ${formatMoney(-gap)}` : `להוסיף הכנסה של ${formatMoney(gap)}`}
               </button>
               <button class="secondary" onClick={correct}>
-                לעדכן את היתרה באפליקציה ל-{formatMoney(real)}
+                לא מצאתי: לרשום את הפער כ"לא מזוהה"
               </button>
+              <p class="muted small">
+                {gap < 0 ? 'תירשם הוצאה' : 'תירשם הכנסה'} של {formatMoney(Math.abs(gap))} בקטגוריה "לא מזוהה", והיתרה באפליקציה תהיה {formatMoney(real)}.
+              </p>
               <button class="link" onClick={props.onBack}>
                 להשאיר ככה
               </button>
@@ -244,7 +248,7 @@ export function BalanceCheck(props: {
                       : checkMark(c.real, c.app, data.checkTolerance) === 'minor'
                         ? `שינוי מינורי של ${formatMoney(Math.abs(c.real - c.app))}`
                         : `פער של ${formatMoney(Math.abs(c.real - c.app))}`,
-                    c.result === 'corrected' && 'היתרה עודכנה',
+                    c.result === 'corrected' && 'נרשם כלא מזוהה',
                   ]
                     .filter(Boolean)
                     .join(' · ')}
