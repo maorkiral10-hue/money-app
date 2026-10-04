@@ -10,7 +10,7 @@ const tx = (t: Partial<Transaction>): Transaction => ({
 
 const base = (over: Partial<AppData>): AppData => ({
   accounts: [], methods: [{ id: 'cash', name: 'מזומן', kind: 'cash', accountId: 'a', order: 0 }], categories: [],
-  transactions: [], recurring: [], events: [], setupDone: true, startDate: '2026-08-01', openOnEntry: true, monthStartDay: 1, balanceChecks: [], checkEvery: 'never', checkMode: 'together', checkEveryByAccount: {}, checkTolerance: 0, cardChecks: [], ...over,
+  transactions: [], recurring: [], events: [], setupDone: true, startDate: '2026-08-01', openOnEntry: true, monthStartDay: 1, balanceChecks: [], checkEvery: 'never', checkMode: 'together', checkEveryByAccount: {}, checkTolerance: 0, cardChecks: [], funds: [], ...over,
 });
 
 describe('budget', () => {

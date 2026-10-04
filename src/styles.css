@@ -629,3 +629,11 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .sav-panel { background: var(--sav-soft); border-color: var(--sav); }
 .savings-toggle { margin: 0; padding: 4px 10px; font-size: .8em; width: auto; background: none; color: var(--muted, #888); border: 1px solid var(--line); border-radius: 999px; font-weight: 500; }
 .savings-toggle.on { background: var(--sav-soft); color: var(--sav); border-color: var(--sav); }
+
+/* Long-term savings */
+.fund-total { text-align: center; }
+.fund-head { display: block; width: 100%; margin: 0 0 8px; padding: 0; background: none; color: var(--text); font-weight: 400; text-align: inherit; }
+.fund-head .line, .fund-history .line { display: flex; justify-content: space-between; gap: 8px; }
+.fund-history { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.fund-form { margin-top: 8px; }
+.danger-link { color: var(--neg); align-self: flex-start; }

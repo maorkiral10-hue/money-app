@@ -4,6 +4,7 @@ import { occurrenceTransaction, openOccurrences, scheduleDatesIn } from './recur
 import type { Budget } from './budget';
 import type { BalanceCheck, CheckEvery, CheckMode } from './reconcile';
 import type { CardCheck } from './cardCheck';
+import type { Fund } from './funds';
 import type { Account, CalendarEvent, Category, PaymentMethod, Recurring, Transaction } from './types';
 
 export interface AppData {
@@ -35,6 +36,8 @@ export interface AppData {
   checkTolerance: number;
   /** Card charges checked against what the card company really charged, newest first. */
   cardChecks: CardCheck[];
+  /** Long-term savings (pension, hishtalmut, gemel), followed for the picture only. */
+  funds: Fund[];
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -61,6 +64,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     checkEveryByAccount: (await getMeta<Record<string, CheckEvery>>(db, 'checkEveryByAccount')) ?? {},
     checkTolerance: (await getMeta<number>(db, 'checkTolerance')) ?? 0,
     cardChecks: (await getMeta<CardCheck[]>(db, 'cardChecks')) ?? [],
+    funds: (await getMeta<Fund[]>(db, 'funds')) ?? [],
   };
 }
 
