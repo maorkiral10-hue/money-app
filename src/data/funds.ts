@@ -60,3 +60,18 @@ export const totalSaved = (funds: Fund[]) => funds.reduce((a, f) => a + (latest(
 
 export const saveFunds = (db: IDBDatabase, funds: Fund[]) => setMeta(db, 'funds', funds);
 export const loadFunds = async (db: IDBDatabase) => (await getMeta<Fund[]>(db, 'funds')) ?? [];
+
+/** Between two updates: the last balance from the report plus what the linked standing order has put in since. */
+export const estimated = (f: Fund, transactions: Transaction[], today: string) => (latest(f)?.balance ?? 0) + depositsSince(f, transactions, today);
+
+export const totalEstimated = (funds: Fund[], transactions: Transaction[], today: string) => funds.reduce((a, f) => a + estimated(f, transactions, today), 0);
+
+/** Since the first update: everything deposited, and what the fund earned on top of it. */
+export function sinceStart(f: Fund) {
+  const first = f.updates[0];
+  const last = latest(f);
+  if (!first || f.updates.length < 2) return undefined;
+  const deposits = f.updates.slice(1).reduce((a, u) => a + u.deposits, 0);
+  const amount = last.balance - first.balance - deposits;
+  return { from: first.date, deposits, amount, pct: first.balance > 0 ? amount / first.balance : undefined };
+}

@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { MoneyInput } from '../components/inputs';
 import { dayLabel, todayStr } from '../data/dates';
-import { depositsSince, earned, FUND_KINDS, latest, saveFunds, totalSaved, type Fund, type FundKind } from '../data/funds';
+import { depositsSince, earned, estimated, FUND_KINDS, latest, saveFunds, sinceStart, totalEstimated, totalSaved, type Fund, type FundKind } from '../data/funds';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 
@@ -41,15 +41,16 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
 
       {funds.length > 0 && (
         <div class="card fund-total">
-          <div class="muted small">סך הכל</div>
-          <div class="big-number sav">{formatMoney(totalSaved(funds))}</div>
-          {lastUpdate && <div class="muted small">עודכן לאחרונה {dayLabel(lastUpdate, today)}</div>}
+          <div class="muted small">סך הכל{totalEstimated(funds, data.transactions, today) !== totalSaved(funds) ? ' (משוער)' : ''}</div>
+          <div class="big-number sav">{formatMoney(totalEstimated(funds, data.transactions, today))}</div>
+          {lastUpdate && <div class="muted small">עדכון אחרון מהדוחות: {dayLabel(lastUpdate, today)}</div>}
         </div>
       )}
 
       {funds.map(f => {
         const last = latest(f);
-        const gain = earned(f, f.updates.length - 1);
+        const since = depositsSince(f, data.transactions, today);
+        const total = sinceStart(f);
         const open = openId === f.id;
         return (
           <div key={f.id} class="card fund">
@@ -59,17 +60,57 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
                   <strong>{f.name}</strong>
                   {kindName(f.kind) !== f.name && <span class="muted small"> · {kindName(f.kind)}</span>}
                 </span>
-                <span class="sav">{last ? formatMoney(last.balance) : '—'}</span>
+                <span>
+                  <span class="sav">{last ? formatMoney(last.balance + since) : '—'}</span>
+                  <span class={`chevron small-chevron ${open ? 'open' : ''}`}> ‹</span>
+                </span>
               </div>
               <div class="muted small">
-                {[
-                  last && `עודכן ${dayLabel(last.date, today)}`,
-                  gain && `תשואה מאז ${dayLabel(gain.since, today)}: ${formatMoney(gain.amount, { sign: true })}${pctText(gain.pct)}`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {since > 0 ? `משוער: ${formatMoney(last!.balance)} מהדוח (${dayLabel(last!.date, today)}) + ${formatMoney(since)} שהופקדו מאז` : last && `מהדוח, ${dayLabel(last.date, today)}`}
               </div>
+              {total && (
+                <div class="small">
+                  תשואה מאז {dayLabel(total.from, today)}: <span class={total.amount >= 0 ? 'inc' : 'exp'}>{formatMoney(total.amount, { sign: true })}{pctText(total.pct)}</span>
+                </div>
+              )}
             </button>
+            {open && (
+              <div class="fund-stats">
+                <div class="line">
+                  <span>יתרה בדוח האחרון ({dayLabel(last.date, today)})</span>
+                  <span>{formatMoney(last.balance)}</span>
+                </div>
+                {since > 0 && (
+                  <div class="line">
+                    <span>הופקד מאז (הוראת קבע)</span>
+                    <span>{formatMoney(since)}</span>
+                  </div>
+                )}
+                {total ? (
+                  <>
+                    <div class="line">
+                      <span>יתרה כשהתחלת לעקוב ({dayLabel(total.from, today)})</span>
+                      <span>{formatMoney(f.updates[0].balance)}</span>
+                    </div>
+                    <div class="line">
+                      <span>הפקדות מאז</span>
+                      <span>{formatMoney(total.deposits)}</span>
+                    </div>
+                    <div class="line">
+                      <span>
+                        <strong>תשואה מאז</strong>
+                      </span>
+                      <strong class={total.amount >= 0 ? 'inc' : 'exp'}>
+                        {formatMoney(total.amount, { sign: true })}
+                        {pctText(total.pct)}
+                      </strong>
+                    </div>
+                  </>
+                ) : (
+                  <p class="muted small">אחרי העדכון הבא מהדוח יופיעו כאן ההפקדות והתשואה (כמה הקופה הרוויחה בעצמה).</p>
+                )}
+              </div>
+            )}
             {updating === f.id ? (
               <UpdateForm
                 fund={f}
@@ -87,6 +128,7 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
             )}
             {open && (
               <div class="fund-history">
+                <p class="field-label">כל העדכונים</p>
                 {[...f.updates].reverse().map((u, ri) => {
                   const i = f.updates.length - 1 - ri;
                   const g = earned(f, i);
@@ -141,7 +183,11 @@ function UpdateForm(props: { fund: Fund; data: AppData; onCancel: () => void; on
   const last = latest(fund);
   const [date, setDate] = useState(today);
   const [balance, setBalance] = useState(0);
-  const [deposits, setDeposits] = useState(() => depositsSince(fund, props.data.transactions, today));
+  // With a standing order tied to it, what it put in is known: nothing to ask. From the salary, it's in the report
+  const fromOrder = depositsSince(fund, props.data.transactions, date);
+  const [other, setOther] = useState(0);
+  const [showOther, setShowOther] = useState(false);
+  const deposits = fund.recurringId ? fromOrder + other : other;
   const ok = balance > 0 && !!date && date <= today && (!last || date >= last.date);
   const gain = last ? balance - last.balance - deposits : undefined;
   return (
@@ -154,11 +200,29 @@ function UpdateForm(props: { fund: Fund; data: AppData; onCancel: () => void; on
       </label>
       {last && (
         <>
-          <p class="field-label">כמה הופקד מאז {dayLabel(last.date, today)}</p>
-          <MoneyInput value={deposits} onChange={setDeposits} />
-          <p class="muted small">
-            מופיע בדוח של הקרן (הפקדות עובד ומעסיק).{fund.recurringId ? ' מולא מראש לפי הוראת הקבע שמשויכת לקופה.' : ''}
-          </p>
+          {fund.recurringId ? (
+            <>
+              <p class="small">
+                הופקד מאז {dayLabel(last.date, today)} בהוראת הקבע: <strong>{formatMoney(fromOrder)}</strong>
+              </p>
+              {showOther ? (
+                <>
+                  <p class="field-label">הפקדות נוספות (למשל מהמשכורת)</p>
+                  <MoneyInput value={other} onChange={setOther} />
+                </>
+              ) : (
+                <button class="link small" onClick={() => setShowOther(true)}>
+                  + הייתה עוד הפקדה (למשל מהמשכורת)
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <p class="field-label">כמה הופקד מאז {dayLabel(last.date, today)}</p>
+              <MoneyInput value={other} onChange={setOther} />
+              <p class="muted small">יורד מהמשכורת, אז זה משתנה: מופיע בדוח של הקרן (הפקדות עובד ומעסיק).</p>
+            </>
+          )}
           {balance > 0 && gain !== undefined && (
             <p class="small">
               תשואה מאז העדכון הקודם: <strong>{formatMoney(gain, { sign: true })}</strong>

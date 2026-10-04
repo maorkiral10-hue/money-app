@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { depositsSince, earned, totalSaved, type Fund } from './funds';
+import { depositsSince, earned, estimated, sinceStart, totalSaved, type Fund } from './funds';
 import type { Transaction } from './types';
 
 const fund: Fund = {
@@ -28,5 +28,13 @@ describe('long-term savings', () => {
     expect(depositsSince(fund, txs, '2026-10-31')).toBe(1_000_00);
     expect(depositsSince({ ...fund, recurringId: undefined }, txs, '2026-10-31')).toBe(0);
     expect(totalSaved([fund, { ...fund, id: 'g', updates: [{ date: '2026-10-01', balance: 50_000_00, deposits: 0 }] }])).toBe(155_000_00);
+  });
+
+  it('estimates the balance between updates, and sums it all up since the start', () => {
+    const dep: Transaction = { id: 'a', type: 'expense', amount: 1_000_00, date: '2026-10-10', recurringId: 'rec', createdAt: '', updatedAt: '' };
+    expect(estimated(fund, [dep], '2026-10-20')).toBe(106_000_00);
+    expect(estimated(fund, [dep], '2026-10-05')).toBe(105_000_00);
+    expect(sinceStart(fund)).toEqual({ from: '2026-07-01', deposits: 3_000_00, amount: 2_000_00, pct: 0.02 });
+    expect(sinceStart({ ...fund, updates: [fund.updates[0]] })).toBeUndefined();
   });
 });
