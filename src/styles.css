@@ -639,3 +639,8 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .danger-link { color: var(--neg); align-self: flex-start; }
 .fund-stats { margin: 8px 0; padding: 10px; background: var(--sav-soft); border-radius: 10px; display: flex; flex-direction: column; gap: 6px; }
 .fund-stats .line { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+
+/* Three month tiles side by side on a phone: everything stays inside its tile */
+.stat-row:not(.two) .stat { padding: 8px 4px; min-width: 0; overflow: hidden; }
+.stat-row:not(.two) .stat-value { font-size: clamp(12px, 4.1vw, 17px); letter-spacing: -0.3px; }
+.stat-row:not(.two) .tap-hint { font-size: clamp(10px, 3vw, 12px); white-space: nowrap; }
