@@ -5,7 +5,7 @@ import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, unknownBySource, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -53,6 +53,8 @@ export function BalanceCheck(props: {
   const app = account ? appBalance(data, account.id, today) : 0;
   const gap = real - app;
   const mark = checkMark(real, app, data.checkTolerance);
+  // A gap may stay open no longer than the source is checked
+  const graceCap = account && everyFor(data, account) !== 'never' ? { week: 7, twoWeeks: 14, month: 30 }[everyFor(data, account) as 'week'] : data.gapGraceDays;
   // Today or one of the last three days was Shabbat or a rest day: the bank may not have caught up yet
   const restNote = (() => {
     for (let i = 0; i <= 3; i++) {
@@ -145,7 +147,7 @@ export function BalanceCheck(props: {
                   ? 'יש פחות ממה שהאפליקציה חושבת: כנראה הוצאה שלא נרשמה.'
                   : 'יש יותר ממה שהאפליקציה חושבת: כנראה הכנסה שלא נרשמה.'}
               </p>
-              <button onClick={() => props.onAddMissing({ type: gap < 0 ? 'expense' : 'income', amount: Math.abs(gap) })}>
+              <button onClick={() => props.onAddMissing({ ...sourcePreset(data, account, gap), date: today })}>
                 {gap < 0 ? `להוסיף הוצאה של ${formatMoney(-gap)}` : `להוסיף הכנסה של ${formatMoney(gap)}`}
               </button>
               <button class="secondary" onClick={correct}>
@@ -154,9 +156,20 @@ export function BalanceCheck(props: {
               <p class="muted small">
                 {gap < 0 ? 'תירשם הוצאה' : 'תירשם הכנסה'} של {formatMoney(Math.abs(gap))} בקטגוריה "לא מזוהה", והיתרה באפליקציה תהיה {formatMoney(real)}.
               </p>
-              <button class="link" onClick={props.onBack}>
-                להשאיר ככה
-              </button>
+              {mark === 'minor' ? (
+                <button class="link" onClick={props.onBack}>
+                  להשאיר ככה
+                </button>
+              ) : (
+                <>
+                  <button class="link" onClick={props.onBack}>
+                    להשאיר פתוח ל־{Math.min(data.gapGraceDays, graceCap)} {Math.min(data.gapGraceDays, graceCap) === 1 ? 'יום' : 'ימים'} ולחפש
+                  </button>
+                  <p class="muted small">
+                    בימים האלה כל מה שתרשום מלפני היום יקטין את הפער, ואפשר לבדוק שוב. מה שיישאר אחר כך יירשם לבד כ"לא מזוהה" (בתאריך של היום).
+                  </p>
+                </>
+              )}
             </>
           )}
         </div>
@@ -183,6 +196,19 @@ export function BalanceCheck(props: {
       {checked && nextDue && (
         <button onClick={() => pick(nextDue.id)}>לבדיקה הבאה: {nextDue.name}</button>
       )}
+
+      <div class="card">
+        <h2>פער שנשאר פתוח</h2>
+        <p class="muted small">כמה ימים פער מחכה שתמצא אותו, לפני שהוא נרשם לבד כ"לא מזוהה" (לא יותר מתדירות הבדיקה).</p>
+        <Segmented
+          value={String(data.gapGraceDays)}
+          onChange={async (v: string) => {
+            await setMeta(props.db, 'gapGraceDays', Number(v));
+            props.onChange();
+          }}
+          options={[1, 2, 3, 5, 7].map(n => [String(n), n === DEFAULT_GRACE_DAYS ? `${n} (רגיל)` : String(n)] as [string, string])}
+        />
+      </div>
 
       <div class="card">
         <h2>תזכורת</h2>
@@ -251,6 +277,7 @@ export function BalanceCheck(props: {
                         ? `שינוי מינורי של ${formatMoney(Math.abs(c.real - c.app))}`
                         : `פער של ${formatMoney(Math.abs(c.real - c.app))}`,
                     c.result === 'corrected' && 'נרשם כלא מזוהה',
+                    c.result === 'closed' && 'הפער נמצא ונסגר',
                     canDeleteCheck(c) && 'בדיקה נוספת',
                   ]
                     .filter(Boolean)
@@ -258,7 +285,7 @@ export function BalanceCheck(props: {
                 </div>
               </div>
               {(() => {
-                const m = checkMark(c.real, c.app, data.checkTolerance);
+                const m = c.result === 'closed' ? 'exact' : checkMark(c.real, c.app, data.checkTolerance);
                 return <div class={m === 'exact' ? 'inc' : m === 'minor' ? 'minor' : 'exp'}>{m === 'exact' ? '✓' : m === 'minor' ? '✓✗' : '✗'}</div>;
               })()}
               {canDeleteCheck(c) && (

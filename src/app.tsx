@@ -22,6 +22,8 @@ import { EventDoneCard } from './components/EventDoneCard';
 import { VariableDueCard } from './components/VariableDueCard';
 import { EarlyRecordCard } from './components/EarlyRecordCard';
 import { CardChargeCard } from './components/CardChargeCard';
+import { OpenGapCard } from './components/OpenGapCard';
+import { correctBalance, openGaps, settleOpenGaps, sourcePreset } from './data/reconcile';
 import { cardChecksDue } from './data/cardCheck';
 import { RECORD_EARLY_EVENT } from './components/MoneyList';
 import { openOccurrences } from './data/recurring';
@@ -111,6 +113,8 @@ export function App() {
   }, []);
   // "Later" on an event's question: not asked again until the app is next opened
   const [laterIds, setLaterIds] = useState<string[]>([]);
+  // A gap left open just got smaller (something remembered was recorded): its card says by how much
+  const [gapDrop, setGapDrop] = useState<{ accountId: string; from: number } | null>(null);
   // Standing orders with a changing amount put off with "remind me in half an hour": until when
   const [snoozedUntil, setSnoozedUntil] = useState(0);
   // A standing order or fixed income tapped before its day: offer to record it now (it came early)
@@ -133,6 +137,15 @@ export function App() {
     let loaded = await loadAll(d);
     // Rent, standing orders and other fixed items whose date has come are recorded on open
     if (loaded.setupDone && (await recordDueRecurring(d, loaded.startDate, todayStr()))) loaded = await loadAll(d);
+    // Gaps left open after a check: made up in full, they close; their days over, what's left is recorded
+    if (loaded.setupDone) {
+      const settled = await settleOpenGaps(d, loaded, todayStr());
+      if (settled.length) {
+        loaded = await loadAll(d);
+        const s = settled[0];
+        setToast({ text: s.closed ? `🎉 הפער ב${s.account.name} נסגר! הכל מתאים` : `נרשם "לא מזוהה" של ${formatMoney(Math.abs(s.amount))} ב${s.account.name} (נגמרו ימי החיפוש)` });
+      }
+    }
     setData(loaded);
     setCopies(await listSafetyCopies(d));
     return loaded;
@@ -264,8 +277,22 @@ export function App() {
           if (event && saved) {
             await putRecords(db, 'events', [withAnswer(event, entry.eventDate ?? event.date, { at: new Date().toISOString(), txId: saved.id })]);
           }
+          const gapsBefore = openGaps(data, todayStr());
           const loaded = await refresh();
           if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
+          // It made a gap left open smaller: say so, with how much is still missing
+          const after = openGaps(loaded, todayStr());
+          for (const b of gapsBefore) {
+            const a = after.find(g => g.account.id === b.account.id && g.check.date === b.check.date);
+            // Made up in full: it closed while saving
+            if (!a && loaded.balanceChecks.some(c => c.accountId === b.account.id && c.date === b.check.date && c.result === 'closed')) {
+              setToast({ text: `🎉 הפער ב${b.account.name} נסגר! הכל מתאים` });
+            }
+            if (a && Math.abs(a.left) < Math.abs(b.left)) {
+              setGapDrop({ accountId: a.account.id, from: Math.abs(b.left) });
+              setLaterIds(ids => ids.filter(id => id !== `gap|${a.account.id}|${a.check.date}`));
+            }
+          }
           // Back on the home screen, its calendar shows the day this was recorded on
           if (saved && !entry.tx && entry.from === 'home') homeDay.current = saved.date;
           back();
@@ -403,6 +430,8 @@ export function App() {
         onEdit={tx => go({ name: 'entry', tx, from: 'home' })}
         onOpenData={() => go({ name: 'data', from: 'home' })}
         onOpenCheck={accountId => go({ name: 'balanceCheck', from: 'home', accountId })}
+        openGaps={openGaps(data, todayStr())}
+        onOpenGap={accountId => setLaterIds(ids => ids.filter(id => !id.startsWith(`gap|${accountId}|`)))}
         onOpenGoals={() => go({ name: 'goals' })}
         onEditEvent={(event, date, time) => go({ name: 'eventForm', event, date, time, from: 'home' })}
         day={homeDay.current}
@@ -421,6 +450,9 @@ export function App() {
     .flatMap(rec => openOccurrences(rec, today, data.startDate).map(occurrence => ({ rec, occurrence })))
     .sort((a, b) => a.occurrence.localeCompare(b.occurrence));
   const askVariable = now.getTime() >= snoozedUntil ? variableDue[0] : undefined;
+  // Gaps left open after a check (between the changing amounts and the cards)
+  const gapsOpen = openGaps(data, today);
+  const askGap = gapsOpen.find(g => !laterIds.includes(`gap|${g.account.id}|${g.check.date}`));
   // Card charges to check against what the card company really charged (after the changing amounts)
   const cardsDue = cardChecksDue(data, today).filter(d => !laterIds.includes(`card|${d.card.id}|${d.charge.date}`));
   const askCard = cardsDue[0];
@@ -438,7 +470,7 @@ export function App() {
       {toast && (
         // key: a new message restarts the bubble's appear-and-fade
         <div key={toast.text + (toast.undoId ?? '')} class="toast-bubble" role="status">
-          <span>✓ {toast.text}</span>
+          <span>{toast.text.startsWith('🎉') ? '' : '✓ '}{toast.text}</span>
           {toast.undoId && (
             <button
               class="link"
@@ -498,7 +530,33 @@ export function App() {
               onDone={afterChange}
             />
           )}
-          {!askVariable && askCard && !menuOpen && !earlyAsk && (
+          {!askVariable && askGap && !menuOpen && !earlyAsk && (
+            <OpenGapCard
+              key={`${askGap.account.id}|${askGap.check.date}`}
+              gap={askGap}
+              droppedFrom={gapDrop?.accountId === askGap.account.id ? gapDrop.from : undefined}
+              more={gapsOpen.length - 1}
+              onAdd={() => {
+                setGapDrop(null);
+                go({ name: 'entry', from: tab, preset: { ...sourcePreset(data, askGap.account, askGap.left), date: askGap.check.date } });
+              }}
+              onRecheck={() => {
+                setGapDrop(null);
+                go({ name: 'balanceCheck', from: tab, accountId: askGap.account.id });
+              }}
+              onRecordNow={async () => {
+                setGapDrop(null);
+                await correctBalance(db, data, askGap.account, askGap.check.real, askGap.check.real - askGap.left, askGap.check.date);
+                setToast({ text: `נרשם "לא מזוהה" של ${formatMoney(Math.abs(askGap.left))} ב${askGap.account.name}` });
+                afterChange();
+              }}
+              onLater={() => {
+                setGapDrop(null);
+                setLaterIds(ids => [...ids, `gap|${askGap.account.id}|${askGap.check.date}`]);
+              }}
+            />
+          )}
+          {!askVariable && !askGap && askCard && !menuOpen && !earlyAsk && (
             <CardChargeCard
               key={`${askCard.card.id}|${askCard.charge.date}|${askCard.actual ?? ''}`}
               db={db}
@@ -514,7 +572,7 @@ export function App() {
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />
           )}
-          {!askVariable && !askCard && askEvent && !menuOpen && (
+          {!askVariable && !askGap && !askCard && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

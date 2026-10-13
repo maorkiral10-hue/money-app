@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'preact/hooks';
+import type { OpenGap } from '../data/reconcile';
+import { whenRecorded } from '../components/OpenGapCard';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
@@ -22,6 +24,9 @@ export function Home(props: {
   onEdit: (tx: Transaction) => void;
   onOpenData: () => void;
   onOpenCheck: (accountId?: string) => void;
+  /** Gaps left open after checks: tapping one brings up its card. */
+  openGaps?: OpenGap[];
+  onOpenGap?: (accountId: string) => void;
   onOpenGoals: () => void;
   onEditEvent: (event?: CalendarEvent, date?: string, time?: string) => void;
   /** The calendar's chosen day: kept by the app, so "+" records on it and coming back keeps it. */
@@ -56,6 +61,18 @@ export function Home(props: {
           </span>
         </button>
       )}
+
+      {props.openGaps?.map(g => (
+        <button key={g.account.id} class="open-gap-line" onClick={() => props.onOpenGap?.(g.account.id)}>
+          <span>
+            פער פתוח ב{g.account.name}: נשארו <strong>{formatMoney(Math.abs(g.left))}</strong>
+          </span>
+          <span class="bar gap-bar">
+            <span style={{ width: `${Math.abs(g.found) ? Math.max(0, Math.min(1, 1 - Math.abs(g.left) / Math.abs(g.found))) * 100 : 0}%` }} />
+          </span>
+          <span class="small muted">{whenRecorded(g, today)} · לחץ להשלמה</span>
+        </button>
+      ))}
 
       <div class="card hero">
         <div class="muted small">כסף נזיל עכשיו</div>

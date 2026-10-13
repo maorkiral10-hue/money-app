@@ -38,6 +38,8 @@ export interface AppData {
   cardChecks: CardCheck[];
   /** Long-term savings (pension, hishtalmut, gemel), followed for the picture only. */
   funds: Fund[];
+  /** Days a gap may be left open after a check before it's recorded as unexplained. */
+  gapGraceDays: number;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -65,6 +67,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     checkTolerance: (await getMeta<number>(db, 'checkTolerance')) ?? 0,
     cardChecks: (await getMeta<CardCheck[]>(db, 'cardChecks')) ?? [],
     funds: (await getMeta<Fund[]>(db, 'funds')) ?? [],
+    gapGraceDays: (await getMeta<number>(db, 'gapGraceDays')) ?? 3,
   };
 }
 

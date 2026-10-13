@@ -11,8 +11,12 @@ export interface BalanceCheck {
   real: number;
   /** What the app had. */
   app: number;
-  /** "corrected": the gap was recorded as an unexplained expense or income (before version 78: the start balance was moved). */
-  result: 'match' | 'gap' | 'corrected';
+  /**
+   * "gap": left open for a few days (see openGaps). "corrected": the gap was recorded as an unexplained
+   * expense or income (before version 78: the start balance was moved). "closed": a gap left open that
+   * what was remembered in the days after made up in full.
+   */
+  result: 'match' | 'gap' | 'corrected' | 'closed';
   /**
    * Checked before it was due, and the user chose to stay on the regular schedule: the next reminder is
    * counted from the check before, as if this one hadn't moved it.
@@ -178,7 +182,8 @@ export async function correctBalance(
     tx.objectStore('categories').put(category);
     tx.objectStore('transactions').put(gapTx);
     // The comparison just logged becomes this record, not a second line for the same check
-    const same = all.findIndex(c => c.accountId === account.id && c.date === today && c.real === real && c.app === app && c.result === 'gap');
+    // (matched by the real balance: the app's side may have changed while the gap was left open)
+    const same = all.findIndex(c => c.accountId === account.id && c.date === today && c.real === real && c.result === 'gap');
     const rest = same >= 0 ? all.filter((_, i) => i !== same) : all;
     if (same >= 0 && all[same].early) check.early = true;
     tx.objectStore('meta').put([check, ...rest].slice(0, KEEP), 'balanceChecks');
@@ -284,4 +289,76 @@ export function unknownBySource(data: {
     balance: sources.reduce((a, s) => a + s.balance, 0),
     total: sources.reduce((a, s) => a + s.total, 0),
   };
+}
+
+/** How many days a gap may be left open by default before it's recorded as unexplained. */
+export const DEFAULT_GRACE_DAYS = 3;
+
+/** A gap left open after a check: found then, what's still missing now, and the day it's recorded as unexplained. */
+export interface OpenGap {
+  account: Account;
+  check: BalanceCheck;
+  /** + more money than the app had, − less: as found at the check. */
+  found: number;
+  /** The same now: the real balance that day against everything recorded up to that day since. */
+  left: number;
+  /** From the day after it, what's left is recorded as unexplained. */
+  until: string;
+}
+
+/**
+ * Gaps left open ("להשאיר ככה"): each source's latest check, when it found a gap beyond the minor
+ * range and nothing was done about it yet. What's left of it is worked out again all the time — the
+ * real balance typed that day against the app's balance for that day as it stands now — so anything
+ * remembered and recorded for before the check makes it smaller. The days it may stay open are the
+ * user's choice, never more than the source's own check interval.
+ */
+export function openGaps(
+  data: Ledger & CheckSettings & { balanceChecks: BalanceCheck[]; checkTolerance: number; gapGraceDays: number },
+  today: string,
+): OpenGap[] {
+  const out: OpenGap[] = [];
+  for (const account of data.accounts.filter(a => a.kind !== 'goal' && !a.archived)) {
+    const check = data.balanceChecks.find(c => c.accountId === account.id);
+    if (!check || check.result !== 'gap' || checkMark(check.real, check.app, data.checkTolerance) !== 'off') continue;
+    const every = everyFor(data, account);
+    const days = Math.min(data.gapGraceDays, every === 'never' ? data.gapGraceDays : EVERY_DAYS[every]);
+    out.push({
+      account,
+      check,
+      found: check.real - check.app,
+      left: check.real - appBalance(data, account.id, check.date),
+      until: addDays(check.date, days),
+    });
+  }
+  return out.filter(g => g.check.date <= today);
+}
+
+/**
+ * Settles the gaps left open: one made up in full (or to within the minor range) is closed; one whose days
+ * are over has what's left recorded as unexplained, on the day of its check. Returns what happened.
+ */
+export async function settleOpenGaps(
+  db: IDBDatabase,
+  data: Parameters<typeof openGaps>[0] & { categories: Category[] },
+  today: string,
+): Promise<{ account: Account; closed: boolean; amount: number }[]> {
+  const done: { account: Account; closed: boolean; amount: number }[] = [];
+  for (const g of openGaps(data, today)) {
+    if (Math.abs(g.left) <= data.checkTolerance) {
+      const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+      await setMeta(db, 'balanceChecks', all.map(c => (c === all.find(x => x.accountId === g.account.id && x.date === g.check.date && x.real === g.check.real && x.result === 'gap') ? { ...c, result: 'closed' as const } : c)));
+      done.push({ account: g.account, closed: true, amount: 0 });
+    } else if (today > g.until) {
+      await correctBalance(db, data, g.account, g.check.real, g.check.real - g.left, g.check.date);
+      done.push({ account: g.account, closed: false, amount: g.left });
+    }
+  }
+  return done;
+}
+
+/** How to record something for a source from its check: the way money leaves it (expenses) or the source itself (income). */
+export function sourcePreset(data: { methods: PaymentMethod[] }, account: Account, gap: number) {
+  const method = data.methods.find(m => m.accountId === account.id && m.kind !== 'credit' && !m.archived);
+  return { type: gap < 0 ? ('expense' as const) : ('income' as const), amount: Math.abs(gap), method: gap < 0 ? method?.name : account.name, editAmount: true };
 }

@@ -12,6 +12,8 @@ export interface QuickPreset {
   /** Recording what a calendar event came to: its day and its title. */
   date?: string;
   note?: string;
+  /** The amount is a suggestion (a gap from a check): start on the keypad with it, the first key replacing it. */
+  editAmount?: boolean;
 }
 
 /**

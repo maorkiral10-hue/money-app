@@ -652,3 +652,9 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .unknown-head { display: block; width: 100%; margin: 0; padding: 0; background: none; color: var(--text); font-weight: 400; text-align: inherit; }
 .unknown-head .line, .unknown-gaps .line { display: flex; justify-content: space-between; gap: 8px; }
 .unknown-gaps { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 8px; background: var(--soft); border-radius: 10px; }
+
+/* A gap left open after a check */
+.gap-bar { height: 8px; margin: 8px 0 4px; display: block; }
+.gap-bar > span { background: var(--pos); }
+.open-gap .gap-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.open-gap-line { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; margin: 0 0 10px; padding: 10px 14px; border-radius: 14px; background: var(--sav-soft); border: 1px solid var(--sav); color: var(--text); font-weight: 400; text-align: inherit; }

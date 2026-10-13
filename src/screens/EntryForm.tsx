@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'preact/hooks';
+import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
 import { ongoingEvents, timeRoundOf } from '../data/calendar';
 import { Chips } from '../components/inputs';
 import { cardUsage, chargeOf, splitInstallments } from '../data/balance';
@@ -74,6 +74,9 @@ export function EntryForm(props: {
 
   const [type, setType] = useState<TxType>(initialType);
   const [amountText, setAmountText] = useState(tx ? moneyInputText(tx.amount) : preset?.amount ? moneyInputText(preset.amount) : '');
+  const [freshAmount, setFreshAmount] = useState(!!preset?.editAmount && !tx);
+  // Read by taps in quick succession too: only the very first replaces the suggested amount
+  const fresh = useRef(freshAmount);
   const [categoryId, setCategoryId] = useState(tx?.categoryId ?? presetCategory?.id);
   // How it was paid: a payment method, or a savings goal the money comes straight out of
   const [methodId, setMethodId] = useState(tx?.methodId ?? (tx?.type === 'expense' ? tx.accountId : undefined) ?? presetMethod?.id ?? defaultMethod?.id);
@@ -91,7 +94,7 @@ export function EntryForm(props: {
     if (!preset?.type) return 'type';
     // Start at the first question the Shortcut didn't answer
     const answered: Partial<Record<Step, boolean>> = {
-      amount: !!preset?.amount,
+      amount: !!preset?.amount && !preset.editAmount,
       category: !!presetCategory,
       method: !!presetMethod,
       account: !!presetAccount,
@@ -352,7 +355,17 @@ export function EntryForm(props: {
 
       {step === 'amount' && (
         <div class={type}>
-          <Keypad text={amountText} onChange={setAmountText} />
+          <Keypad
+            text={amountText}
+            onChange={u => {
+              // A suggested amount: the first key starts it over
+              const first = fresh.current;
+              fresh.current = false;
+              setAmountText(t => (first ? u('') : u(t)));
+              setFreshAmount(false);
+            }}
+          />
+          {freshAmount && <p class="muted small center">הסכום של הפער מולא מראש. אפשר להקליד אחר.</p>}
         </div>
       )}
 
