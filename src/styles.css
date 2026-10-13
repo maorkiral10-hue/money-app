@@ -644,3 +644,11 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .stat-row:not(.two) .stat { padding: 8px 4px; min-width: 0; overflow: hidden; }
 .stat-row:not(.two) .stat-value { font-size: clamp(12px, 4.1vw, 17px); letter-spacing: -0.3px; }
 .stat-row:not(.two) .tap-hint { font-size: clamp(10px, 3vw, 12px); white-space: nowrap; }
+
+/* Money that got away unexplained */
+.unknown-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: center; margin: 8px 0 4px; }
+.unknown-big { font-size: 22px; font-weight: 700; direction: ltr; unicode-bidi: plaintext; }
+.unknown-source { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.unknown-head { display: block; width: 100%; margin: 0; padding: 0; background: none; color: var(--text); font-weight: 400; text-align: inherit; }
+.unknown-head .line, .unknown-gaps .line { display: flex; justify-content: space-between; gap: 8px; }
+.unknown-gaps { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 8px; background: var(--soft); border-radius: 10px; }

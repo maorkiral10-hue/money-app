@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, canDeleteCheck, checkDue, checkMark, checkStatus, correctBalance, explainGap, logCheck, gapFor, gapForChange, type BalanceCheck } from './reconcile';
+import { appBalance, canDeleteCheck, checkDue, checkMark, checkStatus, correctBalance, explainGap, logCheck, unknownBySource, gapFor, gapForChange, type BalanceCheck } from './reconcile';
 import type { Account, Category, Transaction } from './types';
 
 let n = 0;
@@ -68,6 +68,34 @@ describe('checking the balance against the bank', () => {
     const history = (await getMeta<BalanceCheck[]>(db, 'balanceChecks'))!;
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({ result: 'corrected', early: true });
+  });
+
+  it('adds up the money that got away unexplained, per source, over all the history', async () => {
+    const db = await openDb(`reconcile-${++n}`);
+    const cash: Account = { id: 'wallet', name: 'מזומן', kind: 'cash', openingBalance: 0, order: 1 };
+    const methods = [{ id: 'cashm', name: 'מזומן', kind: 'cash' as const, accountId: 'wallet', order: 0 }];
+    // Before version 78: corrected in the start balance, no transaction (−100)
+    const old: BalanceCheck = { date: '2026-09-20', accountId: 'wallet', real: 400_00, app: 500_00, result: 'corrected' };
+    await logCheck(db, old);
+    // Now: +300, then −200 of which 150 was remembered later
+    await correctBalance(db, { categories: [], methods }, cash, 800_00, 500_00, '2026-10-06');
+    let categories = await getAll<Category>(db, 'categories');
+    await correctBalance(db, { categories, methods }, cash, 300_00, 500_00, '2026-10-13');
+    categories = await getAll<Category>(db, 'categories');
+    let txs = await getAll<Transaction>(db, 'transactions');
+    const minus = txs.find(t => t.type === 'expense')!;
+    await explainGap(db, minus, 150_00, { put: { id: 'falafel', type: 'expense', amount: 150_00, date: '2026-10-12', methodId: 'cashm', categoryId: 'food', createdAt: '', updatedAt: '' } });
+    txs = await getAll<Transaction>(db, 'transactions');
+    const checks = (await getMeta<BalanceCheck[]>(db, 'balanceChecks'))!;
+    const u = unknownBySource({ accounts: [cash], balanceChecks: checks, transactions: txs, categories, methods });
+    expect(u.sources[0].gaps.map(g => [g.date, g.found, g.left])).toEqual([
+      ['2026-10-13', -200_00, -50_00],
+      ['2026-10-06', 300_00, 300_00],
+      ['2026-09-20', -100_00, -100_00],
+    ]);
+    // Pluses and minuses offset: +300 −50 −100; all of it either way: 450
+    expect(u).toMatchObject({ balance: 150_00, total: 450_00 });
+    expect(u.sources[0]).toMatchObject({ less: 2, more: 1 });
   });
 
   it('the quiet reminder comes due by the chosen interval', () => {

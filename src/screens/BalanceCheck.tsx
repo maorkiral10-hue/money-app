@@ -5,7 +5,7 @@ import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { appBalance, unknownBySource, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -233,6 +233,8 @@ export function BalanceCheck(props: {
         )}
       </div>
 
+      <UnknownMoney data={data} />
+
       {data.balanceChecks.length > 0 && (
         <div class="card list">
           <h2 class="list-title">בדיקות קודמות</h2>
@@ -278,5 +280,67 @@ export function BalanceCheck(props: {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Money that got away unexplained, per source, over all the history: the balance (pluses and minuses
+ * offset) and the total either way, the number to bring down. Tapping a source shows each gap.
+ */
+function UnknownMoney(props: { data: AppData }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const u = unknownBySource(props.data);
+  if (!u.sources.length) return null;
+  const today = todayStr();
+  const signed = (n: number) => (n === 0 ? formatMoney(0) : formatMoney(n, { sign: true }));
+  return (
+    <div class="card unknown-money">
+      <h2 class="list-title">כסף לא מזוהה</h2>
+      <p class="muted small">פערים שנרשמו כ"לא מזוהה" מכל הבדיקות. כל מה שנזכרת בו אחר כך יורד מכאן.</p>
+      <div class="unknown-totals">
+        <div>
+          <div class="muted small">סך הכסף הלא מזוהה</div>
+          <div class="unknown-big">{formatMoney(u.total)}</div>
+        </div>
+        <div>
+          <div class="muted small">מאזן (פלוס מול מינוס)</div>
+          <div class={`unknown-big ${u.balance < 0 ? 'exp' : u.balance > 0 ? 'inc' : ''}`}>{signed(u.balance)}</div>
+        </div>
+      </div>
+      {u.sources.map(s => (
+        <div key={s.account.id} class="unknown-source">
+          <button class="unknown-head" onClick={() => setOpen(open === s.account.id ? null : s.account.id)} aria-expanded={open === s.account.id}>
+            <div class="line">
+              <strong>
+                {s.account.name}
+                <span class={`chevron small-chevron ${open === s.account.id ? 'open' : ''}`}> ‹</span>
+              </strong>
+              <span>{formatMoney(s.total)}</span>
+            </div>
+            <div class="muted small">
+              מאזן <span class={s.balance < 0 ? 'exp' : s.balance > 0 ? 'inc' : ''}>{signed(s.balance)}</span>
+              {' · '}חוסר {s.less} {s.less === 1 ? 'פעם' : 'פעמים'} · עודף {s.more} {s.more === 1 ? 'פעם' : 'פעמים'}
+            </div>
+          </button>
+          {open === s.account.id && (
+            <div class="unknown-gaps">
+              {s.gaps.map((g, i) => (
+                <div key={i} class="line small">
+                  <span>
+                    {dayLabel(g.date, today)}
+                    {g.left === 0 ? (
+                      <span class="muted"> · הוסבר כולו ✓</span>
+                    ) : (
+                      g.left !== g.found && <span class="muted"> · הוסבר {formatMoney(Math.abs(g.found - g.left))} מתוך {formatMoney(Math.abs(g.found))}</span>
+                    )}
+                  </span>
+                  <span class={g.left < 0 ? 'exp' : g.left > 0 ? 'inc' : 'muted'}>{signed(g.left)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

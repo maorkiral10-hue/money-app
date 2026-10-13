@@ -23,6 +23,8 @@ export interface BalanceCheck {
    * Missing on checks from before version 82, where only keepSchedule tells.
    */
   early?: boolean;
+  /** "corrected" from version 87 on: the unexplained expense or income it recorded. */
+  gapTxId?: string;
 }
 
 /** A regular check stays in the history for good; only an extra one can be deleted. */
@@ -171,6 +173,7 @@ export async function correctBalance(
     createdAt: now,
     updatedAt: now,
   };
+  check.gapTxId = gapTx.id;
   await run(db, ['categories', 'transactions', 'meta'], 'readwrite', tx => {
     tx.objectStore('categories').put(category);
     tx.objectStore('transactions').put(gapTx);
@@ -213,4 +216,72 @@ export function checkStatus(data: CheckSettings & { accounts: Account[]; balance
   const last = (id: string) => data.balanceChecks.find(c => c.accountId === id && !c.keepSchedule)?.date;
   const due = sources.filter(a => checkDue(everyFor(data, a), last(a.id), today));
   return { due, total: sources.length, checked: sources.length - due.length };
+}
+
+/** The day version 78 came out: corrections before it moved the start balance, with no transaction to follow. */
+const RECORDED_FROM = '2026-10-04';
+
+/** One gap recorded as unexplained, and how much of it is still unexplained now. */
+export interface UnknownGap {
+  date: string;
+  /** As found at the check: + more money than the app had, − less. */
+  found: number;
+  /** Still unexplained: what's left after things remembered later (0 once all of it was). */
+  left: number;
+}
+
+/**
+ * Money that got away unexplained, per money source (bank, cash, a payment app), over all the history:
+ * every check whose gap was recorded as unexplained, with what's still unexplained of it (things remembered
+ * later take their part off), the balance of them (pluses and minuses offset) and the total (all of it,
+ * either way — the money no one knows where it went or came from). Display only: nothing is changed.
+ */
+export function unknownBySource(data: {
+  accounts: Account[];
+  balanceChecks: BalanceCheck[];
+  transactions: Transaction[];
+  categories: Category[];
+  methods: PaymentMethod[];
+}) {
+  const signedGap = (t: Transaction) => (t.type === 'expense' ? -t.amount : t.amount);
+  const gapTxs = data.transactions.filter(t => isGapTx(t, data.categories));
+  const used = new Set<string>();
+  const bySource = new Map<string, UnknownGap[]>();
+  const add = (accountId: string, g: UnknownGap) => bySource.set(accountId, [...(bySource.get(accountId) ?? []), g]);
+
+  for (const c of data.balanceChecks.filter(c => c.result === 'corrected')) {
+    const found = c.real - c.app;
+    let mine: Transaction[];
+    if (c.gapTxId) mine = gapTxs.filter(t => t.id === c.gapTxId);
+    else mine = gapTxs.filter(t => !used.has(t.id) && t.date === c.date && touches(t, data.methods)?.accountId === c.accountId);
+    mine.forEach(t => used.add(t.id));
+    // Its transaction gone: all of it was explained later — unless it was from before there were transactions for it
+    const left = mine.length ? mine.reduce((a, t) => a + signedGap(t), 0) : !c.gapTxId && c.date <= RECORDED_FROM ? found : 0;
+    add(c.accountId, { date: c.date, found, left });
+  }
+  // A gap whose check isn't in the history any more still counts
+  for (const t of gapTxs.filter(t => !used.has(t.id))) {
+    const accountId = touches(t, data.methods)?.accountId;
+    if (accountId) add(accountId, { date: t.date, found: signedGap(t), left: signedGap(t) });
+  }
+
+  const sources = data.accounts
+    .filter(a => a.kind !== 'goal' && bySource.has(a.id))
+    .map(account => {
+      const gaps = bySource.get(account.id)!.sort((a, b) => b.date.localeCompare(a.date));
+      const open = gaps.filter(g => g.left !== 0);
+      return {
+        account,
+        gaps,
+        balance: gaps.reduce((a, g) => a + g.left, 0),
+        total: gaps.reduce((a, g) => a + Math.abs(g.left), 0),
+        less: open.filter(g => g.left < 0).length,
+        more: open.filter(g => g.left > 0).length,
+      };
+    });
+  return {
+    sources,
+    balance: sources.reduce((a, s) => a + s.balance, 0),
+    total: sources.reduce((a, s) => a + s.total, 0),
+  };
 }
