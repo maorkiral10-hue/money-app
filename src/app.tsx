@@ -23,7 +23,7 @@ import { VariableDueCard } from './components/VariableDueCard';
 import { EarlyRecordCard } from './components/EarlyRecordCard';
 import { CardChargeCard } from './components/CardChargeCard';
 import { OpenGapCard } from './components/OpenGapCard';
-import { correctBalance, openGaps, settleOpenGaps, sourcePreset } from './data/reconcile';
+import { correctBalance, gapAsOf, openGaps, settleOpenGaps, sourcePreset } from './data/reconcile';
 import { cardChecksDue } from './data/cardCheck';
 import { RECORD_EARLY_EVENT } from './components/MoneyList';
 import { openOccurrences } from './data/recurring';
@@ -57,7 +57,7 @@ type Screen =
   | { name: 'goal'; id: string }
   | { name: 'goalForm'; goal?: Account }
   | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string; from?: Place }
-  | { name: 'balanceCheck'; from: Place; accountId?: string }
+  | { name: 'balanceCheck'; from: Place; accountId?: string; recheck?: boolean }
   | { name: 'data'; from: Place }
   | { name: 'funds' };
 
@@ -343,6 +343,7 @@ export function App() {
         db={db}
         data={data}
         accountId={screen.accountId}
+        recheck={screen.recheck}
         onBack={() => go({ name: from })}
         onChange={afterChange}
         onAddMissing={preset => go({ name: 'entry', preset, from })}
@@ -538,11 +539,11 @@ export function App() {
               more={gapsOpen.length - 1}
               onAdd={() => {
                 setGapDrop(null);
-                go({ name: 'entry', from: tab, preset: { ...sourcePreset(data, askGap.account, askGap.left), date: askGap.check.date } });
+                go({ name: 'entry', from: tab, preset: { ...sourcePreset(data, askGap.account, askGap.left), date: gapAsOf(askGap) } });
               }}
               onRecheck={() => {
                 setGapDrop(null);
-                go({ name: 'balanceCheck', from: tab, accountId: askGap.account.id });
+                go({ name: 'balanceCheck', from: tab, accountId: askGap.account.id, recheck: true });
               }}
               onRecordNow={async () => {
                 setGapDrop(null);

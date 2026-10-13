@@ -29,6 +29,12 @@ export interface BalanceCheck {
   early?: boolean;
   /** "corrected" from version 87 on: the unexplained expense or income it recorded. */
   gapTxId?: string;
+  /**
+   * A gap left open, checked again while looking for it: the balance seen then. It takes the place of the
+   * first one for what's still missing, but isn't a check of its own: not in the history, and the next
+   * check stays due when it was.
+   */
+  recheck?: { date: string; real: number };
 }
 
 /** A regular check stays in the history for good; only an extra one can be deleted. */
@@ -327,7 +333,7 @@ export function openGaps(
       account,
       check,
       found: check.real - check.app,
-      left: check.real - appBalance(data, account.id, check.date),
+      left: (check.recheck?.real ?? check.real) - appBalance(data, account.id, check.recheck?.date ?? check.date),
       until: addDays(check.date, days),
     });
   }
@@ -356,6 +362,17 @@ export async function settleOpenGaps(
   }
   return done;
 }
+
+/** Checking a gap left open again: the balance seen now replaces the first one for what's still missing. */
+export async function recheckGap(db: IDBDatabase, g: OpenGap, real: number, date: string) {
+  const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+  const i = all.findIndex(c => c.accountId === g.account.id && c.date === g.check.date && c.real === g.check.real && c.result === 'gap');
+  if (i < 0) return;
+  await setMeta(db, 'balanceChecks', all.map((c, j) => (j === i ? { ...c, recheck: { date, real } } : c)));
+}
+
+/** The day something remembered has to be dated by to count for a gap left open: the latest look at it. */
+export const gapAsOf = (g: OpenGap) => g.check.recheck?.date ?? g.check.date;
 
 /** How to record something for a source from its check: the way money leaves it (expenses) or the source itself (income). */
 export function sourcePreset(data: { methods: PaymentMethod[] }, account: Account, gap: number) {

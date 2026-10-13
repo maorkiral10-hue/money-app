@@ -5,7 +5,7 @@ import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, openGaps, recheckGap, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -28,6 +28,8 @@ export function BalanceCheck(props: {
   onAddMissing: (preset: QuickPreset) => void;
   /** Open on this source (the first one due, from the home screen's bubble). */
   accountId?: string;
+  /** Checking a gap left open again: not a check of its own (see BalanceCheck.recheck). */
+  recheck?: boolean;
 }) {
   const { data } = props;
   const today = todayStr();
@@ -68,8 +70,19 @@ export function BalanceCheck(props: {
   })();
   const name = (id: string) => data.accounts.find(a => a.id === id)?.name ?? '';
 
+  // Opened to check a gap left open again: the gap it's for, as it was when the screen opened
+  const [recheckOf] = useState(() => (props.recheck ? openGaps(data, today).find(g => g.account.id === props.accountId) : undefined));
+  const [recheckDone, setRecheckDone] = useState('');
+
   const compare = async () => {
     if (!account) return;
+    if (recheckOf) {
+      await recheckGap(props.db, recheckOf, real, today);
+      setChecked(true);
+      setRecheckDone('');
+      props.onChange();
+      return;
+    }
     const due = checkStatus(data, today).due.some(a => a.id === account.id);
     const checkedBefore = data.balanceChecks.some(c => c.accountId === account.id);
     setEarly(!due && checkedBefore && everyFor(data, account) !== 'never' ? 'ask' : null);
@@ -91,7 +104,7 @@ export function BalanceCheck(props: {
   return (
     <>
       <header class="top">
-        <h1>בדיקה מול הבנק</h1>
+        <h1>{recheckOf ? `בדיקה חוזרת · ${recheckOf.account.name}` : 'בדיקה מול הבנק'}</h1>
         <button class="link" onClick={props.onBack}>
           חזרה
         </button>
@@ -101,9 +114,14 @@ export function BalanceCheck(props: {
         {data.checkTolerance > 0 ? `פער עד ${formatMoney(data.checkTolerance)} נחשב שינוי מינורי (אפשר לשנות בהעדפות).` : 'כל פער נחשב חריגה (אפשר לקבוע טווח לשינוי מינורי בהעדפות).'}
       </p>
 
+      {recheckOf && (
+        <p class="small recheck-note">
+          בודקים שוב את הפער הפתוח מ{dayLabel(recheckOf.check.date, today)}. הבדיקה הזו לא נכנסת להיסטוריה ולא משנה את מועד הבדיקה הבאה.
+        </p>
+      )}
       <div class="card">
-        <h2>איפה בודקים?</h2>
-        <Chips items={accounts} value={accountId} onChange={pick} />
+        <h2>{recheckOf ? 'כמה יש עכשיו באמת?' : 'איפה בודקים?'}</h2>
+        {!recheckOf && <Chips items={accounts} value={accountId} onChange={pick} />}
         <label class="field">
           <span>כמה יש שם עכשיו באמת</span>
           <MoneyInput
@@ -121,7 +139,50 @@ export function BalanceCheck(props: {
         </button>
       </div>
 
-      {checked && account && !done && (
+      {recheckOf && checked && account && (
+        <div class={`card check-result ${Math.abs(gap) <= data.checkTolerance ? 'inc-panel' : 'exp-panel'}`}>
+          {Math.abs(gap) <= data.checkTolerance ? (
+            <>
+              <h2 class="inc">✓ הפער נסגר</h2>
+              <p class="muted small">עכשיו {account.name} מתאים למה שרשום.</p>
+              <button onClick={props.onBack}>סיום</button>
+            </>
+          ) : recheckDone ? (
+            <>
+              <p>{recheckDone}</p>
+              <button onClick={props.onBack}>סיום</button>
+            </>
+          ) : (
+            <>
+              <h2 class="exp">
+                עדיין {gap < 0 ? 'חסרים' : 'יש עודף של'} {formatMoney(Math.abs(gap))}
+              </h2>
+              <p class="muted small">
+                {Math.abs(gap) < Math.abs(recheckOf.found) ? `מתוך ${formatMoney(Math.abs(recheckOf.found))} בהתחלה. ` : ''}הפער נשאר פתוח עד {dayLabel(recheckOf.until, today)}.
+              </p>
+              <button onClick={() => props.onAddMissing({ ...sourcePreset(data, account, gap), date: today })}>
+                {gap < 0 ? `+ להוסיף הוצאה (עד ${formatMoney(-gap)})` : `+ להוסיף הכנסה (עד ${formatMoney(gap)})`}
+              </button>
+              <button
+                class="secondary"
+                onClick={async () => {
+                  const g = openGaps(data, today).find(x => x.account.id === account.id);
+                  if (!g) return;
+                  await correctBalance(props.db, data, account, g.check.real, g.check.real - g.left, g.check.date);
+                  setRecheckDone(`נרשם "לא מזוהה" של ${formatMoney(Math.abs(g.left))}. היתרה של ${account.name} עכשיו מתאימה.`);
+                  props.onChange();
+                }}
+              >
+                לא אמצא: לרשום כ"לא מזוהה"
+              </button>
+              <button class="link" onClick={props.onBack}>
+                להמשיך לחפש
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {!recheckOf && checked && account && !done && (
         <div class={`card check-result ${mark === 'exact' ? 'inc-panel' : mark === 'minor' ? 'minor-panel' : 'exp-panel'}`}>
           {mark === 'exact' ? (
             <h2 class="inc">✓ מתאים בדיוק</h2>
@@ -175,7 +236,7 @@ export function BalanceCheck(props: {
         </div>
       )}
       {done && <div class="card note">{done}</div>}
-      {checked && early === 'ask' && account && (
+      {!recheckOf && checked && early === 'ask' && account && (
         <div class="card">
           <h2>בדקת לפני הזמן. מתי הבדיקה הבאה?</h2>
           <div class="scope-buttons">
@@ -193,7 +254,7 @@ export function BalanceCheck(props: {
           </div>
         </div>
       )}
-      {checked && nextDue && (
+      {!recheckOf && checked && nextDue && (
         <button onClick={() => pick(nextDue.id)}>לבדיקה הבאה: {nextDue.name}</button>
       )}
 

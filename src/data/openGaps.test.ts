@@ -28,6 +28,9 @@ describe('a gap left open after a check', () => {
     expect(openGaps(base([], [check]), '2026-10-07')[0]).toMatchObject({ found: -100_00, left: -100_00, until: '2026-10-09' });
     expect(openGaps(base([spent('a', 60_00, '2026-10-04')], [check]), '2026-10-07')[0].left).toBe(-40_00);
     expect(openGaps(base([spent('b', 60_00, '2026-10-07')], [check]), '2026-10-07')[0].left).toBe(-100_00);
+    // Checked again two days later (the bank caught up: 460 there now, 40 spent in between was recorded)
+    const again = { ...check, recheck: { date: '2026-10-08', real: 460_00 } };
+    expect(openGaps(base([spent('c', 40_00, '2026-10-07')], [again]), '2026-10-08')[0]).toMatchObject({ found: -100_00, left: 0, until: '2026-10-09' });
     // A newer check takes its place
     expect(openGaps(base([], [{ ...check, date: '2026-10-07', result: 'match', real: 500_00 }, check]), '2026-10-07')).toEqual([]);
   });
