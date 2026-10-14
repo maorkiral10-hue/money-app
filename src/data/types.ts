@@ -104,6 +104,11 @@ export interface Transaction {
   eventDate?: string;
   /** An extra deposit into a long-term savings fund (besides its standing order): counts in its estimated balance. */
   fundId?: string;
+  /**
+   * A move back out of a goal made to pay for something on it from other money ("מהכסף שבצד"): the id of
+   * that expense. It isn't money taken back from savings, so the month's savings don't count it.
+   */
+  coverFor?: string;
   /** Set when the transaction was created from a recurring item, for that item's occurrence on `occurrence`. */
   recurringId?: string;
   occurrence?: string;

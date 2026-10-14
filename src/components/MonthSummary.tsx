@@ -91,6 +91,19 @@ export function MonthSummary(props: {
   // Money put into savings: not spending, so not in its totals, but a tile of its own so it's never missed —
   // standing orders like a provident fund and one-off deposits alike
   const savedSoFar = sum(data.transactions.filter(t => isSaving(t, savingsIds) && t.date >= start && t.date <= end));
+  // Money moved into savings goals this month (not spending), and what was taken back out of them (not
+  // counting moves between goals, or money taken out to cover something paid on a goal)
+  const goalAccounts = data.accounts.filter(a => a.kind === 'goal');
+  const goalIds = new Set(goalAccounts.map(a => a.id));
+  const goalMoves = data.transactions.filter(t => t.type === 'transfer' && t.date >= start && t.date <= end && goalIds.has(t.accountId ?? '') !== goalIds.has(t.toAccountId ?? ''));
+  const intoGoals = goalMoves.filter(t => goalIds.has(t.toAccountId ?? ''));
+  const outOfGoals = goalMoves.filter(t => goalIds.has(t.accountId ?? '') && !t.coverFor);
+  const putIn = sum(intoGoals);
+  const tookOut = sum(outOfGoals);
+  const hasSavings = savingsIds.size > 0 || goalAccounts.some(a => !a.archived);
+  // Never below zero: taking money back is a line in the breakdown, not negative savings
+  const savedTile = Math.max(0, savedSoFar + putIn - tookOut);
+  const goalName = (id?: string) => goalAccounts.find(a => a.id === id)?.name ?? '';
   const savings = [
     ...data.transactions.filter(t => isSaving(t, savingsIds) && t.date >= start && t.date <= end),
     ...coming.filter(t => isSaving(t, savingsIds)),
@@ -191,7 +204,7 @@ export function MonthSummary(props: {
       </div>
       )}
 
-      <div class={`stat-row ${savingsIds.size ? '' : 'two'}`}>
+      <div class={`stat-row ${hasSavings ? '' : 'two'}`}>
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>
           <div class="small inc">הכנסות</div>
           <div class="stat-value inc">
@@ -206,11 +219,11 @@ export function MonthSummary(props: {
           </div>
           <div class="tap-hint">{open === 'expenses' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
         </button>
-        {savingsIds.size > 0 && (
+        {hasSavings && (
           <button class={`stat tappable ${open === 'savings' ? 'on sav-bg' : ''}`} onClick={() => toggle('savings')} aria-expanded={open === 'savings'}>
             <div class="small sav">חיסכון</div>
             <div class="stat-value sav">
-              <AnimatedMoney value={savedSoFar} />
+              <AnimatedMoney value={savedTile} />
             </div>
             <div class="tap-hint">{open === 'savings' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
           </button>
@@ -219,7 +232,29 @@ export function MonthSummary(props: {
 
       {open === 'savings' && (
         <div class="card breakdown-panel sav-panel">
-          {savings.length === 0 && <p class="muted small">לא עבר כסף לחיסכון בחודש הזה</p>}
+          {savings.length === 0 && !putIn && !tookOut && <p class="muted small">לא עבר כסף לחיסכון בחודש הזה</p>}
+          {(putIn > 0 || tookOut > 0) && (
+            <div class="goal-moves">
+              {putIn > 0 && (
+                <div class="line">
+                  <span>הועבר ליעדים</span>
+                  <span class="sav">{formatMoney(putIn)}</span>
+                </div>
+              )}
+              {[...new Set(intoGoals.map(t => t.toAccountId))].map(id => (
+                <div key={id} class="line small muted">
+                  <span>· {goalName(id)}</span>
+                  <span>{formatMoney(sum(intoGoals.filter(t => t.toAccountId === id)))}</span>
+                </div>
+              ))}
+              {tookOut > 0 && (
+                <div class="line">
+                  <span>הוחזר מיעדים</span>
+                  <span>{formatMoney(-tookOut)}</span>
+                </div>
+              )}
+            </div>
+          )}
           {comingSaving > 0 && (
             <div class="panel-split">
               <div class="line">

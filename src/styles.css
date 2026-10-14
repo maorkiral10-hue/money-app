@@ -704,3 +704,5 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .goal-tosave { font-weight: 700; border-top: 1px solid var(--line); padding-top: 4px; }
 
 .reserved-line { display: block; }
+.goal-moves { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.goal-moves .line { display: flex; justify-content: space-between; }
