@@ -17,7 +17,7 @@ const fullDate = (d: string) => d.split('-').reverse().map(Number).join('.');
  * standing order and any extra deposits put in is added as an estimate. The history shows where everything
  * stood on each day an update was made.
  */
-export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () => void; onChange: () => void }) {
+export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () => void; onChange: () => void; /** Inside the "הקופות שלי" tab: no header of its own. */ embedded?: boolean }) {
   const { data } = props;
   const today = todayStr();
   const funds = data.funds;
@@ -36,12 +36,14 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
 
   return (
     <>
-      <header class="top">
-        <h1>חיסכון לטווח ארוך</h1>
-        <button class="link" onClick={props.onBack}>
-          חזרה
-        </button>
-      </header>
+      {!props.embedded && (
+        <header class="top">
+          <h1>חיסכון לטווח ארוך</h1>
+          <button class="link" onClick={props.onBack}>
+            חזרה
+          </button>
+        </header>
+      )}
       <p class="muted small">
         לשיקוף בלבד: הכסף הזה לא נספר בכסף הנזיל ולא בחודש. מעדכנים יתרה מהדוח או מהאתר של הקרן, מתי שנוח. בין עדכון לעדכון מתווסף לבד מה שהפקדת בהוראת קבע או בהפקדה נוספת.
       </p>

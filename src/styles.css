@@ -689,3 +689,6 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .fund-day-rows { display: flex; flex-direction: column; gap: 6px; padding: 0 4px 10px; }
 .fund-day-row .line { display: flex; justify-content: space-between; gap: 8px; }
 .fund-edit { margin: 6px 0; }
+
+/* Savings goals are savings: orange like the rest */
+.goal-bar span { background: var(--sav); }

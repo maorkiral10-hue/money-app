@@ -8,12 +8,24 @@ import { goalPlan } from '../data/goals';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { Account, Transaction } from '../data/types';
+import { FundsScreen } from './Funds';
+
+/** Which part of the tab was open last, kept while the app is open. */
+let lastPart: 'goals' | 'long' = 'goals';
 
 const shortDate = (d: string) => d.split('-').reverse().map(Number).slice(0, 3).join('.');
 
-/** The goals tab: every savings goal with how far it's got and what it needs each month. */
-export function GoalsTab(props: { data: AppData; onOpen: (goal: Account) => void; onNew: () => void }) {
+/**
+ * "הקופות שלי": savings goals (money put aside to spend later) and long-term savings (pension and the like, for
+ * the picture only), each its own part, never added up together.
+ */
+export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal: Account) => void; onNew: () => void; onChange: () => void }) {
   const { data } = props;
+  const [part, setPart] = useState(lastPart);
+  const pick = (p: 'goals' | 'long') => {
+    lastPart = p;
+    setPart(p);
+  };
   const today = todayStr();
   const { goals } = summarize(data, today);
   const active = goals.filter(g => !g.account.archived);
@@ -22,8 +34,20 @@ export function GoalsTab(props: { data: AppData; onOpen: (goal: Account) => void
   return (
     <>
       <header class="top">
-        <h1>יעדים</h1>
+        <h1>הקופות שלי</h1>
       </header>
+      <Segmented
+        value={part}
+        onChange={pick}
+        options={[
+          ['goals', 'יעדים'],
+          ['long', 'לטווח ארוך'],
+        ]}
+      />
+      {part === 'long' ? (
+        <FundsScreen embedded db={props.db} data={data} onBack={() => pick('goals')} onChange={props.onChange} />
+      ) : (
+      <>
 
       {active.length === 0 ? (
         <div class="card locked">
@@ -35,7 +59,7 @@ export function GoalsTab(props: { data: AppData; onOpen: (goal: Account) => void
         <>
           <div class="card hero">
             <div class="muted small">נחסך ביעדים</div>
-            <div class="big-number inc">
+            <div class="big-number sav">
               <AnimatedMoney value={total} />
             </div>
             <div class="muted small">הכסף הזה לא נספר בכסף הנזיל</div>
@@ -46,7 +70,7 @@ export function GoalsTab(props: { data: AppData; onOpen: (goal: Account) => void
               <button key={g.id} class="card goal-card" onClick={() => props.onOpen(g)}>
                 <div class="line">
                   <span class="goal-name">{g.name}</span>
-                  <span class="inc">
+                  <span class="sav">
                     {formatMoney(balance)}
                     {g.goalTarget ? <span class="muted small"> מתוך {formatMoney(g.goalTarget)}</span> : null}
                   </span>
@@ -74,6 +98,8 @@ export function GoalsTab(props: { data: AppData; onOpen: (goal: Account) => void
             + יעד חדש
           </button>
         </>
+      )}
+      </>
       )}
     </>
   );
@@ -143,7 +169,7 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
       </header>
 
       <div class="card hero">
-        <div class="big-number inc">
+        <div class="big-number sav">
           <AnimatedMoney value={balance} />
         </div>
         {goal.goalTarget && (

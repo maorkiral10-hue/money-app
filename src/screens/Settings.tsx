@@ -49,9 +49,6 @@ export function SideMenu(props: {
             ✕
           </button>
         </div>
-        <button class="side-menu-item" onClick={() => props.onOpen('funds')}>
-          חיסכון לטווח ארוך
-        </button>
         <button class="side-menu-item" aria-expanded={moneyOpen} onClick={() => props.onSection(moneyOpen ? 'main' : 'money')}>
           הכסף שלי - הגדרות
           <span class={`chevron ${moneyOpen ? 'open' : ''}`}>‹</span>

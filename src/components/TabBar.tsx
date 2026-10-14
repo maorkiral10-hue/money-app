@@ -31,7 +31,7 @@ const ICONS: Record<Tab, ComponentChildren> = {
     </>
   ),
 };
-const LABELS: Record<Tab, string> = { home: 'בית', budget: 'תקציב', goals: 'יעדים', dashboard: 'דשבורד' };
+const LABELS: Record<Tab, string> = { home: 'בית', budget: 'תקציב', goals: 'הקופות שלי', dashboard: 'דשבורד' };
 
 /** The floating bar at the bottom: the main screens, with "+" (new entry) in the middle. */
 /** How far a drag between screens has gone, so the bar's highlight can follow the finger. */
