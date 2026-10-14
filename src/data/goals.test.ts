@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { summarize, type Ledger } from './balance';
-import { goalPlan, monthsUntil } from './goals';
+import { goalPlan, monthsUntil, goalNumbers, overReserved } from './goals';
 import type { Account, Transaction } from './types';
 
 const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 10_000_00, order: 0 };
@@ -44,5 +44,25 @@ describe('savings goals', () => {
     const plan = goalPlan(trip, 1_700_00, [...ledger.transactions, spend], '2026-09-28');
     expect(plan).toMatchObject({ spent: 800_00, perMonth: 600_00 });
     expect(plan.progress).toBeCloseTo(2_500_00 / 7_000_00);
+  });
+});
+
+describe("a goal's numbers and where its money is", () => {
+  const trip: Account = { id: 'trip', name: 'חופשה', kind: 'goal', openingBalance: 0, order: 1, goalTarget: 8_000_00 };
+  const t = (id: string, type: Transaction['type'], amount: number, from?: string, to?: string): Transaction => ({ id, type, amount, date: '2026-10-10', accountId: from, toAccountId: to, categoryId: 'c', createdAt: '', updatedAt: '' });
+
+  it('put in, paid on it, left in it, and what is left to save', () => {
+    // 5,000 put in, 2,000 paid straight out of it (the hotel), 200 taken back
+    const txs = [t('a', 'transfer', 5_000_00, 'bank', 'trip'), t('b', 'expense', 2_000_00, 'trip'), t('c', 'transfer', 200_00, 'trip', 'bank')];
+    expect(goalNumbers(trip, 2_800_00, txs)).toEqual({ deposited: 4_800_00, paid: 2_000_00, left: 2_800_00, toSave: 3_200_00, surplus: 0 });
+    expect(goalNumbers(trip, 6_300_00, [t('a', 'transfer', 6_300_00, 'bank', 'trip'), t('b', 'expense', 2_000_00, 'trip')]).surplus).toBe(300_00);
+  });
+
+  it('set aside inside a source that now holds less: comes down to what the source has, shared in order', () => {
+    const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 0, order: 0 };
+    const a: Account = { ...trip, id: 'a', order: 1, goalPlace: 'inside', goalSource: 'bank' };
+    const b: Account = { ...trip, id: 'b', order: 2, goalPlace: 'inside', goalSource: 'bank' };
+    const over = overReserved([bank, a, b], [{ account: bank, balance: 700_00 }], [{ account: a, balance: 500_00 }, { account: b, balance: 400_00 }]);
+    expect(over.map(o => [o.goal.id, o.from, o.to])).toEqual([['b', 400_00, 200_00]]);
   });
 });

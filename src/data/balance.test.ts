@@ -195,3 +195,25 @@ describe('standing orders on a card and its limit', () => {
     expect(cardUsage(ledger, '2026-11-01', '2026-09-29')[0].used).toBe(170_00);
   });
 });
+
+describe('where a goal\'s money is', () => {
+  const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 5_000_00, order: 0 };
+  const move = (id: string, amount: number, from: string, to: string): Transaction => ({ id, type: 'transfer', amount, date: '2026-10-10', accountId: from, toAccountId: to, createdAt: '', updatedAt: '' });
+  const ledgerWith = (goal: Account, transactions: Transaction[]): Ledger => ({ accounts: [bank, goal], methods: [], transactions, startDate: '2026-10-01' });
+
+  it('apart (a deposit): what goes in leaves the liquid money', () => {
+    const trip: Account = { id: 'trip', name: 'חופשה', kind: 'goal', openingBalance: 3_000_00, order: 1 };
+    const s = summarize(ledgerWith(trip, [move('a', 900_00, 'bank', 'trip')]), '2026-10-14');
+    expect(s).toMatchObject({ liquid: 4_100_00, reserved: 0, apart: 3_900_00 });
+  });
+
+  it('inside the bank: only marked, so the bank (and its checks) still has it, shown as set aside', () => {
+    const trip: Account = { id: 'trip', name: 'חופשה', kind: 'goal', openingBalance: 0, order: 1, goalPlace: 'inside', goalSource: 'bank' };
+    const s = summarize(ledgerWith(trip, [move('a', 900_00, 'bank', 'trip')]), '2026-10-14');
+    expect(s).toMatchObject({ liquid: 5_000_00, reserved: 900_00, apart: 0 });
+    expect(s.byAccount.find(b => b.account.id === 'bank')!.balance).toBe(5_000_00);
+    // Paid straight out of it: out of the goal and out of the bank alike
+    const paid: Transaction = { id: 'p', type: 'expense', amount: 400_00, date: '2026-10-12', accountId: 'trip', categoryId: 'c', createdAt: '', updatedAt: '' };
+    expect(summarize(ledgerWith(trip, [move('a', 900_00, 'bank', 'trip'), paid]), '2026-10-14')).toMatchObject({ liquid: 4_600_00, reserved: 500_00 });
+  });
+});

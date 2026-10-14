@@ -120,6 +120,10 @@ export interface Summary {
   byAccount: { account: Account; balance: number }[];
   /** Savings goals, each with what's in it. */
   goals: { account: Account; balance: number }[];
+  /** Of the liquid money: set aside for goals kept inside a source (still counted in it). */
+  reserved: number;
+  /** Put aside apart for goals (a deposit, an envelope): not part of the liquid money. */
+  apart: number;
   upcoming: {
     until: string;
     credit: number;
@@ -148,6 +152,12 @@ export function summarize(ledger: Ledger, today: string): Summary {
     }
   }
 
+  // A goal kept inside a money source is only marked as set aside: what was moved into it is still in that source
+  for (const g of ledger.accounts.filter(a => isGoal(a) && a.goalPlace === 'inside' && a.goalSource)) {
+    const held = (balances.get(g.id) ?? 0) - g.openingBalance;
+    balances.set(g.goalSource!, (balances.get(g.goalSource!) ?? 0) + held);
+  }
+
   const shown = ledger.accounts
     .filter(a => !a.archived || balances.get(a.id))
     .map(account => ({ account, balance: balances.get(account.id) ?? 0 }));
@@ -155,10 +165,13 @@ export function summarize(ledger: Ledger, today: string): Summary {
   const goals = shown.filter(b => isGoal(b.account));
   const liquid = byAccount.reduce((a, b) => a + b.balance, 0);
   // Moving money into or out of a goal is a transfer: it changes what's liquid, not the future
-  const goalIds = new Set(goals.map(g => g.account.id));
+  const inside = (a: Account) => a.goalPlace === 'inside' && !!a.goalSource;
+  const goalIds = new Set(goals.filter(g => !inside(g.account)).map(g => g.account.id));
   const futureGoalMoves = effects.filter(e => e.date > today && e.date <= until && goalIds.has(e.accountId)).reduce((a, e) => a + e.amount, 0);
   upcoming.projected = liquid + future - futureGoalMoves;
-  return { liquid, byAccount, goals, upcoming };
+  const reserved = goals.filter(g => inside(g.account)).reduce((a, g) => a + g.balance, 0);
+  const apart = goals.filter(g => !inside(g.account)).reduce((a, g) => a + g.balance, 0);
+  return { liquid, byAccount, goals, upcoming, reserved, apart };
 }
 
 /** One line of a card's bill: a purchase (or one of its installments), a refund, or what was on the card at the start. */

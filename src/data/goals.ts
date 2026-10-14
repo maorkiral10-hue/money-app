@@ -46,3 +46,61 @@ export function goalPlan(goal: Account, saved: number, transactions: Transaction
   const perMonth = reached ? undefined : goal.goalMonthly;
   return { saved, spent, progress: target ? Math.min(1, done / target) : undefined, perMonth, thisMonth, leftThisMonth: left(perMonth), reached };
 }
+
+/** A goal's numbers as shown on it: put in, paid on what it's for, still in it, and what's left to save. */
+export interface GoalNumbers {
+  /** What it started with plus everything moved in, minus what was moved back out. */
+  deposited: number;
+  /** Spent on what it's for (paid straight out of it). */
+  paid: number;
+  /** In it now. */
+  left: number;
+  /** With a target: what's still to save (the target, less what's in it and what was already paid). */
+  toSave?: number;
+  /** With a target: how much more than it there is. */
+  surplus: number;
+}
+
+export function goalNumbers(goal: Account, balance: number, transactions: Transaction[]): GoalNumbers {
+  let deposited = goal.openingBalance;
+  let paid = 0;
+  for (const t of transactions) {
+    if (t.type === 'transfer' && t.toAccountId === goal.id) deposited += t.amount;
+    else if (t.type === 'transfer' && t.accountId === goal.id) deposited -= t.amount;
+    else if (t.type === 'expense' && t.accountId === goal.id) paid += t.amount;
+  }
+  const target = goal.goalTarget;
+  return {
+    deposited,
+    paid,
+    left: balance,
+    toSave: target ? Math.max(0, target - balance - paid) : undefined,
+    surplus: target ? Math.max(0, balance + paid - target) : 0,
+  };
+}
+
+/**
+ * Goals kept inside a money source that holds less than is set aside in them (it was used for something
+ * else): the set-aside amount comes down to what the source has, as a move back out of the goal. Returns
+ * what came down, to tell the user.
+ */
+export function overReserved(
+  accounts: Account[],
+  balances: { account: Account; balance: number }[],
+  goals: { account: Account; balance: number }[],
+) {
+  const out: { goal: Account; source: Account; from: number; to: number }[] = [];
+  const inside = goals.filter(g => g.account.goalPlace === 'inside' && g.account.goalSource && g.balance > 0 && !g.account.archived);
+  for (const sourceId of new Set(inside.map(g => g.account.goalSource!))) {
+    const source = accounts.find(a => a.id === sourceId);
+    if (!source) continue;
+    // What the source has is shared out among its goals in order; whatever doesn't fit comes down
+    let room = Math.max(0, balances.find(b => b.account.id === sourceId)?.balance ?? 0);
+    for (const g of inside.filter(x => x.account.goalSource === sourceId).sort((x, y) => x.account.order - y.account.order)) {
+      const keeps = Math.min(g.balance, room);
+      room -= keeps;
+      if (keeps < g.balance) out.push({ goal: g.account, source, from: g.balance, to: keeps });
+    }
+  }
+  return out;
+}

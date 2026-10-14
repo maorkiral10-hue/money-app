@@ -30,6 +30,14 @@ export interface Account {
   goalMonthly?: number;
   /** Goals: the expense category the money is for, used when it's spent straight from the goal. */
   goalCategoryId?: string;
+  /**
+   * Goals: where its money really is. "deposit" (a deposit or separate account) and "envelope" (cash put away
+   * apart): out of the liquid money, as before (missing: "deposit"). "inside": still in a money source
+   * (`goalSource`), only marked as set aside, so that source's balance and its checks include it.
+   */
+  goalPlace?: 'deposit' | 'envelope' | 'inside';
+  /** Goals: the money source it's inside ("inside"), or that its money comes back to (a deposit: the bank; an envelope: cash). */
+  goalSource?: string;
 }
 
 export const isGoal = (a: Pick<Account, 'kind'>) => a.kind === 'goal';

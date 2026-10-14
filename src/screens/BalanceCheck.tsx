@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { summarize } from '../data/balance';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { addDays, dayLabel, parseDate, todayStr } from '../data/dates';
 import { holidaysOn } from '../data/holidays';
@@ -22,6 +23,16 @@ const EVERY_OPTIONS: [CheckEvery, string][] = [
  * how to close it - add the missing expense or income, set the app's balance, or leave it. No pop-ups:
  * this screen is opened when you want it, from the quiet line on the home screen or from settings.
  */
+/** For counting cash: what of it is set aside for goals, in the wallet (counted) and apart (not). */
+function cashSetAside(data: AppData, cashId: string) {
+  const goals = summarize(data, todayStr()).goals.filter(g => g.balance > 0 && !g.account.archived);
+  const inWallet = goals.filter(g => g.account.goalPlace === 'inside' && g.account.goalSource === cashId);
+  const apart = goals.filter(g => g.account.goalPlace === 'envelope');
+  const part = (list: typeof goals) => list.map(g => `${formatMoney(g.balance)} ${g.account.name}`).join(', ');
+  const bits = [inWallet.length && `בתוך הארנק: ${part(inWallet)}`, apart.length && `בנפרד: ${part(apart)}`].filter(Boolean);
+  return bits.length ? `מזומן ששמור לחיסכון · ${bits.join(' · ')}` : '';
+}
+
 export function BalanceCheck(props: {
   db: IDBDatabase;
   data: AppData;
@@ -156,6 +167,7 @@ export function BalanceCheck(props: {
         {recheckOf && <h2>כמה יש עכשיו באמת?</h2>}
         <label class="field">
           <span>כמה יש שם עכשיו באמת</span>
+          {account?.kind === 'cash' && cashSetAside(data, account.id) && <span class="small muted block">{cashSetAside(data, account.id)}</span>}
           <MoneyInput
             key={accountId}
             value={0}

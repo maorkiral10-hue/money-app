@@ -80,9 +80,15 @@ export function Home(props: {
         <div class="big-number">
           <AnimatedMoney value={summary.liquid} />
         </div>
-        {summary.goals.some(g => g.balance) && (
+        {summary.reserved > 0 && (
+          <button class="link small reserved-line" onClick={props.onOpenGoals}>
+            מתוכם {formatMoney(summary.reserved)} שמורים ליעדים · פנוי{' '}
+            <span class={summary.liquid - summary.reserved < 0 ? 'exp' : ''}>{formatMoney(summary.liquid - summary.reserved)}</span> ‹
+          </button>
+        )}
+        {summary.apart > 0 && (
           <button class="link small" onClick={props.onOpenGoals}>
-            ועוד {formatMoney(summary.goals.reduce((a, g) => a + g.balance, 0))} ביעדי חיסכון ‹
+            ועוד {formatMoney(summary.apart)} בצד, ביעדי חיסכון ‹
           </button>
         )}
         {showBreakdown && (

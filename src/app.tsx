@@ -24,6 +24,9 @@ import { EarlyRecordCard } from './components/EarlyRecordCard';
 import { CardChargeCard } from './components/CardChargeCard';
 import { OpenGapCard } from './components/OpenGapCard';
 import { CardGapReminder } from './components/CardGapReminder';
+import { GoalReachedCard } from './components/GoalReachedCard';
+import { goalNumbers, overReserved } from './data/goals';
+import { summarize } from './data/balance';
 import { openCardGaps } from './data/cardCheck';
 import { correctBalance, gapAsOf, openGaps, settleOpenGaps, sourcePreset } from './data/reconcile';
 import { cardChecksDue } from './data/cardCheck';
@@ -146,6 +149,31 @@ export function App() {
         loaded = await loadAll(d);
         const s = settled[0];
         setToast({ text: s.closed ? `🎉 הפער ב${s.account.name} נסגר! הכל מתאים` : `נרשם "לא מזוהה" של ${formatMoney(Math.abs(s.amount))} ב${s.account.name} (נגמרו ימי החיפוש)` });
+      }
+    }
+    if (loaded.setupDone) {
+      const s = summarize(loaded, todayStr());
+      const over = overReserved(loaded.accounts, s.byAccount, s.goals);
+      if (over.length) {
+        const now = new Date().toISOString();
+        await putRecords(
+          d,
+          'transactions',
+          over.map(o => ({
+            id: crypto.randomUUID(),
+            type: 'transfer' as const,
+            amount: o.from - o.to,
+            date: todayStr(),
+            accountId: o.goal.id,
+            toAccountId: o.source.id,
+            note: `שוחרר מ${o.goal.name}: ב${o.source.name} נשאר פחות`,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        );
+        loaded = await loadAll(d);
+        const o = over[0];
+        setToast({ text: `הכסף השמור ל${o.goal.name} ירד מ־${formatMoney(o.from)} ל־${formatMoney(o.to)}, כי ב${o.source.name} נשאר רק ${formatMoney(o.to)}. ההפרש חזר לכסף הפנוי.` });
       }
     }
     setData(loaded);
@@ -452,6 +480,12 @@ export function App() {
   // Card charges to check against what the card company really charged (after the changing amounts)
   const cardsDue = cardChecksDue(data, today).filter(d => !laterIds.includes(`card|${d.card.id}|${d.charge.date}`));
   const askCard = cardsDue[0];
+  // A goal that got more than its target: what to do with the extra
+  const goalsNow = summarize(data, today).goals;
+  const reached = goalsNow
+    .filter(g => !g.account.archived && g.account.goalTarget && !laterIds.includes(`reached|${g.account.id}`))
+    .map(g => ({ goal: g.account, surplus: goalNumbers(g.account, g.balance, data.transactions).surplus }))
+    .find(r => r.surplus > 0);
   // A card's gap from the weekly check still open two days before its charge: said once
   const cardGapsOpen = openCardGaps(data, today);
   const remindCard = cardGapsOpen.find(g => g.chargeDate <= addDays(today, 2) && !data.cardGapReminded.includes(`${g.card.id}|${g.chargeDate}`));
@@ -590,7 +624,36 @@ export function App() {
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />
           )}
-          {!askVariable && !askGap && !askCard && !remindCard && askEvent && !menuOpen && (
+          {!askVariable && !askGap && !askCard && !remindCard && reached && !menuOpen && !earlyAsk && (
+            <GoalReachedCard
+              key={reached.goal.id}
+              goal={reached.goal}
+              surplus={reached.surplus}
+              others={goalsNow.filter(g => g.account.id !== reached.goal.id && !g.account.archived).map(g => g.account)}
+              onKeep={async () => {
+                await putRecords(db, 'accounts', [{ ...reached.goal, goalTarget: (reached.goal.goalTarget ?? 0) + reached.surplus } as Account]);
+                afterChange();
+              }}
+              onBack={async () => {
+                const now = new Date().toISOString();
+                const back = reached.goal.goalSource ?? data.accounts.find(a => a.kind === 'bank')?.id;
+                if (back)
+                  await putRecords(db, 'transactions', [
+                    { id: crypto.randomUUID(), type: 'transfer', amount: reached.surplus, date: todayStr(), accountId: reached.goal.id, toAccountId: back, note: `עודף מ${reached.goal.name}`, createdAt: now, updatedAt: now } as Transaction,
+                  ]);
+                afterChange();
+              }}
+              onMove={async to => {
+                const now = new Date().toISOString();
+                await putRecords(db, 'transactions', [
+                  { id: crypto.randomUUID(), type: 'transfer', amount: reached.surplus, date: todayStr(), accountId: reached.goal.id, toAccountId: to.id, note: `עודף מ${reached.goal.name} ל${to.name}`, createdAt: now, updatedAt: now } as Transaction,
+                ]);
+                afterChange();
+              }}
+              onLater={() => setLaterIds(ids => [...ids, `reached|${reached.goal.id}`])}
+            />
+          )}
+          {!askVariable && !askGap && !askCard && !remindCard && !reached && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

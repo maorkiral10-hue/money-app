@@ -692,3 +692,15 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 
 /* Savings goals are savings: orange like the rest */
 .goal-bar span { background: var(--sav); }
+
+/* A goal: where its money is, and its numbers */
+.place-options { display: flex; flex-direction: column; gap: 8px; }
+.place-tile { text-align: start; }
+.place-tile .small { display: block; font-weight: 400; opacity: .8; margin-top: 2px; }
+.goal-numbers { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; text-align: start; }
+.goal-numbers .line { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.goal-paid { width: 100%; margin: 0; padding: 0; background: none; color: var(--text); font-weight: 400; }
+.goal-paid-list { padding: 6px 10px; background: var(--sav-soft); border-radius: 10px; display: flex; flex-direction: column; gap: 4px; }
+.goal-tosave { font-weight: 700; border-top: 1px solid var(--line); padding-top: 4px; }
+
+.reserved-line { display: block; }

@@ -4,7 +4,7 @@ import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { summarize } from '../data/balance';
 import { dayLabel, todayStr } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
-import { goalPlan } from '../data/goals';
+import { goalNumbers, goalPlan } from '../data/goals';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
 import type { Account, Transaction } from '../data/types';
@@ -12,6 +12,14 @@ import { FundsScreen } from './Funds';
 
 /** Which part of the tab was open last, kept while the app is open. */
 let lastPart: 'goals' | 'long' = 'goals';
+
+/** Where a goal's money is, in words. */
+export const placeText = (g: Account, data: Pick<AppData, 'accounts'>) => {
+  const source = data.accounts.find(a => a.id === g.goalSource)?.name;
+  if (g.goalPlace === 'inside') return `בתוך ${source ?? 'הכסף הנזיל'} (מסומן)`;
+  if (g.goalPlace === 'envelope') return 'מזומן בצד';
+  return 'בצד, בפיקדון';
+};
 
 const shortDate = (d: string) => d.split('-').reverse().map(Number).slice(0, 3).join('.');
 
@@ -30,6 +38,7 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
   const { goals } = summarize(data, today);
   const active = goals.filter(g => !g.account.archived);
   const total = active.reduce((a, g) => a + g.balance, 0);
+  const reservedTotal = active.filter(g => g.account.goalPlace === 'inside').reduce((a, g) => a + g.balance, 0);
 
   return (
     <>
@@ -62,7 +71,13 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
             <div class="big-number sav">
               <AnimatedMoney value={total} />
             </div>
-            <div class="muted small">הכסף הזה לא נספר בכסף הנזיל</div>
+            <div class="muted small">
+              {reservedTotal > 0 && reservedTotal < total
+                ? `מתוכם ${formatMoney(reservedTotal)} בתוך הכסף הנזיל (רק מסומן), והשאר בצד`
+                : reservedTotal > 0
+                  ? 'הכל בתוך הכסף הנזיל, רק מסומן כשמור'
+                  : 'בצד, ולא נספר בכסף הנזיל'}
+            </div>
           </div>
           {active.map(({ account: g, balance }) => {
             const plan = goalPlan(g, balance, data.transactions, today);
@@ -84,6 +99,7 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
                   {plan.reached
                     ? '🎉 היעד הושג'
                     : [
+                        placeText(g, data),
                         g.goalDate && `עד ${shortDate(g.goalDate)}`,
                         plan.perMonth && `צריך ${formatMoney(plan.perMonth)} בחודש`,
                         plan.perMonth && plan.thisMonth > 0 && (plan.leftThisMonth ? `החודש הועבר ${formatMoney(plan.thisMonth)}` : 'החודש ✓'),
@@ -116,11 +132,19 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
   const [spendCategory, setSpendCategory] = useState<string | undefined>();
   const expenseCategories = data.categories.filter(c => c.kind === 'expense' && c.name.trim() && !c.archived);
   const [amount, setAmount] = useState(0);
-  const [accountId, setAccountId] = useState(liquid.find(a => a.kind === 'bank')?.id ?? liquid[0]?.id);
+  const goalAccount = data.accounts.find(a => a.id === props.goalId);
+  // A goal inside a source moves only within that source; one apart can take from anywhere
+  const [accountId, setAccountId] = useState(
+    goalAccount?.goalPlace === 'inside' && goalAccount.goalSource ? goalAccount.goalSource : liquid.find(a => a.kind === 'bank')?.id ?? liquid[0]?.id,
+  );
   const [formKey, setFormKey] = useState(0);
   if (!entry) return null;
   const { account: goal, balance } = entry;
   const plan = goalPlan(goal, balance, data.transactions, today);
+  const nums = goalNumbers(goal, balance, data.transactions);
+  const inside = goal.goalPlace === 'inside' && !!goal.goalSource;
+  const [showPaid, setShowPaid] = useState(false);
+  const paidList = data.transactions.filter(t => t.type === 'expense' && t.accountId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
   const moves = data.transactions.filter(t => t.accountId === goal.id || t.toAccountId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
   const name = (id?: string) => data.accounts.find(a => a.id === id)?.name ?? '';
   const catName = (id?: string) => data.categories.find(c => c.id === id)?.name ?? '';
@@ -149,8 +173,8 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
   };
 
   const remove = async () => {
-    if (balance !== 0) return alert(`ביעד יש עדיין ${formatMoney(balance)}. קודם העבר אותו בחזרה לכסף הנזיל.`);
-    if (!confirm(`למחוק את היעד "${goal.name}"?`)) return;
+    if (balance !== 0 && !inside) return alert(`ביעד יש עדיין ${formatMoney(balance)}. קודם העבר אותו בחזרה לכסף הנזיל.`);
+    if (!confirm(inside && balance ? `למחוק את היעד "${goal.name}"? ה־${formatMoney(balance)} השמורים בו יחזרו להיות פנויים (הכסף לא זז).` : `למחוק את היעד "${goal.name}"?`)) return;
     // Its past moves stay in the statement, so a goal that had any is hidden rather than removed
     const hidden: Account = { ...goal, archived: true };
     if (moves.length) await putRecords(props.db, 'accounts', [hidden]);
@@ -169,24 +193,56 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
       </header>
 
       <div class="card hero">
+        <div class="muted small">נשאר ביעד · {placeText(goal, data)}</div>
         <div class="big-number sav">
           <AnimatedMoney value={balance} />
         </div>
-        {goal.goalTarget && (
-          <div class="muted small">
-            מתוך {formatMoney(goal.goalTarget)}
-            {plan.spent > 0 && ` · כבר שולמו ממנו ${formatMoney(plan.spent)}`}
-          </div>
-        )}
-        {goal.goalCategoryId && <div class="muted small">קטגוריה: {catName(goal.goalCategoryId)}</div>}
         {plan.progress !== undefined && (
           <div class={`bar goal-bar ${plan.reached ? 'done' : ''}`}>
             <span style={{ width: `${Math.min(1, plan.progress) * 100}%` }} />
           </div>
         )}
+        <div class="goal-numbers">
+          {goal.goalTarget ? (
+            <div class="line">
+              <span>היעד</span>
+              <span>{formatMoney(goal.goalTarget)}</span>
+            </div>
+          ) : null}
+          <div class="line">
+            <span>{inside ? 'סומן כשמור עד עכשיו' : 'הופקד עד עכשיו'}</span>
+            <span>{formatMoney(nums.deposited)}</span>
+          </div>
+          <button class="line goal-paid" onClick={() => setShowPaid(!showPaid)} aria-expanded={showPaid} disabled={!paidList.length}>
+            <span>שולם על היעד{paidList.length ? (showPaid ? ' ›' : ' ‹') : ''}</span>
+            <span>{formatMoney(nums.paid)}</span>
+          </button>
+          {showPaid && (
+            <div class="goal-paid-list">
+              {paidList.map(t => (
+                <div key={t.id} class="line small">
+                  <span>
+                    {t.note && t.note !== goal.name ? t.note : catName(t.categoryId)} · {dayLabel(t.date, today)} · <span class="muted">מתוך היעד</span>
+                  </span>
+                  <span>{formatMoney(t.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div class="line">
+            <span>נשאר ביעד</span>
+            <span>{formatMoney(nums.left)}</span>
+          </div>
+          {nums.toSave !== undefined && (
+            <div class="line goal-tosave">
+              <span>נשאר לחסוך</span>
+              <span>{formatMoney(nums.toSave)}</span>
+            </div>
+          )}
+        </div>
         <div class="small">
           {plan.reached
-            ? '🎉 היעד הושג'
+            ? `🎉 היעד הושג${nums.surplus > 0 ? ` · יש ${formatMoney(nums.surplus)} מעבר` : ''}`
             : plan.perMonth
               ? `כדי להגיע ${goal.goalDate ? `עד ${shortDate(goal.goalDate)}` : 'בזמן'}: ${formatMoney(plan.perMonth)} בחודש${plan.monthsLeft ? ` (${plan.monthsLeft} חודשים)` : ''}`
               : ''}
@@ -196,9 +252,8 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
             {plan.leftThisMonth ? `נשאר להכניס החודש: ${formatMoney(plan.leftThisMonth)}` : '✓ הסכום של החודש כבר הוכנס'}
             {plan.thisMonth ? ` (הוכנסו ${formatMoney(plan.thisMonth)})` : ''}
           </div>
-        ) : (
-          plan.thisMonth !== 0 && <div class="muted small">החודש: {formatMoney(plan.thisMonth, { sign: true })}</div>
-        )}
+        ) : null}
+        {goal.goalCategoryId && <div class="muted small">קטגוריה: {catName(goal.goalCategoryId)}</div>}
       </div>
 
       <div class="card">
@@ -206,8 +261,8 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
           value={dir}
           onChange={setDir}
           options={[
-            ['in', 'הפקדה'],
-            ['out', 'החזרה לנזיל'],
+            ['in', inside ? 'לשמור עוד' : 'הפקדה'],
+            ['out', inside ? 'לשחרר' : 'החזרה לנזיל'],
             ['spend', 'הוצאה מהיעד'],
           ]}
         />
@@ -234,14 +289,22 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
             <p class="muted small">נרשם כהוצאה בקטגוריה הזאת, והכסף יורד מהיעד (לא מהכסף הנזיל).</p>
           </>
         ) : (
+          inside ? (
+            <p class="muted small">
+              {dir === 'in'
+                ? `מסמן עוד כסף ב${name(goal.goalSource)} כשמור ליעד. הכסף לא זז.`
+                : `הכסף השמור ב${name(goal.goalSource)} חוזר להיות פנוי לשימוש. הכסף לא זז.`}
+            </p>
+          ) : (
           <>
             <p class="field-label">{dir === 'in' ? 'מאיפה' : 'לאן'}</p>
             <Chips items={liquid} value={accountId} onChange={setAccountId} />
           </>
+          )
         )}
         {tooMuch && <p class="small warn">ביעד יש רק {formatMoney(balance)}</p>}
         <button disabled={!ready} onClick={move}>
-          {dir === 'in' ? 'להעביר ליעד' : dir === 'out' ? 'להחזיר לכסף הנזיל' : 'לרשום הוצאה'}
+          {dir === 'in' ? (inside ? 'לשמור' : 'להעביר ליעד') : dir === 'out' ? (inside ? 'לשחרר' : 'להחזיר לכסף הנזיל') : 'לרשום הוצאה'}
         </button>
       </div>
 
@@ -251,7 +314,17 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
           {moves.map(t => (
             <div key={t.id} class="tx">
               <div>
-                <div>{t.type === 'expense' ? `הוצאה: ${catName(t.categoryId)}` : t.toAccountId === goal.id ? `מ${name(t.accountId)}` : `ל${name(t.toAccountId)}`}</div>
+                <div>
+                {t.type === 'expense'
+                  ? `הוצאה: ${catName(t.categoryId)}`
+                  : inside
+                    ? t.toAccountId === goal.id
+                      ? 'סומן כשמור'
+                      : 'שוחרר'
+                    : t.toAccountId === goal.id
+                      ? `מ${name(t.accountId)}`
+                      : `ל${name(t.toAccountId)}`}
+              </div>
                 <div class="muted small">{dayLabel(t.date, today)}</div>
               </div>
               <div class={t.toAccountId === goal.id ? 'inc' : 'exp'}>{formatMoney(t.toAccountId === goal.id ? t.amount : -t.amount, { sign: true })}</div>
@@ -280,8 +353,19 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
   const [monthly, setMonthly] = useState(g?.goalMonthly ?? 0);
   const [already, setAlready] = useState(g?.openingBalance ?? 0);
   const [categoryId, setCategoryId] = useState(g?.goalCategoryId);
+  const [place, setPlace] = useState<'deposit' | 'envelope' | 'inside'>(g?.goalPlace ?? 'deposit');
+  const sources = props.data.accounts.filter(a => !a.archived && a.kind !== 'goal' && a.name.trim());
+  const [source, setSource] = useState(g?.goalSource ?? sources.find(a => a.kind === 'bank')?.id ?? sources[0]?.id);
+  const held = g ? summarize(props.data, todayStr()).goals.find(x => x.account.id === g.id)?.balance ?? 0 : 0;
+  const placeChanged = !!g && held > 0 && ((g.goalPlace ?? 'deposit') !== place || (place === 'inside' && g.goalSource !== source));
   const categories = props.data.categories.filter(c => c.kind === 'expense' && c.name.trim() && (!c.archived || c.id === g?.goalCategoryId));
-  const valid = name.trim() && categoryId && (kind === 'target' ? target > 0 : monthly > 0);
+  const valid = name.trim() && categoryId && (kind === 'target' ? target > 0 : monthly > 0) && (place !== 'inside' || !!source);
+
+  const sourceName = sources.find(a => a.id === source)?.name ?? '';
+  const placeChangeText =
+    place === 'inside'
+      ? `ה־${formatMoney(held)} שביעד יחזרו להיות חלק מהיתרה של ${sourceName}, מסומנים כשמורים (בבדיקה מול ${sourceName} הם ייספרו).`
+      : `ה־${formatMoney(held)} שביעד ייצאו מהכסף הנזיל, כי הם עכשיו בצד.`;
 
   const save = async () => {
     if (!valid) return;
@@ -295,7 +379,11 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
       goalDate: kind === 'target' && date ? date : undefined,
       goalMonthly: kind === 'monthly' ? monthly : undefined,
       goalCategoryId: categoryId,
+      goalPlace: place,
+      // Inside: the source it's in. Apart: where its money comes back to (a deposit: the bank; an envelope: cash)
+      goalSource: place === 'inside' ? source : place === 'envelope' ? sources.find(a => a.kind === 'cash')?.id : sources.find(a => a.kind === 'bank')?.id,
     };
+    if (placeChanged && !confirm(placeChangeText)) return;
     await putRecords(props.db, 'accounts', [goal]);
     props.onDone(goal);
   };
@@ -351,11 +439,36 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
         )}
       </section>
 
+      <section>
+        <h2>איפה הכסף של היעד?</h2>
+        <div class="place-options">
+          {(
+            [
+              ['deposit', 'בצד: פיקדון או חשבון נפרד', 'הכסף יוצא מהכסף הנזיל.'],
+              ['envelope', 'בצד: מזומן במעטפה', 'כסף שלא סופרים עם הארנק. יוצא מהכסף הנזיל.'],
+              ['inside', 'בתוך הכסף הנזיל', 'נשאר בבנק (או במזומן, בביט), רק מסומן כשמור. בבדיקה מול הבנק הוא נספר.'],
+            ] as const
+          ).map(([id, title, hint]) => (
+            <button key={id} type="button" class={`tile place-tile ${place === id ? 'on' : ''}`} onClick={() => setPlace(id)}>
+              {title}
+              <span class="small">{hint}</span>
+            </button>
+          ))}
+        </div>
+        {place === 'inside' && (
+          <>
+            <p class="field-label">בתוך</p>
+            <Chips items={sources} value={source} onChange={setSource} />
+          </>
+        )}
+        {placeChanged && <p class="small warn">{placeChangeText}</p>}
+      </section>
+
       {!g && (
         <section>
           <h2>כבר חסכת לזה?</h2>
           <label class="field">
-            <span>כמה כבר יש בצד (לא יורד מהכסף הנזיל)</span>
+            <span>{place === 'inside' ? 'כמה כבר שמור לזה מתוך הכסף הנזיל' : 'כמה כבר יש בצד (לא יורד מהכסף הנזיל)'}</span>
             <MoneyInput value={already} onChange={setAlready} />
           </label>
         </section>
