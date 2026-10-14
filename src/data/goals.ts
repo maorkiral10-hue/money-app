@@ -105,3 +105,17 @@ export function overReserved(
   }
   return out;
 }
+
+/** The monthly deposits into a goal that came round and weren't made or skipped yet, oldest first. */
+export function goalDepositsDue(goal: Account, today: string): string[] {
+  if (!goal.goalEveryDay || !goal.goalEveryAmount || goal.archived) return [];
+  const from = goal.goalEveryHandled ?? today;
+  const out: string[] = [];
+  for (let i = 0; i < 24; i++) {
+    const d = dayInMonth(from, i, goal.goalEveryDay);
+    if (d <= from) continue;
+    if (d > today) break;
+    out.push(d);
+  }
+  return out;
+}

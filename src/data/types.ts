@@ -38,6 +38,15 @@ export interface Account {
   goalPlace?: 'deposit' | 'envelope' | 'inside';
   /** Goals: the money source it's inside ("inside"), or that its money comes back to (a deposit: the bank; an envelope: cash). */
   goalSource?: string;
+  /**
+   * Goals: a deposit every month, on this day, of `goalEveryAmount`. Recorded on its own only when a real
+   * standing order in the bank moves it (`goalEveryByBank`); otherwise a reminder asks on the day.
+   */
+  goalEveryDay?: number;
+  goalEveryAmount?: number;
+  goalEveryByBank?: boolean;
+  /** Every monthly deposit up to this day has been made, or said not to happen. */
+  goalEveryHandled?: string;
 }
 
 export const isGoal = (a: Pick<Account, 'kind'>) => a.kind === 'goal';

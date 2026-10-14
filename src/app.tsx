@@ -26,7 +26,8 @@ import { OpenGapCard } from './components/OpenGapCard';
 import { CardGapReminder } from './components/CardGapReminder';
 import { GoalReachedCard } from './components/GoalReachedCard';
 import { GoalPayCard } from './components/GoalPayCard';
-import { goalNumbers, overReserved } from './data/goals';
+import { goalDepositsDue, goalNumbers, overReserved } from './data/goals';
+import { GoalDepositCard } from './components/GoalDepositCard';
 import { summarize } from './data/balance';
 import { openCardGaps } from './data/cardCheck';
 import { correctBalance, gapAsOf, openGaps, settleOpenGaps, sourcePreset } from './data/reconcile';
@@ -152,6 +153,29 @@ export function App() {
         loaded = await loadAll(d);
         const s = settled[0];
         setToast({ text: s.closed ? `🎉 הפער ב${s.account.name} נסגר! הכל מתאים` : `נרשם "לא מזוהה" של ${formatMoney(Math.abs(s.amount))} ב${s.account.name} (נגמרו ימי החיפוש)` });
+      }
+    }
+    // Monthly goal deposits a real standing order makes: recorded on their day (stopping once the goal is reached)
+    if (loaded.setupDone) {
+      const now = new Date().toISOString();
+      const s0 = summarize(loaded, todayStr());
+      const made: Transaction[] = [];
+      const goalsDone: Account[] = [];
+      for (const g of s0.goals.map(x => x.account).filter(a => a.goalEveryByBank)) {
+        const due = goalDepositsDue(g, todayStr());
+        if (!due.length) continue;
+        const bal = s0.goals.find(x => x.account.id === g.id)?.balance ?? 0;
+        const reachedAlready = g.goalTarget && goalNumbers(g, bal, loaded.transactions).toSave === 0;
+        const from = g.goalSource ?? loaded.accounts.find(a => a.kind === 'bank')?.id;
+        if (!reachedAlready && from)
+          for (const d of due)
+            made.push({ id: crypto.randomUUID(), type: 'transfer', amount: g.goalEveryAmount!, date: d, accountId: from, toAccountId: g.id, note: `הפקדה קבועה ל${g.name}`, createdAt: now, updatedAt: now });
+        goalsDone.push({ ...g, goalEveryHandled: due[due.length - 1] });
+      }
+      if (goalsDone.length) {
+        if (made.length) await putRecords(d, 'transactions', made);
+        await putRecords(d, 'accounts', goalsDone);
+        loaded = await loadAll(d);
       }
     }
     if (loaded.setupDone) {
@@ -486,6 +510,14 @@ export function App() {
   const askCard = cardsDue[0];
   // A goal that got more than its target: what to do with the extra
   const goalsNow = summarize(data, today).goals;
+  // Monthly goal deposits nothing makes on its own: a reminder on the day (not once the goal is reached)
+  const depositsDue = goalsNow
+    .filter(g => !g.account.goalEveryByBank && !g.account.archived)
+    .filter(g => !(g.account.goalTarget && goalNumbers(g.account, g.balance, data.transactions).toSave === 0))
+    .flatMap(g => goalDepositsDue(g.account, today).map(date => ({ goal: g.account, date })))
+    .filter(x => !laterIds.includes(`deposit|${x.goal.id}|${x.date}`));
+  const askDeposit = depositsDue[0];
+  const handleDeposit = async (goal: Account, date: string) => putRecords(db, 'accounts', [{ ...goal, goalEveryHandled: date } as Account]);
   const reached = goalsNow
     .filter(g => !g.account.archived && g.account.goalTarget && !laterIds.includes(`reached|${g.account.id}`))
     .map(g => ({ goal: g.account, surplus: goalNumbers(g.account, g.balance, data.transactions).surplus }))
@@ -666,7 +698,30 @@ export function App() {
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />
           )}
-          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && reached && !menuOpen && !earlyAsk && (
+          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && askDeposit && !menuOpen && !earlyAsk && (
+            <GoalDepositCard
+              key={`${askDeposit.goal.id}|${askDeposit.date}`}
+              goal={askDeposit.goal}
+              date={askDeposit.date}
+              more={depositsDue.length - 1}
+              sources={data.accounts.filter(a => a.kind !== 'goal' && !a.archived && a.name.trim())}
+              onDone={async fromId => {
+                const now = new Date().toISOString();
+                if (fromId)
+                  await putRecords(db, 'transactions', [
+                    { id: crypto.randomUUID(), type: 'transfer', amount: askDeposit.goal.goalEveryAmount!, date: askDeposit.date, accountId: fromId, toAccountId: askDeposit.goal.id, note: `הפקדה קבועה ל${askDeposit.goal.name}`, createdAt: now, updatedAt: now } as Transaction,
+                  ]);
+                await handleDeposit(askDeposit.goal, askDeposit.date);
+                afterChange();
+              }}
+              onSkip={async () => {
+                await handleDeposit(askDeposit.goal, askDeposit.date);
+                afterChange();
+              }}
+              onLater={() => setLaterIds(ids => [...ids, `deposit|${askDeposit.goal.id}|${askDeposit.date}`])}
+            />
+          )}
+          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && !askDeposit && reached && !menuOpen && !earlyAsk && (
             <GoalReachedCard
               key={reached.goal.id}
               goal={reached.goal}
@@ -695,7 +750,7 @@ export function App() {
               onLater={() => setLaterIds(ids => [...ids, `reached|${reached.goal.id}`])}
             />
           )}
-          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && !reached && askEvent && !menuOpen && (
+          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && !askDeposit && !reached && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

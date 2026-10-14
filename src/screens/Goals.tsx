@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { summarize } from '../data/balance';
-import { dayLabel, todayStr } from '../data/dates';
+import { addDays, dayLabel, todayStr } from '../data/dates';
 import { deleteRecord, putRecords } from '../data/db';
 import { goalNumbers, goalPlan } from '../data/goals';
 import { formatMoney } from '../data/money';
@@ -358,12 +358,21 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
   const [already, setAlready] = useState(g?.openingBalance ?? 0);
   const [categoryId, setCategoryId] = useState(g?.goalCategoryId);
   const [place, setPlace] = useState<'deposit' | 'envelope' | 'inside'>(g?.goalPlace ?? 'deposit');
+  const [every, setEvery] = useState(!!g?.goalEveryDay);
+  const [everyDay, setEveryDay] = useState(g?.goalEveryDay ?? 10);
+  const [everyAmount, setEveryAmount] = useState(g?.goalEveryAmount ?? g?.goalMonthly ?? 0);
+  const [byBank, setByBank] = useState<boolean | undefined>(g?.goalEveryByBank);
   const sources = props.data.accounts.filter(a => !a.archived && a.kind !== 'goal' && a.name.trim());
   const [source, setSource] = useState(g?.goalSource ?? sources.find(a => a.kind === 'bank')?.id ?? sources[0]?.id);
   const held = g ? summarize(props.data, todayStr()).goals.find(x => x.account.id === g.id)?.balance ?? 0 : 0;
   const placeChanged = !!g && held > 0 && ((g.goalPlace ?? 'deposit') !== place || (place === 'inside' && g.goalSource !== source));
   const categories = props.data.categories.filter(c => c.kind === 'expense' && c.name.trim() && (!c.archived || c.id === g?.goalCategoryId));
-  const valid = name.trim() && categoryId && (kind === 'target' ? target > 0 : monthly > 0) && (place !== 'inside' || !!source);
+  const valid =
+    name.trim() &&
+    categoryId &&
+    (kind === 'target' ? target > 0 : monthly > 0) &&
+    (place !== 'inside' || !!source) &&
+    (!every || (everyAmount > 0 && (place !== 'deposit' || byBank !== undefined)));
 
   const sourceName = sources.find(a => a.id === source)?.name ?? '';
   const placeChangeText =
@@ -386,6 +395,16 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
       goalPlace: place,
       // Inside: the source it's in. Apart: where its money comes back to (a deposit: the bank; an envelope: cash)
       goalSource: place === 'inside' ? source : place === 'envelope' ? sources.find(a => a.kind === 'cash')?.id : sources.find(a => a.kind === 'bank')?.id,
+      ...(every && everyAmount > 0
+        ? {
+            goalEveryDay: everyDay,
+            goalEveryAmount: everyAmount,
+            // Only a real standing order makes it happen on its own; a goal inside a source never moves money
+            goalEveryByBank: place === 'deposit' ? !!byBank : false,
+            // From now on: a new (or changed) schedule doesn't reach back
+            goalEveryHandled: g?.goalEveryDay === everyDay && g.goalEveryHandled ? g.goalEveryHandled : addDays(todayStr(), -1),
+          }
+        : { goalEveryDay: undefined, goalEveryAmount: undefined, goalEveryByBank: undefined, goalEveryHandled: undefined }),
     };
     if (placeChanged && !confirm(placeChangeText)) return;
     await putRecords(props.db, 'accounts', [goal]);
@@ -466,6 +485,55 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
           </>
         )}
         {placeChanged && <p class="small warn">{placeChangeText}</p>}
+      </section>
+
+      <section>
+        <h2>הפקדה קבועה כל חודש</h2>
+        <label class="toggle-row">
+          <span>להפקיד ליעד כל חודש</span>
+          <input type="checkbox" checked={every} onChange={e => setEvery(e.currentTarget.checked)} />
+        </label>
+        {every && (
+          <>
+            <label class="field">
+              <span>כמה</span>
+              <MoneyInput value={everyAmount} onChange={setEveryAmount} />
+            </label>
+            <label class="field">
+              <span>באיזה יום בחודש</span>
+              <select value={everyDay} onChange={e => setEveryDay(Number(e.currentTarget.value))}>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {place === 'deposit' ? (
+              <>
+                <p class="field-label">יש בבנק הוראת קבע שמעבירה את זה לפיקדון?</p>
+                <div class="scope-buttons">
+                  <button type="button" class={byBank === true ? '' : 'secondary'} onClick={() => setByBank(true)}>
+                    כן, זה זז לבד
+                  </button>
+                  <button type="button" class={byBank === false ? '' : 'secondary'} onClick={() => setByBank(false)}>
+                    לא, אני מעביר בעצמי
+                  </button>
+                </div>
+                <p class="muted small">
+                  {byBank === true
+                    ? 'יירשם לבד כל חודש, כמו כל הוראת קבע.'
+                    : byBank === false
+                      ? 'ביום הזה תקפוץ תזכורת, ותאשר כשהעברת.'
+                      : 'כדי שהאפליקציה לא תוריד מהבנק כסף שלא באמת זז.'}
+                </p>
+              </>
+            ) : (
+              <p class="muted small">ביום הזה תקפוץ תזכורת, ותאשר כשהעברת או שמרת.</p>
+            )}
+            <p class="muted small">כשהיעד מושג, ההפקדה נעצרת.</p>
+          </>
+        )}
       </section>
 
       {!g && (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { summarize, type Ledger } from './balance';
-import { goalPlan, monthsUntil, goalNumbers, overReserved } from './goals';
+import { goalPlan, monthsUntil, goalNumbers, overReserved, goalDepositsDue } from './goals';
 import type { Account, Transaction } from './types';
 
 const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 10_000_00, order: 0 };
@@ -79,5 +79,14 @@ describe('paid on a goal with other money', () => {
   it('from the money put aside: taken out of the goal, still deposited, and the rest is left to save', () => {
     const cover: Transaction = { id: 'c', type: 'transfer', amount: 3_000_00, date: '2026-10-10', accountId: 'trip', toAccountId: 'bank', coverFor: 'f', createdAt: '', updatedAt: '' };
     expect(goalNumbers(trip, 2_000_00, [into, flight, cover])).toMatchObject({ deposited: 5_000_00, paid: 3_000_00, left: 2_000_00, toSave: 3_000_00 });
+  });
+});
+
+describe('a monthly deposit into a goal', () => {
+  it('comes round on its day each month after the last one handled', () => {
+    const g: Account = { id: 'g', name: 'חופשה', kind: 'goal', openingBalance: 0, order: 1, goalEveryDay: 10, goalEveryAmount: 500_00, goalEveryHandled: '2026-09-12' };
+    expect(goalDepositsDue(g, '2026-10-09')).toEqual([]);
+    expect(goalDepositsDue(g, '2026-11-14')).toEqual(['2026-10-10', '2026-11-10']);
+    expect(goalDepositsDue({ ...g, goalEveryHandled: '2026-10-10' }, '2026-10-20')).toEqual([]);
   });
 });
