@@ -12,7 +12,7 @@ import type { AppData } from '../data/store';
 import { explainGap, gapForChange } from '../data/reconcile';
 import type { Transaction, TxType } from '../data/types';
 
-type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'review';
+type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'goal' | 'review';
 
 // One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
 const STEPS: Record<TxType, Step[]> = {
@@ -238,6 +238,17 @@ export function EntryForm(props: {
     to: !!toAccountId && toAccountId !== accountId,
     when: dateOk,
     event: true,
+    goal: true,
+  };
+  // Paid with other money for what a goal is for (only from the summary; not when paid out of the goal itself)
+  const activeGoals = goalAccounts.filter(g => !g.archived);
+  const [goalId, setGoalId] = useState<string | undefined>(tx?.goalId);
+  const goalLink = type === 'expense' && !paidFromGoal ? activeGoals.find(g => g.id === goalId) : undefined;
+  const pickGoal = (id: string | undefined) => {
+    setGoalId(id);
+    // The goal's category comes with it (it can be changed back from the summary)
+    const g = activeGoals.find(x => x.id === id);
+    if (g?.goalCategoryId && g.goalCategoryId !== categoryId) setCategoryId(g.goalCategoryId);
   };
 
   const [newId] = useState(() => crypto.randomUUID());
@@ -259,6 +270,7 @@ export function EntryForm(props: {
       ...(type === 'transfer' && { accountId, toAccountId }),
       // Added to an event's pot (an edited transaction keeps the event it was part of)
       ...(linked ? { eventId: linked.id, eventDate: linked.round } : {}),
+      ...(goalLink ? { goalId: goalLink.id } : {}),
       // Which card charge it went into, as said at the charge's check: kept while it's the same purchase on the same card
       ...(tx?.chargeDate && tx.date === date && tx.methodId === (type === 'expense' ? methodId : refundCard?.id) && { chargeDate: tx.chargeDate }),
   });
@@ -310,6 +322,7 @@ export function EntryForm(props: {
     to: 'לאן הוא עבר?',
     when: 'מתי?',
     event: 'שייך לאירוע?',
+    goal: 'על חשבון יעד?',
     review: tx ? 'עריכה' : 'לסיום',
   };
 
@@ -366,6 +379,22 @@ export function EntryForm(props: {
             }}
           />
           {freshAmount && <p class="muted small center">הסכום של הפער מולא מראש. אפשר להקליד אחר.</p>}
+        </div>
+      )}
+
+      {step === 'goal' && (
+        <div class="event-step">
+          <p class="muted small center">הוצאה בשביל מה שחוסכים אליו (למשל טיסה לחופשה), ששולמה בכסף אחר. היא תיספר ב"שולם על היעד".</p>
+          <div class="tiles">
+            {activeGoals.map(g => (
+              <button key={g.id} class={`tile event-tile ${goalId === g.id ? 'on' : ''}`} onClick={() => pickGoal(g.id)}>
+                {g.name}
+              </button>
+            ))}
+            <button class={`tile ${!goalId ? 'on' : ''}`} onClick={() => pickGoal(undefined)}>
+              לא על חשבון יעד
+            </button>
+          </div>
         </div>
       )}
 
@@ -478,6 +507,9 @@ export function EntryForm(props: {
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
             <ReviewRow label="מתי" value={dayLabel(date, today)} onClick={() => change('when')} />
             {candidates.length > 0 && <ReviewRow label="אירוע" value={linked ? linked.title : 'לא שייך'} onClick={() => change('event')} />}
+            {type === 'expense' && !paidFromGoal && activeGoals.length > 0 && (
+              <ReviewRow label="יעד" value={goalLink ? goalLink.name : 'לא על חשבון יעד'} onClick={() => change('goal')} />
+            )}
           </div>
           {lostLink && <p class="small warn">ביום שנבחר אין את האירוע, אז השיוך הוסר.</p>}
           {gap && (

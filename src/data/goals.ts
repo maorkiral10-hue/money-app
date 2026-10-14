@@ -28,9 +28,9 @@ export function monthsUntil(today: string, date: string) {
 export function goalPlan(goal: Account, saved: number, transactions: Transaction[], today: string): GoalPlan {
   const monthStart = dayInMonth(today, 0, 1);
   const thisMonth = transactions
-    .filter(t => t.type === 'transfer' && t.date >= monthStart && t.date <= today)
+    .filter(t => t.type === 'transfer' && !t.coverFor && t.date >= monthStart && t.date <= today)
     .reduce((a, t) => a + (t.toAccountId === goal.id ? t.amount : t.accountId === goal.id ? -t.amount : 0), 0);
-  const spent = transactions.filter(t => t.type === 'expense' && t.accountId === goal.id).reduce((a, t) => a + t.amount, 0);
+  const spent = transactions.filter(t => t.type === 'expense' && (t.accountId === goal.id || t.goalId === goal.id)).reduce((a, t) => a + t.amount, 0);
   // Paying for the goal out of it (a flight for the trip) is progress, not falling behind
   const done = saved + spent;
   const target = goal.goalTarget;
@@ -66,8 +66,9 @@ export function goalNumbers(goal: Account, balance: number, transactions: Transa
   let paid = 0;
   for (const t of transactions) {
     if (t.type === 'transfer' && t.toAccountId === goal.id) deposited += t.amount;
-    else if (t.type === 'transfer' && t.accountId === goal.id) deposited -= t.amount;
-    else if (t.type === 'expense' && t.accountId === goal.id) paid += t.amount;
+    // Taken out to cover something paid on the goal: still deposited, now spent on it
+    else if (t.type === 'transfer' && t.accountId === goal.id && !t.coverFor) deposited -= t.amount;
+    else if (t.type === 'expense' && (t.accountId === goal.id || t.goalId === goal.id)) paid += t.amount;
   }
   const target = goal.goalTarget;
   return {

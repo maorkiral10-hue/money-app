@@ -144,7 +144,11 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
   const nums = goalNumbers(goal, balance, data.transactions);
   const inside = goal.goalPlace === 'inside' && !!goal.goalSource;
   const [showPaid, setShowPaid] = useState(false);
-  const paidList = data.transactions.filter(t => t.type === 'expense' && t.accountId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
+  const paidList = data.transactions
+    .filter(t => t.type === 'expense' && (t.accountId === goal.id || t.goalId === goal.id))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const howPaid = (t: Transaction) =>
+    t.accountId === goal.id ? 'מתוך היעד' : `${data.methods.find(m => m.id === t.methodId)?.name ?? ''}${data.transactions.some(x => x.coverFor === t.id) ? ' · מהכסף שבצד' : ''}`;
   const moves = data.transactions.filter(t => t.accountId === goal.id || t.toAccountId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
   const name = (id?: string) => data.accounts.find(a => a.id === id)?.name ?? '';
   const catName = (id?: string) => data.categories.find(c => c.id === id)?.name ?? '';
@@ -222,7 +226,7 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
               {paidList.map(t => (
                 <div key={t.id} class="line small">
                   <span>
-                    {t.note && t.note !== goal.name ? t.note : catName(t.categoryId)} · {dayLabel(t.date, today)} · <span class="muted">מתוך היעד</span>
+                    {t.note && t.note !== goal.name ? t.note : catName(t.categoryId)} · {dayLabel(t.date, today)} · <span class="muted">{howPaid(t)}</span>
                   </span>
                   <span>{formatMoney(t.amount)}</span>
                 </div>

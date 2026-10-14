@@ -66,3 +66,18 @@ describe("a goal's numbers and where its money is", () => {
     expect(over.map(o => [o.goal.id, o.from, o.to])).toEqual([['b', 400_00, 200_00]]);
   });
 });
+
+describe('paid on a goal with other money', () => {
+  const trip: Account = { id: 'trip', name: 'חופשה', kind: 'goal', openingBalance: 0, order: 1, goalTarget: 8_000_00 };
+  const into: Transaction = { id: 'in', type: 'transfer', amount: 5_000_00, date: '2026-10-01', accountId: 'bank', toAccountId: 'trip', createdAt: '', updatedAt: '' };
+  const flight: Transaction = { id: 'f', type: 'expense', amount: 3_000_00, date: '2026-10-10', methodId: 'visa', categoryId: 'c', goalId: 'trip', createdAt: '', updatedAt: '' };
+
+  it('from the daily money: the goal keeps its money, and nothing is left to save', () => {
+    expect(goalNumbers(trip, 5_000_00, [into, flight])).toMatchObject({ deposited: 5_000_00, paid: 3_000_00, left: 5_000_00, toSave: 0 });
+  });
+
+  it('from the money put aside: taken out of the goal, still deposited, and the rest is left to save', () => {
+    const cover: Transaction = { id: 'c', type: 'transfer', amount: 3_000_00, date: '2026-10-10', accountId: 'trip', toAccountId: 'bank', coverFor: 'f', createdAt: '', updatedAt: '' };
+    expect(goalNumbers(trip, 2_000_00, [into, flight, cover])).toMatchObject({ deposited: 5_000_00, paid: 3_000_00, left: 2_000_00, toSave: 3_000_00 });
+  });
+});

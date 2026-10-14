@@ -25,6 +25,7 @@ import { CardChargeCard } from './components/CardChargeCard';
 import { OpenGapCard } from './components/OpenGapCard';
 import { CardGapReminder } from './components/CardGapReminder';
 import { GoalReachedCard } from './components/GoalReachedCard';
+import { GoalPayCard } from './components/GoalPayCard';
 import { goalNumbers, overReserved } from './data/goals';
 import { summarize } from './data/balance';
 import { openCardGaps } from './data/cardCheck';
@@ -120,6 +121,8 @@ export function App() {
   const [laterIds, setLaterIds] = useState<string[]>([]);
   // A gap left open just got smaller (something remembered was recorded): its card says by how much
   const [gapDrop, setGapDrop] = useState<{ accountId: string; from: number } | null>(null);
+  // Just recorded on account of a goal with other money: ask where the money for it comes from
+  const [goalPay, setGoalPay] = useState<Transaction | null>(null);
   // Standing orders with a changing amount put off with "remind me in half an hour": until when
   const [snoozedUntil, setSnoozedUntil] = useState(0);
   // A standing order or fixed income tapped before its day: offer to record it now (it came early)
@@ -308,6 +311,7 @@ export function App() {
             await putRecords(db, 'events', [withAnswer(event, entry.eventDate ?? event.date, { at: new Date().toISOString(), txId: saved.id })]);
           }
           const gapsBefore = openGaps(data, todayStr());
+          if (saved && saved.goalId && !entry.tx?.goalId) setGoalPay(saved);
           const loaded = await refresh();
           if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
           // It made a gap left open smaller: say so, with how much is still missing
@@ -538,6 +542,44 @@ export function App() {
               go({ name: 'entry', from: tab, ...(tab === 'home' && homeDay.current !== todayStr() && { preset: { date: homeDay.current } }) })
             }
           />
+          {goalPay &&
+            (() => {
+              const g = summarize(data, today).goals.find(x => x.account.id === goalPay.goalId);
+              if (!g) return null;
+              const take = Math.min(goalPay.amount, g.balance);
+              const back = g.account.goalSource ?? data.accounts.find(a => a.kind === 'bank')?.id;
+              return (
+                <GoalPayCard
+                  goal={g.account}
+                  inGoal={g.balance}
+                  paid={goalPay}
+                  method={data.methods.find(m => m.id === goalPay.methodId)?.name}
+                  onFromDaily={() => setGoalPay(null)}
+                  onFromGoal={async () => {
+                    const now = new Date().toISOString();
+                    if (back && take > 0) {
+                      await putRecords(db, 'transactions', [
+                        { id: crypto.randomUUID(), type: 'transfer', amount: take, date: goalPay.date, accountId: g.account.id, toAccountId: back, note: `לכיסוי: ${goalPay.note || g.account.name}`, coverFor: goalPay.id, createdAt: now, updatedAt: now } as Transaction,
+                      ]);
+                    }
+                    const where = data.accounts.find(a => a.id === back)?.name ?? '';
+                    const card = data.methods.find(m => m.id === goalPay.methodId);
+                    const fromBank = card?.kind === 'credit' || card?.kind === 'bank';
+                    // The money has to really get where the payment comes out of
+                    setToast({
+                      text:
+                        g.account.goalPlace === 'inside'
+                          ? `${formatMoney(take)} מהשמור ל${g.account.name} חזרו להיות פנויים`
+                          : g.account.goalPlace === 'envelope' && fromBank
+                            ? `${formatMoney(take)} מהמעטפה חזרו למזומן. התשלום יירד מהבנק: אם תפקיד אותם, רשום העברה מזומן ← בנק`
+                            : `${formatMoney(take)} חזרו מהיעד ל${where}${g.account.goalPlace !== 'envelope' ? '. כדי שזה יקרה גם בבנק, העבר אותם מהפיקדון לעו"ש' : ''}`,
+                    });
+                    setGoalPay(null);
+                    afterChange();
+                  }}
+                />
+              );
+            })()}
           {earlyAsk && (
             <EarlyRecordCard
               key={`${earlyAsk.rec.id}|${earlyAsk.occurrence}`}
@@ -552,7 +594,7 @@ export function App() {
               }}
             />
           )}
-          {askVariable && !menuOpen && !earlyAsk && (
+          {!goalPay && askVariable && !menuOpen && !earlyAsk && (
             <VariableDueCard
               key={`${askVariable.rec.id}|${askVariable.occurrence}`}
               db={db}
@@ -567,7 +609,7 @@ export function App() {
               onDone={afterChange}
             />
           )}
-          {!askVariable && askGap && !menuOpen && !earlyAsk && (
+          {!goalPay && !askVariable && askGap && !menuOpen && !earlyAsk && (
             <OpenGapCard
               key={`${askGap.account.id}|${askGap.check.date}`}
               gap={askGap}
@@ -593,7 +635,7 @@ export function App() {
               }}
             />
           )}
-          {!askVariable && !askGap && !askCard && remindCard && !menuOpen && !earlyAsk && (
+          {!goalPay && !askVariable && !askGap && !askCard && remindCard && !menuOpen && !earlyAsk && (
             <CardGapReminder
               key={`${remindCard.card.id}|${remindCard.chargeDate}`}
               gap={remindCard}
@@ -604,7 +646,7 @@ export function App() {
               onDone={() => reminded(remindCard)}
             />
           )}
-          {!askVariable && !askGap && askCard && !menuOpen && !earlyAsk && (
+          {!goalPay && !askVariable && !askGap && askCard && !menuOpen && !earlyAsk && (
             <CardChargeCard
               key={`${askCard.card.id}|${askCard.charge.date}|${askCard.actual ?? ''}`}
               db={db}
@@ -624,7 +666,7 @@ export function App() {
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />
           )}
-          {!askVariable && !askGap && !askCard && !remindCard && reached && !menuOpen && !earlyAsk && (
+          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && reached && !menuOpen && !earlyAsk && (
             <GoalReachedCard
               key={reached.goal.id}
               goal={reached.goal}
@@ -653,7 +695,7 @@ export function App() {
               onLater={() => setLaterIds(ids => [...ids, `reached|${reached.goal.id}`])}
             />
           )}
-          {!askVariable && !askGap && !askCard && !remindCard && !reached && askEvent && !menuOpen && (
+          {!goalPay && !askVariable && !askGap && !askCard && !remindCard && !reached && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

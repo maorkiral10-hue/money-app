@@ -109,6 +109,8 @@ export interface Transaction {
    * that expense. It isn't money taken back from savings, so the month's savings don't count it.
    */
   coverFor?: string;
+  /** Paid with other money for what a savings goal is for (a flight for the trip): counts as paid on that goal. */
+  goalId?: string;
   /** Set when the transaction was created from a recurring item, for that item's occurrence on `occurrence`. */
   recurringId?: string;
   occurrence?: string;
