@@ -34,34 +34,96 @@ export function scheduleText(rec: Recurring, methods: PaymentMethod[]) {
   return card ? `${often} · בחיוב של ${card.name} (ב-${card.chargeDay} לחודש)` : often;
 }
 
+/** When it goes out (or comes in), in words: "כל חודש ב-10", without the card. */
+const whenText = (rec: Recurring) => {
+  const { y, m0, d } = parseDate(rec.firstDate);
+  if (rec.frequency === 'daily') return 'כל יום';
+  if (rec.frequency === 'yearly') return `כל שנה ב-${d}.${m0 + 1}`;
+  if (rec.frequency === 'weekly') return `כל יום ${WEEKDAYS[new Date(y, m0, d).getDay()]}`;
+  return `כל חודש ב-${d} לחודש`;
+};
+
+/**
+ * Fixed income and standing orders, side by side like the month on the home screen: income on the right,
+ * spending on the left, each opening its own list under it (both can be open, to see one against the other).
+ * A line is just the name and the amount; tapping it shows how it's paid, when, and the next time.
+ */
 export function RecurringList(props: { db: IDBDatabase; data: AppData; onBack: () => void; onEdit: (rec?: Recurring) => void; onChange: () => void }) {
   const today = todayStr();
+  const { data } = props;
   const [deleting, setDeleting] = useState<Recurring | null>(null);
-  const active = props.data.recurring.filter(r => !r.endDate || r.endDate >= today);
-  const ended = props.data.recurring.filter(r => r.endDate && r.endDate < today);
+  const [openSide, setOpenSide] = useState<{ income: boolean; expense: boolean }>({ income: false, expense: false });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [showEnded, setShowEnded] = useState(false);
+  const isActive = (r: Recurring) => !r.endDate || r.endDate >= today;
+  // In the order they come round from today on
+  const byNext = (a: Recurring, b: Recurring) => (nextOccurrence(a, today) ?? '9999').localeCompare(nextOccurrence(b, today) ?? '9999');
+  const side = (type: Recurring['type']) => data.recurring.filter(r => r.type === type && isActive(r)).sort(byNext);
+  const ended = data.recurring.filter(r => !isActive(r));
+  const name = (id?: string) => [...data.methods, ...data.accounts].find(x => x.id === id)?.name ?? '';
 
-  const Row = ({ rec }: { rec: Recurring }) => {
+  const item = (rec: Recurring) => {
+    const amount = estimateFor(rec, data.transactions);
+    const open = openId === rec.id;
     const occ = nextOccurrence(rec, today);
-    const card = creditCard(rec, props.data.methods);
-    const next = occ;
-    const amount = estimateFor(rec, props.data.transactions);
+    const card = creditCard(rec, data.methods);
     return (
-      <SwipeRow onDelete={() => setDeleting(rec)}>
-        <button class="tx" onClick={() => props.onEdit(rec)}>
-          <div>
-            <div>{rec.name}</div>
-            <div class="muted small">
-              {[scheduleText(rec, props.data.methods), next && !rec.endDate ? `הבא: ${dayLabel(next, today)}` : rec.endDate && rec.endDate >= today ? `נפסקת מ־${dayLabel(addDays(rec.endDate, 1), today)}` : rec.endDate ? 'הסתיימה' : '', rec.variable ? 'סכום משתנה' : '']
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          </div>
-          <div class={`amount ${rec.type}`}>
+      <div key={rec.id} class={`rec-item ${open ? 'open' : ''}`}>
+        <button class="rec-head" onClick={() => setOpenId(open ? null : rec.id)} aria-expanded={open}>
+          <span class="rec-name">{rec.name}</span>
+          <span class={`amount ${rec.type}`}>
             {rec.variable ? '~' : ''}
             {formatMoney(rec.type === 'expense' ? -amount : amount, { sign: rec.type === 'income' })}
-          </div>
+          </span>
         </button>
-      </SwipeRow>
+        {open && (
+          <div class="rec-detail">
+            <div>
+              <span class="muted">{rec.type === 'expense' ? 'אמצעי תשלום:' : 'נכנס ל:'}</span> {name(rec.type === 'expense' ? rec.methodId : rec.accountId)}
+            </div>
+            <div>
+              <span class="muted">מתי:</span> {whenText(rec)}
+            </div>
+            {card && (
+              <div>
+                <span class="muted">יורד מהבנק:</span> בחיוב של {card.name} ב-{card.chargeDay} לחודש
+              </div>
+            )}
+            <div>
+              <span class="muted">הפעם הבאה:</span>{' '}
+              {rec.endDate ? (rec.endDate >= today ? `נפסקת מ־${dayLabel(addDays(rec.endDate, 1), today)}` : 'הסתיימה') : occ ? dayLabel(occ, today) : '—'}
+            </div>
+            {rec.variable && <div class="muted small">סכום משתנה: נשאלים ביום עצמו כמה בפועל</div>}
+            <button class="secondary small-btn" onClick={() => props.onEdit(rec)}>
+              עריכה ‹
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const column = (type: Recurring['type']) => {
+    const list = side(type);
+    const income = type === 'income';
+    const open = openSide[type];
+    return (
+      <div class="rec-col">
+        <button
+          class={`stat tappable ${open ? `on ${income ? 'inc-bg' : 'exp-bg'}` : ''}`}
+          onClick={() => setOpenSide({ ...openSide, [type]: !open })}
+          aria-expanded={open}
+        >
+          <div class={`small ${income ? 'inc' : 'exp'}`}>{income ? 'הכנסות קבועות' : 'הוצאות קבועות'}</div>
+          <div class="stat-value">{list.length}</div>
+          <div class="tap-hint">{open ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
+        </button>
+        {open && (
+          <div class={`card rec-list ${income ? 'inc-panel' : 'exp-panel'}`}>
+            {list.length ? list.map(item) : <p class="muted small">{income ? 'אין עדיין הכנסות קבועות' : 'אין עדיין הוראות קבע'}</p>}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -74,16 +136,24 @@ export function RecurringList(props: { db: IDBDatabase; data: AppData; onBack: (
         </button>
       </header>
       <p class="muted small">
-        משכורת, שכר דירה, מנויים וכל הוראת קבע. סכום קבוע נרשם לבד כשמגיע התאריך. בסכום משתנה (כמו חשמל) נשאלים ביום עצמו כמה ירד בפועל, ורק אז זה נרשם. לחיצה על שורה פותחת לעריכה, להפסקה או למחיקה.
+        משכורת, שכר דירה, מנויים וכל הוראת קבע. סכום קבוע נרשם לבד כשמגיע התאריך. בסכום משתנה (כמו חשמל) נשאלים ביום עצמו כמה ירד בפועל, ורק אז זה נרשם. לחיצה על שורה מראה את הפרטים, ומשם אפשר לערוך, להפסיק או למחוק.
       </p>
-      {active.length > 0 && (
-        <div class="card list">
-          {active.map(r => (
-            <Row key={r.id} rec={r} />
-          ))}
+      <button onClick={() => props.onEdit()}>+ הוראת קבע או הכנסה קבועה</button>
+
+      <div class="rec-columns">
+        {column('income')}
+        {column('expense')}
+      </div>
+
+      {ended.length > 0 && (
+        <div class="card rec-ended">
+          <button class="rec-head" onClick={() => setShowEnded(!showEnded)} aria-expanded={showEnded}>
+            <span>הסתיימו ({ended.length})</span>
+            <span class={`chevron ${showEnded ? 'open' : ''}`}>‹</span>
+          </button>
+          {showEnded && ended.map(item)}
         </div>
       )}
-      <button onClick={() => props.onEdit()}>+ הוראת קבע או הכנסה קבועה</button>
       {deleting && (
         <DeleteSheet
           db={props.db}
@@ -95,16 +165,6 @@ export function RecurringList(props: { db: IDBDatabase; data: AppData; onBack: (
             props.onChange();
           }}
         />
-      )}
-      {ended.length > 0 && (
-        <>
-          <div class="day-label">הסתיימו</div>
-          <div class="card list">
-            {ended.map(r => (
-              <Row key={r.id} rec={r} />
-            ))}
-          </div>
-        </>
       )}
     </>
   );

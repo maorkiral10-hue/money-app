@@ -670,3 +670,16 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .rec-actions button { flex: 1; }
 .danger-text { color: var(--neg); }
 .rec-sheet .gap-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+
+/* Fixed income and standing orders, side by side */
+.rec-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; margin-top: 12px; }
+.rec-col { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.rec-col .stat { width: 100%; }
+.rec-list { padding: 4px 8px; margin: 0; }
+.rec-item + .rec-item { border-top: 1px solid var(--line); }
+.rec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; width: 100%; margin: 0; padding: 8px 2px; background: none; color: var(--text); font-weight: 500; text-align: inherit; }
+.rec-name { min-width: 0; overflow-wrap: anywhere; }
+.rec-head .amount { white-space: nowrap; font-size: 14px; }
+.rec-detail { display: flex; flex-direction: column; gap: 4px; padding: 0 2px 10px; font-size: 13px; }
+.rec-detail .small-btn { align-self: flex-start; margin-top: 4px; }
+.rec-ended { margin-top: 12px; padding: 4px 12px; }
