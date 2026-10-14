@@ -33,7 +33,7 @@ export function estimateFor(rec: Recurring, transactions: Transaction[]) {
   const past = transactions
     .filter(t => t.recurringId === rec.id)
     .sort((a, b) => (b.occurrence ?? b.date).localeCompare(a.occurrence ?? a.date))
-    .slice(0, AVERAGE_OF);
+    .slice(0, rec.estimate === 'last' ? 1 : AVERAGE_OF);
   return past.length ? Math.round(past.reduce((a, t) => a + t.amount, 0) / past.length) : rec.amount;
 }
 

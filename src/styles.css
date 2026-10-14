@@ -664,3 +664,9 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 /* A card's gap left open by the weekly check */
 .card-gap-mark { display: block; width: 100%; margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: var(--sav-soft); border: 1px solid var(--sav); color: var(--sav); font-size: 13px; font-weight: 600; text-align: inherit; }
 .gap-split { margin: 6px 0; padding: 8px 10px; background: var(--soft); border-radius: 10px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Standing orders: stopping and deleting, each confirmed */
+.rec-actions { display: flex; gap: 8px; }
+.rec-actions button { flex: 1; }
+.danger-text { color: var(--neg); }
+.rec-sheet .gap-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }

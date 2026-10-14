@@ -304,16 +304,7 @@ export function App() {
   } else if (screen.name === 'recurring') {
     const from = screen.from;
     content = (
-      <RecurringList
-        data={data}
-        onBack={() => go({ name: from })}
-        onEdit={rec => go({ name: 'recurringForm', rec, from })}
-        onDelete={async rec => {
-          // Transactions it already recorded stay; only the schedule goes
-          await deleteRecord(db, 'recurring', rec.id);
-          await refresh();
-        }}
-      />
+      <RecurringList db={db} data={data} onBack={() => go({ name: from })} onEdit={rec => go({ name: 'recurringForm', rec, from })} onChange={afterChange} />
     );
   } else if (screen.name === 'recurringForm') {
     const from = screen.from;

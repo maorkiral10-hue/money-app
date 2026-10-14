@@ -114,7 +114,7 @@ export interface Recurring {
   /** Fixed amounts are recorded automatically; variable ones wait for the user to confirm how much it really was. */
   variable: boolean;
   /** Variable only: forecast with `amount`, or with the average of the last few confirmed amounts. */
-  estimate: 'set' | 'average';
+  estimate: 'set' | 'average' | 'last';
   amount: number;
   categoryId?: string;
   methodId?: string;
