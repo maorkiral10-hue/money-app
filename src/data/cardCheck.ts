@@ -1,8 +1,9 @@
-import { cardStatements, chargeOf, edgeCharges, splitInstallments, type Statement } from './balance';
+import { cardStatements, chargeOf, edgeCharges, nextChargeDate, splitInstallments, type Statement } from './balance';
 import { addDays } from './dates';
 import { getMeta, setMeta } from './db';
 import type { AppData } from './store';
 import type { PaymentMethod, Transaction } from './types';
+import { checkMark, type BalanceCheck } from './reconcile';
 
 /**
  * What a card was really charged on one of its charge days, as the user said. `done` once it matches what
@@ -73,3 +74,62 @@ export async function saveCardCheck(db: IDBDatabase, check: CardCheck) {
   const others = all.filter(c => !(c.methodId === check.methodId && c.date === check.date));
   await setMeta(db, 'cardChecks', [check, ...others].slice(0, KEEP));
 }
+
+/** The card's next charge from a day on (the charge day itself counts as the next one's). */
+export const upcomingCharge = (card: PaymentMethod, today: string) => nextChargeDate(today, card.chargeDay!);
+
+/**
+ * What the app has for a card's charge, counting only what was bought (or refunded) up to a day: the same as
+ * the card company's "next charge" shows by then. Standing orders count once they're recorded, on their day.
+ */
+export function cardSide(data: Pick<AppData, 'methods' | 'transactions' | 'accounts' | 'startDate'>, card: PaymentMethod, chargeDate: string, asOf: string) {
+  const st = cardStatements(data, card.id).find(s => s.date === chargeDate);
+  return st ? st.items.filter(i => !i.tx || i.tx.date <= asOf).reduce((a, i) => a + i.amount, 0) : 0;
+}
+
+/** A card's gap left open after a weekly check: it waits for the charge day, never recorded on its own. */
+export interface OpenCardGap {
+  card: PaymentMethod;
+  check: BalanceCheck;
+  chargeDate: string;
+  /** + the card company shows more than the app (something missing here), − less. */
+  found: number;
+  /** The same now, against everything recorded up to the day of the (latest) look. */
+  left: number;
+  /** The check before it for the same charge, if it left a gap too: what of that is still missing. */
+  before?: { date: string; left: number };
+}
+
+/**
+ * Cards whose latest weekly check left a gap beyond the minor range, for a charge not settled yet on its day.
+ * Each check takes the place of the one before (nothing is recorded in between, so the newer gap already
+ * holds the older one); what's still missing of the older one is told apart, to search the card's page by.
+ */
+export function openCardGaps(
+  data: Pick<AppData, 'methods' | 'transactions' | 'accounts' | 'startDate' | 'balanceChecks' | 'cardChecks' | 'checkTolerance'>,
+  today: string,
+): OpenCardGap[] {
+  const out: OpenCardGap[] = [];
+  for (const card of data.methods.filter(m => m.kind === 'credit' && m.chargeDay && !m.archived)) {
+    const mine = data.balanceChecks.filter(c => c.accountId === card.id);
+    const check = mine[0];
+    if (!check || check.result !== 'gap' || !check.chargeDate || check.date > today) continue;
+    if (checkMark(check.real, check.app, data.checkTolerance) !== 'off') continue;
+    if (data.cardChecks.some(k => k.methodId === card.id && k.date === check.chargeDate && k.done)) continue;
+    const leftOf = (c: BalanceCheck) => (c.recheck?.real ?? c.real) - cardSide(data, card, c.chargeDate!, c.recheck?.date ?? c.date);
+    const prev = mine[1];
+    out.push({
+      card,
+      check,
+      chargeDate: check.chargeDate,
+      found: check.real - check.app,
+      left: leftOf(check),
+      before: prev && prev.result === 'gap' && prev.chargeDate === check.chargeDate ? { date: prev.date, left: leftOf(prev) } : undefined,
+    });
+  }
+  return out;
+}
+
+/** Changing standing orders on a card whose amount wasn't confirmed yet: they're missing from its charge here. */
+export const unconfirmedOnCard = (data: Pick<AppData, 'recurring'>, card: PaymentMethod, due: { rec: { id: string; name: string; methodId?: string } }[]) =>
+  due.filter(d => d.rec.methodId === card.id).map(d => d.rec.name);

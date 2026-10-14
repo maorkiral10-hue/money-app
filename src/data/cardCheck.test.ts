@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cardStatements, cardUsage, edgeCharges, summarize } from './balance';
-import { cardChecksDue, chargeWindow, edgeItems, movedTo, type CardCheck } from './cardCheck';
+import { cardChecksDue, cardSide, chargeWindow, edgeItems, movedTo, openCardGaps, type CardCheck } from './cardCheck';
+import { checkStatus, type BalanceCheck } from './reconcile';
 import type { Account, PaymentMethod, Transaction } from './types';
 
 const bank: Account = { id: 'bank', name: 'בנק', kind: 'bank', openingBalance: 10_000_00, order: 0 };
@@ -69,5 +70,36 @@ describe('purchases close to the charge day', () => {
     const moved = txs.map(t => (t.id === 'edge' ? movedTo(t, '2026-11-02') : t));
     expect(cardStatements(ledger(moved), 'visa').map(s => [s.date, s.amount])).toEqual([['2026-10-02', 200_00], ['2026-11-02', 120_00]]);
     expect(cardUsage(ledger(moved), '2026-10-02')[0].used).toBe(120_00);
+  });
+});
+
+describe("a card's weekly check", () => {
+  const weekly = (date: string, real: number, app: number, result: BalanceCheck['result'] = 'gap'): BalanceCheck => ({ date, accountId: 'visa', real, app, result, chargeDate: '2026-11-02' });
+  const withChecks = (transactions: Transaction[], balanceChecks: BalanceCheck[], cardChecks: CardCheck[] = []) => ({ ...ledger(transactions, cardChecks), balanceChecks, checkTolerance: 0 });
+
+  it('counts only what was bought up to the day, like the card company', () => {
+    const txs = [buy('a', '2026-10-05', 300_00), buy('b', '2026-10-25', 100_00)];
+    expect(cardSide(ledger(txs), visa, '2026-11-02', '2026-10-20')).toBe(300_00);
+    expect(cardSide(ledger(txs), visa, '2026-11-02', '2026-10-31')).toBe(400_00);
+  });
+
+  it('a newer check holds the older gap: what is still missing of it is told apart from what is new', () => {
+    const txs = [buy('a', '2026-10-05', 1_250_00)];
+    // 20.10: the card company shows 1,320 — 70 missing here. 27.10: 1,600 against 1,500 recorded
+    const first = weekly('2026-10-20', 1_320_00, 1_250_00);
+    const more = [...txs, buy('b', '2026-10-24', 250_00)];
+    const [g] = openCardGaps(withChecks(more, [weekly('2026-10-27', 1_600_00, 1_500_00), first]), '2026-10-27');
+    expect(g).toMatchObject({ chargeDate: '2026-11-02', left: 100_00, before: { date: '2026-10-20', left: 70_00 } });
+    // The 70 found (a purchase from before the 20th recorded now): 30 are left, all new
+    const found = [...more, buy('c', '2026-10-18', 70_00)];
+    expect(openCardGaps(withChecks(found, [weekly('2026-10-27', 1_600_00, 1_500_00), first]), '2026-10-27')[0]).toMatchObject({ left: 30_00, before: { left: 0 } });
+  });
+
+  it('is settled by the charge day check, and cards are due a check like any source', () => {
+    const txs = [buy('a', '2026-10-05', 1_250_00)];
+    const done: CardCheck = { methodId: 'visa', date: '2026-11-02', actual: 1_320_00, done: true, at: '' };
+    expect(openCardGaps(withChecks(txs, [weekly('2026-10-20', 1_320_00, 1_250_00)], [done]), '2026-11-02')).toEqual([]);
+    const s = checkStatus({ accounts: [bank], methods: [visa], balanceChecks: [], checkMode: 'together', checkEvery: 'week', checkEveryByAccount: {} }, '2026-10-20');
+    expect(s.due.map(d => d.name)).toEqual(['בנק', 'ויזה']);
   });
 });

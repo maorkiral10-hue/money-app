@@ -22,6 +22,9 @@ export function CardLine(props: {
   statements?: Statement[];
   data?: AppData;
   onEdit?: (tx: Transaction) => void;
+  /** Left open by the weekly check: how much, and a tap to check again. */
+  openGap?: number;
+  onOpenGap?: () => void;
 }) {
   const { usage, today } = props;
   const [open, setOpen] = useState(false);
@@ -70,6 +73,11 @@ export function CardLine(props: {
         </button>
       ) : (
         head
+      )}
+      {props.openGap !== undefined && (
+        <button class="card-gap-mark" onClick={props.onOpenGap}>
+          ⚠ פער פתוח: {formatMoney(Math.abs(props.openGap))} · לחץ לבדיקה
+        </button>
       )}
       {open && props.data && props.onEdit && (
         <div class="card-detail">

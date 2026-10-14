@@ -27,6 +27,7 @@ export function Home(props: {
   /** Gaps left open after checks: tapping one brings up its card. */
   openGaps?: OpenGap[];
   onOpenGap?: (accountId: string) => void;
+  onRecheckCard?: (cardId: string) => void;
   onOpenGoals: () => void;
   onEditEvent: (event?: CalendarEvent, date?: string, time?: string) => void;
   /** The calendar's chosen day: kept by the app, so "+" records on it and coming back keeps it. */
@@ -120,7 +121,7 @@ export function Home(props: {
       />
 
       {/* The month of the day chosen in the calendar above: moving the calendar moves this too */}
-      <MonthSummary data={data} onEdit={props.onEdit} monthKey={periodKey(calendarDay, data.monthStartDay)} asOf={calendarDay} />
+      <MonthSummary data={data} onEdit={props.onEdit} onRecheckCard={props.onRecheckCard} monthKey={periodKey(calendarDay, data.monthStartDay)} asOf={calendarDay} />
 
 
       <div class="quiet-lines">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
-import { todayStr } from './data/dates';
+import { addDays, todayStr } from './data/dates';
 import { deleteRecord, getMeta, openDb, putRecords, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
 import { startup } from './data/startup';
@@ -23,6 +23,8 @@ import { VariableDueCard } from './components/VariableDueCard';
 import { EarlyRecordCard } from './components/EarlyRecordCard';
 import { CardChargeCard } from './components/CardChargeCard';
 import { OpenGapCard } from './components/OpenGapCard';
+import { CardGapReminder } from './components/CardGapReminder';
+import { openCardGaps } from './data/cardCheck';
 import { correctBalance, gapAsOf, openGaps, settleOpenGaps, sourcePreset } from './data/reconcile';
 import { cardChecksDue } from './data/cardCheck';
 import { RECORD_EARLY_EVENT } from './components/MoneyList';
@@ -344,6 +346,7 @@ export function App() {
         data={data}
         accountId={screen.accountId}
         recheck={screen.recheck}
+        onEdit={tx => go({ name: 'entry', tx, from })}
         onBack={() => go({ name: from })}
         onChange={afterChange}
         onAddMissing={preset => go({ name: 'entry', preset, from })}
@@ -433,6 +436,7 @@ export function App() {
         onOpenCheck={accountId => go({ name: 'balanceCheck', from: 'home', accountId })}
         openGaps={openGaps(data, todayStr())}
         onOpenGap={accountId => setLaterIds(ids => ids.filter(id => !id.startsWith(`gap|${accountId}|`)))}
+        onRecheckCard={cardId => go({ name: 'balanceCheck', from: 'home', accountId: cardId, recheck: true })}
         onOpenGoals={() => go({ name: 'goals' })}
         onEditEvent={(event, date, time) => go({ name: 'eventForm', event, date, time, from: 'home' })}
         day={homeDay.current}
@@ -457,6 +461,13 @@ export function App() {
   // Card charges to check against what the card company really charged (after the changing amounts)
   const cardsDue = cardChecksDue(data, today).filter(d => !laterIds.includes(`card|${d.card.id}|${d.charge.date}`));
   const askCard = cardsDue[0];
+  // A card's gap from the weekly check still open two days before its charge: said once
+  const cardGapsOpen = openCardGaps(data, today);
+  const remindCard = cardGapsOpen.find(g => g.chargeDate <= addDays(today, 2) && !data.cardGapReminded.includes(`${g.card.id}|${g.chargeDate}`));
+  const reminded = async (g: { card: { id: string }; chargeDate: string }) => {
+    await setMeta(db, 'cardGapReminded', [...data.cardGapReminded, `${g.card.id}|${g.chargeDate}`].slice(-40));
+    afterChange();
+  };
   // Only the nearest time round can be recorded ahead, so no month is skipped by mistake
   const earlyRec = early ? data.recurring.find(r => r.id === early.recurringId) : undefined;
   const nearest = earlyRec ? openOccurrences(earlyRec, early!.occurrence, data.startDate)[0] : undefined;
@@ -557,6 +568,17 @@ export function App() {
               }}
             />
           )}
+          {!askVariable && !askGap && !askCard && remindCard && !menuOpen && !earlyAsk && (
+            <CardGapReminder
+              key={`${remindCard.card.id}|${remindCard.chargeDate}`}
+              gap={remindCard}
+              onRecheck={async () => {
+                await reminded(remindCard);
+                go({ name: 'balanceCheck', from: tab, accountId: remindCard.card.id, recheck: true });
+              }}
+              onDone={() => reminded(remindCard)}
+            />
+          )}
           {!askVariable && !askGap && askCard && !menuOpen && !earlyAsk && (
             <CardChargeCard
               key={`${askCard.card.id}|${askCard.charge.date}|${askCard.actual ?? ''}`}
@@ -565,6 +587,10 @@ export function App() {
               card={askCard.card}
               charge={askCard.charge}
               actual={askCard.actual}
+              openGap={(() => {
+                const g = cardGapsOpen.find(x => x.card.id === askCard.card.id && x.chargeDate === askCard.charge.date);
+                return g && { date: g.check.date, left: g.left };
+              })()}
               more={cardsDue.length - 1}
               onLater={() => setLaterIds(ids => [...ids, `card|${askCard.card.id}|${askCard.charge.date}`])}
               onDone={afterChange}
@@ -573,7 +599,7 @@ export function App() {
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />
           )}
-          {!askVariable && !askGap && !askCard && askEvent && !menuOpen && (
+          {!askVariable && !askGap && !askCard && !remindCard && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
               db={db}

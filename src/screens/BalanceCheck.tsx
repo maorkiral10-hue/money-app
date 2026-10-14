@@ -5,7 +5,9 @@ import { holidaysOn } from '../data/holidays';
 import { setMeta } from '../data/db';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, openGaps, recheckGap, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { CardWeeklyCheck } from '../components/CardWeeklyCheck';
+import type { Transaction } from '../data/types';
+import { checkableCards, checkSources, appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, openGaps, recheckGap, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -30,11 +32,16 @@ export function BalanceCheck(props: {
   accountId?: string;
   /** Checking a gap left open again: not a check of its own (see BalanceCheck.recheck). */
   recheck?: boolean;
+  /** Opens a purchase (from a card's charge, to compare and fix). */
+  onEdit?: (tx: Transaction) => void;
 }) {
   const { data } = props;
   const today = todayStr();
   const accounts = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal');
+  const cards = checkableCards(data.methods);
   const [accountId, setAccountId] = useState(props.accountId ?? accounts.find(a => a.kind === 'bank')?.id ?? accounts[0]?.id);
+  // A credit card is checked against its next charge, on its own panel
+  const card = cards.find(c => c.id === accountId);
   // The sources still due a check, not counting the one on screen
   const nextDue = checkStatus(data, today).due.find(a => a.id !== accountId);
   const pick = (id: string) => {
@@ -68,7 +75,7 @@ export function BalanceCheck(props: {
     }
     return undefined;
   })();
-  const name = (id: string) => data.accounts.find(a => a.id === id)?.name ?? '';
+  const name = (id: string) => checkSources(data).find(a => a.id === id)?.name ?? data.methods.find(m => m.id === id)?.name ?? '';
 
   // Opened to check a gap left open again: the gap it's for, as it was when the screen opened
   const [recheckOf] = useState(() => (props.recheck ? openGaps(data, today).find(g => g.account.id === props.accountId) : undefined));
@@ -104,24 +111,49 @@ export function BalanceCheck(props: {
   return (
     <>
       <header class="top">
-        <h1>{recheckOf ? `בדיקה חוזרת · ${recheckOf.account.name}` : 'בדיקה מול הבנק'}</h1>
+        <h1>{recheckOf ? `בדיקה חוזרת · ${recheckOf.account.name}` : props.recheck && card ? `בדיקה חוזרת · ${card.name}` : 'בדיקה מול הבנק'}</h1>
         <button class="link" onClick={props.onBack}>
           חזרה
         </button>
       </header>
       <p class="muted small">
-        הקלד כמה יש באמת, כמו שרואים באפליקציה של הבנק, והאפליקציה תשווה.{' '}
+        הקלד כמה יש באמת, כמו שרואים באפליקציה של הבנק (או של חברת האשראי), והאפליקציה תשווה.{' '}
         {data.checkTolerance > 0 ? `פער עד ${formatMoney(data.checkTolerance)} נחשב שינוי מינורי (אפשר לשנות בהעדפות).` : 'כל פער נחשב חריגה (אפשר לקבוע טווח לשינוי מינורי בהעדפות).'}
       </p>
 
-      {recheckOf && (
+      {!props.recheck && (
+        <div class="card">
+          <h2>איפה בודקים?</h2>
+          <Chips items={accounts} value={accountId} onChange={pick} />
+          {cards.length > 0 && (
+            <>
+              <p class="field-label">כרטיסי אשראי</p>
+              <Chips items={cards} value={accountId} onChange={pick} />
+            </>
+          )}
+        </div>
+      )}
+      {card && (
+        <CardWeeklyCheck
+          key={card.id}
+          db={props.db}
+          data={data}
+          card={card}
+          recheck={props.recheck}
+          onBack={props.onBack}
+          onChange={props.onChange}
+          onAddMissing={props.onAddMissing}
+          onEdit={props.onEdit}
+        />
+      )}
+      {!card && recheckOf && (
         <p class="small recheck-note">
           בודקים שוב את הפער הפתוח מ{dayLabel(recheckOf.check.date, today)}. הבדיקה הזו לא נכנסת להיסטוריה ולא משנה את מועד הבדיקה הבאה.
         </p>
       )}
+      {!card && (
       <div class="card">
-        <h2>{recheckOf ? 'כמה יש עכשיו באמת?' : 'איפה בודקים?'}</h2>
-        {!recheckOf && <Chips items={accounts} value={accountId} onChange={pick} />}
+        {recheckOf && <h2>כמה יש עכשיו באמת?</h2>}
         <label class="field">
           <span>כמה יש שם עכשיו באמת</span>
           <MoneyInput
@@ -138,8 +170,9 @@ export function BalanceCheck(props: {
           השווה
         </button>
       </div>
+      )}
 
-      {recheckOf && checked && account && (
+      {!card && recheckOf && checked && account && (
         <div class={`card check-result ${Math.abs(gap) <= data.checkTolerance ? 'inc-panel' : 'exp-panel'}`}>
           {Math.abs(gap) <= data.checkTolerance ? (
             <>
@@ -182,7 +215,7 @@ export function BalanceCheck(props: {
           )}
         </div>
       )}
-      {!recheckOf && checked && account && !done && (
+      {!card && !recheckOf && checked && account && !done && (
         <div class={`card check-result ${mark === 'exact' ? 'inc-panel' : mark === 'minor' ? 'minor-panel' : 'exp-panel'}`}>
           {mark === 'exact' ? (
             <h2 class="inc">✓ מתאים בדיוק</h2>
@@ -236,7 +269,7 @@ export function BalanceCheck(props: {
         </div>
       )}
       {done && <div class="card note">{done}</div>}
-      {!recheckOf && checked && early === 'ask' && account && (
+      {!card && !recheckOf && checked && early === 'ask' && account && (
         <div class="card">
           <h2>בדקת לפני הזמן. מתי הבדיקה הבאה?</h2>
           <div class="scope-buttons">
@@ -260,7 +293,7 @@ export function BalanceCheck(props: {
 
       <div class="card">
         <h2>פער שנשאר פתוח</h2>
-        <p class="muted small">כמה ימים פער מחכה שתמצא אותו, לפני שהוא נרשם לבד כ"לא מזוהה" (לא יותר מתדירות הבדיקה).</p>
+        <p class="muted small">כמה ימים פער מחכה שתמצא אותו, לפני שהוא נרשם לבד כ"לא מזוהה" (לא יותר מתדירות הבדיקה). בכרטיסי אשראי הפער מחכה ליום החיוב ולא נרשם לבד.</p>
         <Segmented
           value={String(data.gapGraceDays)}
           onChange={async (v: string) => {
@@ -298,7 +331,7 @@ export function BalanceCheck(props: {
           </div>
         ) : (
           <div class="check-every">
-            {accounts.map(a => (
+            {checkSources(data).map(a => (
               <label key={a.id} class="line check-every-row">
                 <span>{a.name}</span>
                 <select

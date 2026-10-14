@@ -30,6 +30,8 @@ export function CardChargeCard(props: {
   onChanged: () => void;
   onEdit: (tx: Transaction) => void;
   onAdd: (type: 'expense' | 'income', date: string) => void;
+  /** Left open by a weekly check for this charge: settling the charge settles it too. */
+  openGap?: { date: string; left: number };
 }) {
   const { card, charge, data } = props;
   const today = todayStr();
@@ -131,6 +133,11 @@ export function CardChargeCard(props: {
             <p>
               לפי מה שרשמת: <strong>{formatMoney(charge.amount)}</strong>. זה הסכום שחויב בפועל?
             </p>
+            {props.openGap && (
+              <p class="small rest-note">
+                ⚠ בבדיקה מ{dayLabel(props.openGap.date, today)} נשאר פער פתוח של {formatMoney(Math.abs(props.openGap.left))}.
+              </p>
+            )}
             {differs ? (
               <>
                 <p class="field-label">כמה חויב בפועל?</p>

@@ -35,7 +35,29 @@ export interface BalanceCheck {
    * check stays due when it was.
    */
   recheck?: { date: string; real: number };
+  /**
+   * A credit card's check (its id is the card's, `real` what the card company shows as its next charge):
+   * the charge it was compared with.
+   */
+  chargeDate?: string;
 }
+
+/** Something checked against the outside: a money source, or a credit card (its next charge). */
+export interface CheckSource {
+  id: string;
+  name: string;
+  kind: Account['kind'] | 'card';
+  archived?: boolean;
+}
+
+/** The credit cards that can be checked: with a charge day, so their next charge is known. */
+export const checkableCards = (methods: PaymentMethod[]) => methods.filter(m => m.kind === 'credit' && m.chargeDay && !m.archived && m.name.trim());
+
+/** Every source a balance check can be about: money sources (not savings goals), then credit cards. */
+export const checkSources = (data: { accounts: Account[]; methods?: PaymentMethod[] }): CheckSource[] => [
+  ...data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal'),
+  ...checkableCards(data.methods ?? []).map(m => ({ id: m.id, name: m.name, kind: 'card' as const })),
+];
 
 /** A regular check stays in the history for good; only an extra one can be deleted. */
 export const canDeleteCheck = (c: BalanceCheck) => !!(c.early || c.keepSchedule);
@@ -204,7 +226,7 @@ export function checkDue(every: CheckEvery, last: string | undefined, today: str
 }
 
 /** Counting cash every week is a chore, so it's monthly unless changed; the others weekly. */
-export const defaultEvery = (a: Pick<Account, 'kind'>): CheckEvery => (a.kind === 'cash' ? 'month' : 'week');
+export const defaultEvery = (a: Pick<CheckSource, 'kind'>): CheckEvery => (a.kind === 'cash' ? 'month' : 'week');
 
 export interface CheckSettings {
   checkMode: CheckMode;
@@ -214,15 +236,15 @@ export interface CheckSettings {
   checkEveryByAccount: Record<string, CheckEvery>;
 }
 
-export const everyFor = (s: CheckSettings, a: Account): CheckEvery =>
+export const everyFor = (s: CheckSettings, a: CheckSource): CheckEvery =>
   s.checkMode === 'together' ? s.checkEvery : (s.checkEveryByAccount[a.id] ?? defaultEvery(a));
 
 /**
  * Which money sources are due a check today: each by its own last check and its schedule. Savings goals
  * aren't checked (they're the user's own "piggy banks"). `total` counts the sources that get checked at all.
  */
-export function checkStatus(data: CheckSettings & { accounts: Account[]; balanceChecks: BalanceCheck[] }, today: string) {
-  const sources = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal' && everyFor(data, a) !== 'never');
+export function checkStatus(data: CheckSettings & { accounts: Account[]; methods?: PaymentMethod[]; balanceChecks: BalanceCheck[] }, today: string) {
+  const sources = checkSources(data).filter(a => everyFor(data, a) !== 'never');
   // An early check the user chose not to count doesn't move the schedule
   const last = (id: string) => data.balanceChecks.find(c => c.accountId === id && !c.keepSchedule)?.date;
   const due = sources.filter(a => checkDue(everyFor(data, a), last(a.id), today));
@@ -350,6 +372,19 @@ export async function settleOpenGaps(
   today: string,
 ): Promise<{ account: Account; closed: boolean; amount: number }[]> {
   const done: { account: Account; closed: boolean; amount: number }[] = [];
+  const close = async (id: string, date: string, real: number) => {
+    const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];
+    await setMeta(db, 'balanceChecks', all.map(c => (c === all.find(x => x.accountId === id && x.date === date && x.real === real && x.result === 'gap') ? { ...c, result: 'closed' as const } : c)));
+  };
+  if ('cardChecks' in data) {
+    const { openCardGaps } = await import('./cardCheck');
+    for (const g of openCardGaps(data as never, today)) {
+      if (Math.abs(g.left) <= data.checkTolerance) {
+        await close(g.card.id, g.check.date, g.check.real);
+        done.push({ account: { id: g.card.id, name: g.card.name, kind: 'other', openingBalance: 0, order: 0 }, closed: true, amount: 0 });
+      }
+    }
+  }
   for (const g of openGaps(data, today)) {
     if (Math.abs(g.left) <= data.checkTolerance) {
       const all = (await getMeta<BalanceCheck[]>(db, 'balanceChecks')) ?? [];

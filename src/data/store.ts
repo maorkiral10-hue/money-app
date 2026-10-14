@@ -40,6 +40,8 @@ export interface AppData {
   funds: Fund[];
   /** Days a gap may be left open after a check before it's recorded as unexplained. */
   gapGraceDays: number;
+  /** Cards' open gaps already reminded of before their charge ("card id|charge day"). */
+  cardGapReminded: string[];
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -68,6 +70,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     cardChecks: (await getMeta<CardCheck[]>(db, 'cardChecks')) ?? [],
     funds: (await getMeta<Fund[]>(db, 'funds')) ?? [],
     gapGraceDays: (await getMeta<number>(db, 'gapGraceDays')) ?? 3,
+    cardGapReminded: (await getMeta<string[]>(db, 'cardGapReminded')) ?? [],
   };
 }
 

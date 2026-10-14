@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
+import { openCardGaps } from '../data/cardCheck';
 import { AnimatedMoney } from './AnimatedMoney';
 import { CardLine } from './CardLine';
 import { cardStatements, cardUsage } from '../data/balance';
@@ -43,6 +44,8 @@ const pct = (part: number, total: number) => {
 export function MonthSummary(props: {
   data: AppData;
   onEdit: (tx: Transaction) => void;
+  /** A card's gap left open by the weekly check: check it again. */
+  onRecheckCard?: (cardId: string) => void;
   /** The financial month to show, set from outside (the home screen's calendar); then there are no arrows of its own. */
   monthKey?: string;
   /**
@@ -60,7 +63,7 @@ export function MonthSummary(props: {
   const key = props.monthKey ?? ownKey;
   const [open, setOpen] = useState<Open>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
-  const [cardsOpen, setCardsOpen] = useState(false);
+  const [cardsOpen, setCardsOpen] = useState(() => openCardGaps(data, todayStr()).length > 0);
 
   const index = months.indexOf(key);
   const start = periodStart(key, startDay);
@@ -159,6 +162,7 @@ export function MonthSummary(props: {
   // Credit cards together: how much of all the limits is used
   const asOf = props.asOf ?? today;
   const cards = useMemo(() => cardUsage(data, asOf, today), [data, asOf, today]);
+  const cardGaps = useMemo(() => openCardGaps(data, today), [data, today]);
   const used = cards.reduce((a, c) => a + c.used, 0);
   const limits = cards.reduce((a, c) => a + (c.card.creditLimit ?? 0), 0);
   const withLimit = cards.filter(c => c.card.creditLimit);
@@ -374,7 +378,17 @@ export function MonthSummary(props: {
           {cardsOpen && (
             <div class="section-body">
               {cards.map(u => (
-                <CardLine key={u.card.id} usage={u} today={today} asOf={asOf} statements={cardStatements(data, u.card.id)} data={data} onEdit={props.onEdit} />
+                <CardLine
+                  key={u.card.id}
+                  usage={u}
+                  today={today}
+                  asOf={asOf}
+                  statements={cardStatements(data, u.card.id)}
+                  data={data}
+                  onEdit={props.onEdit}
+                  openGap={cardGaps.find(g => g.card.id === u.card.id)?.left}
+                  onOpenGap={() => props.onRecheckCard?.(u.card.id)}
+                />
               ))}
             </div>
           )}
