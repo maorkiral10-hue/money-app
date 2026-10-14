@@ -683,3 +683,9 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .rec-detail { display: flex; flex-direction: column; gap: 4px; padding: 0 2px 10px; font-size: 13px; }
 .rec-detail .small-btn { align-self: flex-start; margin-top: 4px; }
 .rec-ended { margin-top: 12px; padding: 4px 12px; }
+.fund-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.fund-history-card .fund-day + .fund-day { border-top: 1px solid var(--line); }
+.fund-day-head { display: flex; justify-content: space-between; width: 100%; margin: 0; padding: 10px 2px; background: none; color: var(--text); font-weight: 500; }
+.fund-day-rows { display: flex; flex-direction: column; gap: 6px; padding: 0 4px 10px; }
+.fund-day-row .line { display: flex; justify-content: space-between; gap: 8px; }
+.fund-edit { margin: 6px 0; }

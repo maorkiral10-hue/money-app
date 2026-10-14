@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { depositsSince, earned, estimated, sinceStart, totalSaved, type Fund } from './funds';
+import { depositsSince, earned, estimated, fundsHistory, sinceStart, totalSaved, type Fund } from './funds';
 import type { Transaction } from './types';
 
 const fund: Fund = {
@@ -36,5 +36,18 @@ describe('long-term savings', () => {
     expect(estimated(fund, [dep], '2026-10-05')).toBe(105_000_00);
     expect(sinceStart(fund)).toEqual({ from: '2026-07-01', deposits: 3_000_00, amount: 2_000_00, pct: 0.02 });
     expect(sinceStart({ ...fund, updates: [fund.updates[0]] })).toBeUndefined();
+  });
+
+  it('an extra deposit counts in the estimate, and the history shows where all funds stood on each update day', () => {
+    const extra: Transaction = { id: 'x', type: 'expense', amount: 500_00, date: '2026-10-12', fundId: 'f', createdAt: '', updatedAt: '' };
+    expect(estimated({ ...fund, recurringId: undefined }, [extra], '2026-10-20')).toBe(105_500_00);
+    const pension: Fund = { id: 'p', name: 'פנסיה', kind: 'pension', createdAt: '', updates: [{ date: '2026-08-15', balance: 200_000_00, deposits: 0 }] };
+    const h = fundsHistory([fund, pension]);
+    expect(h.map(x => [x.date, x.total])).toEqual([
+      ['2026-10-01', 305_000_00],
+      ['2026-08-15', 300_000_00],
+      ['2026-07-01', 100_000_00],
+    ]);
+    expect(h[0].funds.map(r => [r.fund.id, r.asOf])).toEqual([['f', '2026-10-01'], ['p', '2026-08-15']]);
   });
 });

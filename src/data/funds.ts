@@ -50,9 +50,9 @@ export function earned(f: Fund, i: number) {
 /** What the linked standing order put in after the last update, up to a day: offered as the deposits for the next one. */
 export function depositsSince(f: Fund, transactions: Transaction[], until: string) {
   const last = latest(f);
-  if (!f.recurringId || !last) return 0;
+  if (!last) return 0;
   return transactions
-    .filter(t => t.recurringId === f.recurringId && t.date > last.date && t.date <= until)
+    .filter(t => ((f.recurringId && t.recurringId === f.recurringId) || t.fundId === f.id) && t.date > last.date && t.date <= until)
     .reduce((a, t) => a + t.amount, 0);
 }
 
@@ -74,4 +74,26 @@ export function sinceStart(f: Fund) {
   const deposits = f.updates.slice(1).reduce((a, u) => a + u.deposits, 0);
   const amount = last.balance - first.balance - deposits;
   return { from: first.date, deposits, amount, pct: first.balance > 0 ? amount / first.balance : undefined };
+}
+
+/** One day something was updated: every fund's balance as it stood then (its latest update up to that day), and their total. */
+export interface FundsSnapshot {
+  date: string;
+  total: number;
+  funds: { fund: Fund; balance: number; asOf: string; index: number }[];
+}
+
+/** The history of updates, newest first: for each day one was made, where all the funds stood. */
+export function fundsHistory(funds: Fund[]): FundsSnapshot[] {
+  const days = [...new Set(funds.flatMap(f => f.updates.map(u => u.date)))].sort().reverse();
+  return days.map(date => {
+    const rows = funds.flatMap(fund => {
+      let index = -1;
+      fund.updates.forEach((u, i) => {
+        if (u.date <= date && (index < 0 || u.date >= fund.updates[index].date)) index = i;
+      });
+      return index < 0 ? [] : [{ fund, balance: fund.updates[index].balance, asOf: fund.updates[index].date, index }];
+    });
+    return { date, total: rows.reduce((a, r) => a + r.balance, 0), funds: rows };
+  });
 }
