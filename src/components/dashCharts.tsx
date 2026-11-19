@@ -260,20 +260,93 @@ const shortMoney = (agorot: number) => {
   return agorot < 0 ? `-${t}` : t;
 };
 
-/** Amounts side by side as bars, e.g. how the spending was paid. */
-export function HBars(props: { rows: { label: string; amount: number }[] }) {
-  const max = Math.max(1, ...props.rows.map(r => r.amount));
+/** Parts of a whole as bars: each with its amount and share; tapping "other" opens what it holds. */
+function SliceBars(props: { slices: Slice[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const total = props.slices.reduce((s, x) => s + x.amount, 0);
+  const max = Math.max(1, ...props.slices.map(s => s.amount));
   return (
     <div class="hbars">
-      {props.rows.map(r => (
-        <div key={r.label} class="hbar">
-          <span class="hbar-label">{r.label}</span>
-          <span class="hbar-track">
-            <span style={{ width: `${(r.amount / max) * 100}%` }} />
-          </span>
-          <span class="hbar-value">{formatMoney(r.amount)}</span>
+      {props.slices.map(s => (
+        <div key={s.key}>
+          <button class="hbar" onClick={() => setOpen(open === s.key ? null : s.key)}>
+            <span class="hbar-label">{s.label}</span>
+            <span class="hbar-track">
+              <span style={{ width: `${(s.amount / max) * 100}%`, background: s.color }} />
+            </span>
+            <span class="hbar-value">
+              {formatMoney(s.amount)}
+              <span class="muted small block">{pct(s.amount, total)}</span>
+            </span>
+          </button>
+          {open === s.key && s.inside && (
+            <div class="pie-inside">
+              {s.inside.map(i => (
+                <div key={i.label} class="line small">
+                  <span>{i.label}</span>
+                  <span>{formatMoney(i.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
+    </div>
+  );
+}
+
+export type PartsMode = 'pie' | 'bars';
+const modeKey = (id: string) => `dash-parts-${id}`;
+function savedMode(id: string): PartsMode {
+  try {
+    return localStorage.getItem(modeKey(id)) === 'bars' ? 'bars' : 'pie';
+  } catch {
+    return 'pie';
+  }
+}
+
+/**
+ * Parts of a whole (where the money goes, how it was paid, where income came from), as a pie or as bars:
+ * a switch in the corner, remembered for each part of the page on its own.
+ */
+export function Parts(props: { id: string; slices: Slice[]; centerLabel: string; centerValue: string; centerNote?: string }) {
+  const [mode, setMode] = useState<PartsMode>(() => savedMode(props.id));
+  const choose = (m: PartsMode) => {
+    setMode(m);
+    try {
+      localStorage.setItem(modeKey(props.id), m);
+    } catch {
+      // private browsing: just for now
+    }
+  };
+  return (
+    <div class="parts">
+      <div class="parts-toggle" role="group" aria-label="איך להציג">
+        <button class={mode === 'pie' ? 'on' : ''} aria-label="עוגה" aria-pressed={mode === 'pie'} onClick={() => choose('pie')}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 4v8l6 5" />
+          </svg>
+        </button>
+        <button class={mode === 'bars' ? 'on' : ''} aria-label="עמודות" aria-pressed={mode === 'bars'} onClick={() => choose('bars')}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6H8" />
+            <path d="M20 12H4" />
+            <path d="M20 18h-9" />
+          </svg>
+        </button>
+      </div>
+      {mode === 'pie' ? (
+        <Pie slices={props.slices} centerLabel={props.centerLabel} centerValue={props.centerValue} centerNote={props.centerNote} />
+      ) : (
+        <>
+          <p class="chart-readout">
+            <b>{props.centerLabel}:</b> {props.centerValue}
+            {props.centerNote && <span class="muted"> {props.centerNote}</span>}
+          </p>
+          <SliceBars slices={props.slices} />
+        </>
+      )}
     </div>
   );
 }

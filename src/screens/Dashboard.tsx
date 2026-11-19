@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { HBars, MoneyLine, PairBars, PeriodBars, Pie, type Slice } from '../components/dashCharts';
+import { MoneyLine, PairBars, Parts, PeriodBars, type Slice } from '../components/dashCharts';
 import { Segmented } from '../components/inputs';
 import { statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
@@ -116,15 +116,17 @@ export function Dashboard(props: { data: AppData }) {
   const slices = useMemo(() => {
     const parts: Slice[] = stats.byCategory.map(c => ({ key: c.categoryId, label: catName(c.categoryId), amount: c.amount, color: categoryColor(c.categoryId, data.categories) }));
     if (stats.saved > 0) parts.push({ key: 'saved', label: 'חיסכון', amount: stats.saved, color: 'var(--sav)' });
-    parts.sort((a, b) => b.amount - a.amount);
-    const total = parts.reduce((a, s) => a + s.amount, 0);
-    const big = parts.filter(s => s.key === 'saved' || s.amount / total >= 0.04);
-    const small = parts.filter(s => !big.includes(s));
-    if (small.length === 1) big.push(small[0]);
-    else if (small.length)
-      big.push({ key: 'other', label: 'אחר', amount: small.reduce((a, s) => a + s.amount, 0), color: 'var(--series-other)', inside: small.map(s => ({ label: s.label, amount: s.amount })) });
-    return big;
+    return fold(parts, 'saved');
   }, [stats]);
+  // How it was paid: each method keeps its color, by its place in the list of methods and money sources
+  const methodSlices = useMemo(() => {
+    const names = [...[...data.methods].sort((a, b) => a.order - b.order).map(m => m.name), ...data.accounts.map(a => a.name), 'אחר'];
+    return fold(stats.byMethod.map(m => ({ key: m.name, label: m.name, amount: m.amount, color: `var(--series-${(Math.max(0, names.indexOf(m.name)) % 7) + 1})` })));
+  }, [stats]);
+  const incomeSlices = useMemo(
+    () => fold(stats.incomeByCategory.map(c => ({ key: c.categoryId, label: catName(c.categoryId), amount: c.amount, color: categoryColor(c.categoryId, data.categories) }))),
+    [stats],
+  );
 
   // Comparisons: each one up to the same point as this period when it isn't over yet
   const days = running ? daysBetween(p.from, today) : undefined;
@@ -230,7 +232,7 @@ export function Dashboard(props: { data: AppData }) {
 
           <Section id="where" title="לאן הכסף הולך" sub="ההוצאות והחיסכון של התקופה, לפי סוג. לחיצה על חלק מראה את הסכום.">
             {slices.length ? (
-              <Pie slices={slices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} centerNote={stats.saved ? `+ ${formatMoney(stats.saved)} לחיסכון` : undefined} />
+              <Parts id="where" slices={slices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} centerNote={stats.saved ? `+ ${formatMoney(stats.saved)} לחיסכון` : undefined} />
             ) : (
               <p class="muted small">לא נרשמו הוצאות בתקופה הזו</p>
             )}
@@ -262,7 +264,11 @@ export function Dashboard(props: { data: AppData }) {
           </Section>
 
           <Section id="methods" title="אמצעי תשלום" sub="כמה יצא מכל כרטיס, מהבנק ובמזומן, לפי יום הקנייה">
-            {stats.byMethod.length ? <HBars rows={stats.byMethod.map(m => ({ label: m.name, amount: m.amount }))} /> : <p class="muted small">לא נרשמו הוצאות בתקופה הזו</p>}
+            {methodSlices.length ? (
+              <Parts id="methods" slices={methodSlices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} />
+            ) : (
+              <p class="muted small">לא נרשמו הוצאות בתקופה הזו</p>
+            )}
           </Section>
 
           <Section id="spending" title="הוצאות לאורך זמן" sub={barsSub}>
@@ -270,16 +276,11 @@ export function Dashboard(props: { data: AppData }) {
           </Section>
 
           <Section id="income" title="הכנסות" sub={`מאיפה הגיע הכסף בתקופה שבחרת. למטה: ${barsSub}`}>
-            <div class="legend">
-              {stats.incomeByCategory.map(c => (
-                <div key={c.categoryId} class="legend-row">
-                  <span class="swatch" style={{ background: categoryColor(c.categoryId, data.categories) }} />
-                  <span class="legend-name">{catName(c.categoryId)}</span>
-                  <span>{formatMoney(c.amount)}</span>
-                </div>
-              ))}
-              {!stats.incomeByCategory.length && <p class="muted small">לא נרשמו הכנסות בתקופה הזו</p>}
-            </div>
+            {incomeSlices.length ? (
+              <Parts id="income" slices={incomeSlices} centerLabel='סה"כ הכנסות' centerValue={formatMoney(stats.income)} />
+            ) : (
+              <p class="muted small">לא נרשמו הכנסות בתקופה הזו</p>
+            )}
             <PeriodBars bars={bars(s => s.income)} current={chosen} color="var(--series-3)" soft={all ? 'var(--series-3)' : 'var(--series-3-soft)'} />
           </Section>
 
@@ -351,6 +352,18 @@ export function Dashboard(props: { data: AppData }) {
       </div>
     </div>
   );
+}
+
+/** Biggest first; parts under 4% fold into one "other" that opens to show them (`keep` never folds). */
+function fold(parts: Slice[], keep?: string): Slice[] {
+  const sorted = [...parts].sort((a, b) => b.amount - a.amount);
+  const total = sorted.reduce((a, s) => a + s.amount, 0);
+  const big = sorted.filter(s => s.key === keep || s.amount / total >= 0.04);
+  const small = sorted.filter(s => !big.includes(s));
+  if (small.length === 1) big.push(small[0]);
+  else if (small.length)
+    big.push({ key: 'other', label: 'אחר', amount: small.reduce((a, s) => a + s.amount, 0), color: 'var(--series-other)', inside: small.map(s => ({ label: s.label, amount: s.amount })) });
+  return big;
 }
 
 /** Scrolls the page down (or up) to a part smoothly, so it's clear it's the same page, a little further on. */

@@ -769,11 +769,15 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .pie-inside { background: var(--soft); border-radius: 10px; padding: 4px 10px; margin: 0 0 4px; }
 .fixed-stack { height: 22px; border-radius: 6px; }
 .hbars { display: flex; flex-direction: column; gap: 8px; }
-.hbar { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.hbar { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0; padding: 2px 0; background: none; color: var(--text); font-weight: 400; font-size: 14px; border-radius: 0; text-align: start; }
 .hbar-label { width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hbar-track { flex: 1; height: 14px; }
 .hbar-track span { display: block; height: 100%; background: var(--series-1); border-radius: 4px 0 0 4px; min-width: 2px; }
-.hbar-value { width: 76px; text-align: end; font-variant-numeric: tabular-nums; }
+.parts { position: relative; }
+.parts-toggle { display: flex; justify-content: flex-end; gap: 4px; margin: -6px 0 4px; }
+.parts-toggle button { width: 32px; height: 28px; margin: 0; padding: 0; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.parts-toggle button.on { background: var(--soft); border-color: var(--accent); color: var(--accent); }
+.hbar-value { width: 76px; text-align: end; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .chart .axis-label.on { fill: var(--text); font-weight: 700; }
 .chart .gridline { stroke: var(--grid); stroke-width: 1; }
 .chart .gridline.strong { stroke: var(--muted); stroke-dasharray: 3 3; }
