@@ -122,6 +122,24 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
     byDrag.current = false;
   }
   const width = () => box.current?.clientWidth || window.innerWidth;
+  // A safety net: a screen left part-way with no finger on it (and no slide running) settles back on its own
+  useEffect(() => {
+    if (dx === 0 || animating) return;
+    const t = setTimeout(() => {
+      if (!drag.current) finish(undefined, 0);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [dx, animating]);
+  useEffect(() => {
+    const reset = () => {
+      drag.current = null;
+      setAnimating(false);
+      setDx(0);
+      reportDrag({ fraction: 0, settle: true });
+    };
+    document.addEventListener('visibilitychange', reset);
+    return () => document.removeEventListener('visibilitychange', reset);
+  }, []);
   // Dragging right shows the tab to the left (next); dragging left shows the one to the right (previous)
   const neighbour = dx > 0 ? TABS[i + 1] : dx < 0 ? TABS[i - 1] : undefined;
   // The neighbour is drawn from the top of what's on screen, so it lines up once it becomes the page
@@ -148,6 +166,12 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
       class="swipe-tabs"
       onTouchStart={e => {
         if (animating) return;
+        // A second finger isn't a slide: let go of it, back in place
+        if (e.touches.length > 1) {
+          drag.current = null;
+          if (dx !== 0) finish(undefined, 0);
+          return;
+        }
         const target = e.target as HTMLElement;
         drag.current = target.closest('.swipe, .cal-area, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, horizontal: null };
       }}
@@ -166,6 +190,12 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
         // Past the first or last tab it only gives a little, like a rubber band
         setDx(hasNeighbour ? mx : mx * 0.25);
         if (hasNeighbour) reportDrag({ fraction: mx / width(), settle: false });
+      }}
+      // The phone took the touch away mid-slide (a notification, a swipe from the edge): back in place
+      onTouchCancel={() => {
+        const d = drag.current;
+        drag.current = null;
+        if (d?.horizontal || dx !== 0) finish(undefined, 0);
       }}
       onTouchEnd={() => {
         const d = drag.current;
