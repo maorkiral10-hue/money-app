@@ -44,7 +44,8 @@ export function CardWeeklyCheck(props: {
   const resumed = !props.recheck && looking[card.id]?.date === today ? looking[card.id] : undefined;
   const [real, setReal] = useState(resumed?.real ?? 0);
   const [typed, setTyped] = useState(!!resumed);
-  const [checked, setChecked] = useState(!!resumed);
+  // A recheck opens on its gap as it stands, with the purchases to compare; typing again is optional
+  const [checked, setChecked] = useState(!!resumed || !!props.recheck);
   const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [ticks, setTicks] = useState(data.verified);
   const [early, setEarly] = useState<'ask' | 'today' | 'regular' | null>(null);

@@ -396,11 +396,11 @@ export function App() {
         data={data}
         accountId={screen.accountId}
         recheck={screen.recheck}
-        onEdit={(tx, sourceId) => go({ name: 'entry', tx, from, returnTo: { name: 'balanceCheck', from, accountId: sourceId ?? screen.accountId } })}
+        onEdit={(tx, sourceId) => go({ name: 'entry', tx, from, returnTo: { name: 'balanceCheck', from, accountId: sourceId ?? screen.accountId, recheck: screen.recheck } })}
         onHome={() => go({ name: 'home' })}
         onBack={() => go({ name: from })}
         onChange={afterChange}
-        onAddMissing={(preset, sourceId) => go({ name: 'entry', preset, from, returnTo: { name: 'balanceCheck', from, accountId: sourceId ?? screen.accountId } })}
+        onAddMissing={(preset, sourceId) => go({ name: 'entry', preset, from, returnTo: { name: 'balanceCheck', from, accountId: sourceId ?? screen.accountId, recheck: screen.recheck } })}
       />
     );
   } else if (screen.name === 'budgetSetup') {

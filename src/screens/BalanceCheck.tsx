@@ -247,12 +247,12 @@ export function BalanceCheck(props: {
       )}
       {!card && recheckOf && (
         <p class="small recheck-note">
-          בודקים שוב את הפער הפתוח מ{dayLabel(recheckOf.check.date, today)}. הבדיקה הזו לא נכנסת להיסטוריה ולא משנה את מועד הבדיקה הבאה.
+          הפער הפתוח מ{dayLabel(recheckOf.check.date, today)}: עבור על הפעולות למטה. אם הבנק כבר התעדכן, אפשר להקליד יתרה חדשה. זה לא נכנס להיסטוריה ולא משנה את מועד הבדיקה הבאה.
         </p>
       )}
       {!card && (
       <div class="card">
-        {recheckOf && <h2>כמה יש עכשיו באמת?</h2>}
+        {recheckOf && <h2>{account?.name}: יתרה מעודכנת (לא חובה)</h2>}
         {!recheckOf && account && <h2>{account.name}</h2>}
         <label class="field">
           <span>{account?.kind === 'bank' ? 'כמה רואים באפליקציה של הבנק?' : account?.kind === 'cash' ? 'כמה מזומן יש באמת?' : 'כמה יש שם עכשיו באמת?'}</span>
@@ -273,47 +273,39 @@ export function BalanceCheck(props: {
       </div>
       )}
 
-      {!card && recheckOf && checked && account && (
-        <div class={`card check-result ${Math.abs(gap) <= data.checkTolerance ? 'inc-panel' : 'exp-panel'}`}>
-          {Math.abs(gap) <= data.checkTolerance ? (
-            <>
-              <h2 class="inc">✓ הפער נסגר</h2>
-              <p class="muted small">עכשיו {account.name} מתאים למה שרשום.</p>
-              <button onClick={props.onBack}>סיום</button>
-            </>
-          ) : recheckDone ? (
-            <>
-              <p>{recheckDone}</p>
-              <button onClick={props.onBack}>סיום</button>
-            </>
-          ) : (
-            <>
-              <h2 class="exp">
-                עדיין {gap < 0 ? 'חסרים' : 'יש עודף של'} {formatMoney(Math.abs(gap))}
-              </h2>
-              <p class="muted small">
-                {Math.abs(gap) < Math.abs(recheckOf.found) ? `מתוך ${formatMoney(Math.abs(recheckOf.found))} בהתחלה. ` : ''}הפער נשאר פתוח עד {dayLabel(recheckOf.until, today)}.
-              </p>
-              <button onClick={() => props.onAddMissing({ ...sourcePreset(data, account, gap), date: today })}>
-                {gap < 0 ? `+ להוסיף הוצאה (עד ${formatMoney(-gap)})` : `+ להוסיף הכנסה (עד ${formatMoney(gap)})`}
-              </button>
-              <button
-                class="secondary"
-                onClick={async () => {
-                  const g = openGaps(data, today).find(x => x.account.id === account.id);
-                  if (!g) return;
-                  await correctBalance(props.db, data, account, g.check.real, g.check.real - g.left, g.check.date);
-                  setRecheckDone(`נרשם "לא מזוהה" של ${formatMoney(Math.abs(g.left))}. היתרה של ${account.name} עכשיו מתאימה.`);
-                  props.onChange();
-                }}
-              >
-                לא אמצא: לרשום כ"לא מזוהה"
-              </button>
-              <button class="link" onClick={props.onBack}>
-                להמשיך לחפש
-              </button>
-            </>
-          )}
+      {!card && recheckOf && account && !recheckDone && (() => {
+        const g = openGaps(data, today).find(x => x.account.id === account.id);
+        // Typed again: against today's balance; otherwise the gap as it stands since the check
+        const left = checked ? gap : g ? g.left : 0;
+        return (
+          <GapLook
+            db={props.db}
+            data={data}
+            source={account}
+            real={checked ? real : recheckOf.check.real}
+            gap={left}
+            initial={recheckOf.found}
+            graceDays={Math.max(0, Math.round((Date.UTC(...(recheckOf.until.split('-').map(Number) as [number, number, number])) - Date.UTC(...(today.split('-').map(Number) as [number, number, number]))) / 86_400_000))}
+            leaveOpenText={`הפער נשאר פתוח עד ${dayLabel(recheckOf.until, today)}. כל פעולה שתרשום מלפני הבדיקה תקטין אותו.`}
+            onEdit={tx => props.onEdit?.(tx, account.id)}
+            onAdd={() => props.onAddMissing({ ...sourcePreset(data, account, left), date: today }, account.id)}
+            onClosed={() => setSuccess({ name: account.name, found: true })}
+            open={notFoundOpen}
+            onToggleOpen={() => setNotFoundOpen(!notFoundOpen)}
+            onLeaveOpen={props.onBack}
+            onUnknown={async () => {
+              if (!g) return;
+              await correctBalance(props.db, data, account, g.check.real, g.check.real - g.left, g.check.date);
+              setRecheckDone(`נרשם "לא מזוהה" של ${formatMoney(Math.abs(g.left))}. היתרה של ${account.name} עכשיו מתאימה.`);
+              props.onChange();
+            }}
+          />
+        );
+      })()}
+      {!card && recheckOf && recheckDone && (
+        <div class="card note">
+          <p>{recheckDone}</p>
+          <button onClick={props.onBack}>סיום</button>
         </div>
       )}
       {!card && !recheckOf && checked && account && !done && (mark === 'off' || !!looking[account.id]) && (
@@ -634,6 +626,8 @@ function GapLook(props: {
   onToggleOpen: () => void;
   onLeaveOpen: () => void;
   onUnknown: () => void;
+  /** Already left open (a recheck): what leaving it means now. */
+  leaveOpenText?: string;
 }) {
   const { data, source, gap } = props;
   const today = todayStr();
@@ -679,7 +673,7 @@ function GapLook(props: {
 
       <div class="card compare-list">
         <p class="muted small">
-          {source.kind === 'cash' ? 'כל מה שנרשם במזומן' : `השווה מול האפליקציה של ${source.name}`} מאז {from === data.startDate ? 'תחילת המעקב' : `הבדיקה התקינה ב${dayLabel(from, today)}`} · ✓ = כבר נבדק ({done} מתוך {lines.length})
+          {source.kind === 'cash' ? 'כל מה שנרשם במזומן' : `השווה מול האפליקציה של ${source.name}`} מאז {from === data.startDate ? 'תחילת המעקב' : `הבדיקה התקינה (${dayLabel(from, today)})`} · ✓ = כבר נבדק ({done} מתוך {lines.length})
         </p>
         {lines.length === 0 && <p class="muted small">אין פעולות בתקופה הזו.</p>}
         {lines.map(l => {
@@ -717,7 +711,8 @@ function GapLook(props: {
                 <span>
                   <strong>להשאיר פתוח ולחפש עוד</strong>
                   <span class="small block">
-                    יש לך {props.graceDays} {props.graceDays === 1 ? 'יום' : 'ימים'} להיזכר. כל פעולה שתרשום מלפני היום תקטין את הפער. בסוף הזמן מה שנשאר יירשם כלא מזוהה.
+                    {props.leaveOpenText ??
+                      `יש לך ${props.graceDays} ${props.graceDays === 1 ? 'יום' : 'ימים'} להיזכר. כל פעולה שתרשום מלפני היום תקטין את הפער. בסוף הזמן מה שנשאר יירשם כלא מזוהה.`}
                   </span>
                 </span>
               </button>

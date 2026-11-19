@@ -56,11 +56,10 @@ export function OpenGapCard(props: {
           {share > 0 ? `מצאת ${Math.round(share * 100)}% מהפער · ` : ''}
           {whenRecorded(gap, today)}
         </p>
-        <p class="small">{less ? 'נזכר בהוצאה מלפני הבדיקה?' : 'נזכר בהכנסה מלפני הבדיקה?'}</p>
         <div class="gap-actions">
-          <button onClick={props.onAdd}>{less ? '+ לרשום הוצאה' : '+ לרשום הכנסה'}</button>
-          <button class="secondary" onClick={props.onRecheck}>
-            לבדוק שוב עכשיו
+          <button onClick={props.onRecheck}>לחפש ברשימת הפעולות ‹</button>
+          <button class="secondary" onClick={props.onAdd}>
+            {less ? '+ לרשום הוצאה שנזכרתי בה' : '+ לרשום הכנסה שנזכרתי בה'}
           </button>
           <button class="secondary" onClick={props.onRecordNow}>
             לא אמצא: לרשום {formatMoney(left)} כלא מזוהה
