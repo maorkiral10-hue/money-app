@@ -283,8 +283,8 @@ export function Dashboard(props: { data: AppData }) {
             <PeriodBars bars={bars(s => s.income)} current={chosen} color="var(--series-3)" soft={all ? 'var(--series-3)' : 'var(--series-3-soft)'} />
           </Section>
 
-          <Section id="versus" title="הכנסות מול הוצאות" sub={barsSub}>
-            <PairBars bars={series.map(x => ({ label: short(x.q), income: x.s?.income ?? 0, expenses: x.s?.expenses ?? 0, missing: !x.s }))} current={chosen} />
+          <Section id="versus" title="הכנסות מול הוצאות" sub={`מה נכנס, ומה יצא מהכסף הנזיל: ההוצאות, ומעליהן החיסכון בכתום. ${barsSub}`}>
+            <PairBars bars={series.map(x => ({ label: short(x.q), income: x.s?.income ?? 0, expenses: x.s?.expenses ?? 0, saved: x.s?.saved ?? 0, missing: !x.s }))} current={chosen} />
           </Section>
 
           <Section id="liquid" title="הכסף הנזיל" sub='אותו מספר כמו "כסף נזיל עכשיו" בדף הבית, יום אחרי יום. לגרף זום משלו: הכפתורים, או שתי אצבעות. גרירה הצידה זזה בזמן.'>

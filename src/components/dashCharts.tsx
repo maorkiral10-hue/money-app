@@ -174,24 +174,28 @@ export function PeriodBars(props: { bars: { label: string; amount: number; missi
   );
 }
 
-/** Income next to spending for each period: two bars side by side, tap a period for both amounts. Facts only. */
-export function PairBars(props: { bars: { label: string; income: number; expenses: number; missing?: boolean }[]; current: number }) {
+/**
+ * Income next to what left the liquid money for each period: income, and beside it spending with the savings
+ * stacked on top in their own color (savings still aren't spending, they're shown apart). Tap a period for the amounts.
+ */
+export function PairBars(props: { bars: { label: string; income: number; expenses: number; saved: number; missing?: boolean }[]; current: number }) {
   const [tapped, setTapped] = useState<number | null>(null);
   useEffect(() => setTapped(null), [props.bars.map(b => b.label).join()]);
   const n = props.bars.length;
-  if (!n || props.bars.every(b => !b.income && !b.expenses)) return <p class="muted small">אין עדיין נתונים</p>;
-  const max = Math.max(1, ...props.bars.flatMap(b => [b.income, b.expenses]));
+  if (!n || props.bars.every(b => !b.income && !b.expenses && !b.saved)) return <p class="muted small">אין עדיין נתונים</p>;
+  const max = Math.max(1, ...props.bars.flatMap(b => [b.income, b.expenses + b.saved]));
   const zero = BOTTOM;
   const scale = (BOTTOM - TOP - 4) / max;
   const slot = W / n;
   const bw = Math.min(16, (slot - 8) / 2);
   const shown = tapped ?? (props.current >= 0 ? props.current : n - 1);
   const s = props.bars[shown];
-  const bar = (x: number, h: number, color: string) => {
+  // A bar from `base` up `h`; only the piece at the top gets rounded corners
+  const bar = (x: number, h: number, color: string, base = zero, top = true) => {
     if (h <= 0) return null;
-    const rr = Math.min(3, h, bw / 2);
-    const y = zero - h;
-    return <path d={`M${x},${zero} V${y + rr} Q${x},${y} ${x + rr},${y} H${x + bw - rr} Q${x + bw},${y} ${x + bw},${y + rr} V${zero} Z`} fill={color} />;
+    const rr = top ? Math.min(3, h, bw / 2) : 0;
+    const y = base - h;
+    return <path d={`M${x},${base} V${y + rr} Q${x},${y} ${x + rr},${y} H${x + bw - rr} Q${x + bw},${y} ${x + bw},${y + rr} V${base} Z`} fill={color} />;
   };
   return (
     <div>
@@ -201,6 +205,9 @@ export function PairBars(props: { bars: { label: string; income: number; expense
         </span>
         <span>
           <span class="swatch" style={{ background: 'var(--series-1)' }} /> הוצאות
+        </span>
+        <span>
+          <span class="swatch" style={{ background: 'var(--sav)' }} /> חיסכון
         </span>
       </div>
       <p class="chart-readout">
@@ -212,6 +219,7 @@ export function PairBars(props: { bars: { label: string; income: number; expense
           ) : (
             <>
               <b>{s.label}:</b> הכנסות {formatMoney(s.income)} · הוצאות {formatMoney(s.expenses)}
+              {s.saved > 0 && <> · חיסכון {formatMoney(s.saved)}</>}
             </>
           ))}
       </p>
@@ -229,7 +237,9 @@ export function PairBars(props: { bars: { label: string; income: number; expense
                 <>
                   {/* income on the right, spending on the left, as the text reads */}
                   {bar(cx + 1, b.income * scale, 'var(--series-3)')}
-                  {bar(cx - bw - 1, b.expenses * scale, 'var(--series-1)')}
+                  {/* what left the liquid money: spending, and savings on top of it in its own color */}
+                  {bar(cx - bw - 1, b.expenses * scale, 'var(--series-1)', zero, !b.saved)}
+                  {bar(cx - bw - 1, b.saved * scale, 'var(--sav)', zero - b.expenses * scale)}
                 </>
               )}
               <text x={cx} y={H - 4} text-anchor="middle" class={`axis-label ${i === shown ? 'on' : ''}`}>
