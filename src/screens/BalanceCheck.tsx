@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { periodKey, periodStart } from '../data/dashboard';
 import { summarize } from '../data/balance';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { addDays, dayLabel, parseDate, todayStr } from '../data/dates';
@@ -632,7 +633,14 @@ function GapLook(props: {
   const { data, source, gap } = props;
   const today = todayStr();
   // Fixed for the look: closing the gap shouldn't shrink the list under the user's eyes
-  const [from] = useState(() => lastGoodCheck(data.balanceChecks, source.id) ?? data.startDate);
+  // The whole month (the financial one) — or back to the last check that came out right, if that was before it —
+  // so something recorded late for an earlier week shows up, unticked among the ticked lines
+  const [from] = useState(() => {
+    const monthStart = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
+    const good = lastGoodCheck(data.balanceChecks, source.id) ?? data.startDate;
+    const earliest = good < monthStart ? good : monthStart;
+    return earliest < data.startDate ? data.startDate : earliest;
+  });
   const lines = compareLines(data, source.id, from, today);
   const [ticks, setTicks] = useState(data.verified);
   const closed = Math.abs(gap) <= data.checkTolerance;
@@ -673,7 +681,7 @@ function GapLook(props: {
 
       <div class="card compare-list">
         <p class="muted small">
-          {source.kind === 'cash' ? 'כל מה שנרשם במזומן' : `השווה מול האפליקציה של ${source.name}`} מאז {from === data.startDate ? 'תחילת המעקב' : `הבדיקה התקינה (${dayLabel(from, today)})`} · ✓ = כבר נבדק ({done} מתוך {lines.length})
+          {source.kind === 'cash' ? 'כל מה שנרשם במזומן' : `השווה מול האפליקציה של ${source.name}`} מאז {from === data.startDate ? 'תחילת המעקב' : from.split('-').reverse().slice(0, 2).map(Number).join('.')} · ✓ = כבר נבדק ({done} מתוך {lines.length})
         </p>
         {lines.length === 0 && <p class="muted small">אין פעולות בתקופה הזו.</p>}
         {lines.map(l => {
