@@ -1,4 +1,5 @@
-import { chargeOf, summarize, type Ledger } from './balance';
+import { allEffects, chargeOf, summarize, type Ledger } from './balance';
+import { setMeta as saveMeta } from './db';
 import { addDays } from './dates';
 import { getMeta, run, setMeta } from './db';
 import type { Account, Category, PaymentMethod, Transaction } from './types';
@@ -414,3 +415,75 @@ export function sourcePreset(data: { methods: PaymentMethod[] }, account: Accoun
   const method = data.methods.find(m => m.accountId === account.id && m.kind !== 'credit' && !m.archived);
   return { type: gap < 0 ? ('expense' as const) : ('income' as const), amount: Math.abs(gap), method: gap < 0 ? method?.name : account.name, editAmount: true };
 }
+
+/** The last day a source's check came out right (or was made right): what's before it was already compared. */
+export function lastGoodCheck(checks: BalanceCheck[], sourceId: string) {
+  return checks.find(c => c.accountId === sourceId && (c.result === 'match' || c.result === 'closed' || c.result === 'corrected'))?.date;
+}
+
+/** One line of a source's statement, as the bank (or app) would show it. */
+export interface CompareLine {
+  /** Stable for the line: the transaction, or a card's charge on its day. */
+  key: string;
+  /** Changes when the line does (its amount, or the transaction edited): a tick on an older version no longer counts. */
+  version: string;
+  date: string;
+  /** + into the source, − out of it. */
+  amount: number;
+  label: string;
+  note?: string;
+  tx?: Transaction;
+}
+
+/**
+ * What went through a money source from a day on, up to today, line by line like its own statement: each
+ * transaction, and a credit card's charge as the one line the bank shows for it. To find a gap by comparing.
+ */
+export function compareLines(
+  data: Ledger & { categories: Category[] },
+  sourceId: string,
+  from: string,
+  today: string,
+): CompareLine[] {
+  const txs = new Map(data.transactions.map(t => [t.id, t]));
+  const charges = new Map<string, CompareLine>();
+  const out: CompareLine[] = [];
+  const cat = (id?: string) => data.categories.find(c => c.id === id)?.name ?? '';
+  const place = (id?: string) => data.accounts.find(a => a.id === id)?.name ?? '';
+  for (const e of allEffects(data)) {
+    if (e.accountId !== sourceId || e.date < from || e.date > today) continue;
+    if (e.kind === 'credit' && e.methodId) {
+      const key = `charge:${e.methodId}:${e.date}`;
+      const line = charges.get(key) ?? { key, version: '', date: e.date, amount: 0, label: `חיוב ${data.methods.find(m => m.id === e.methodId)?.name ?? 'כרטיס'}` };
+      line.amount += e.amount;
+      line.version = String(line.amount);
+      charges.set(key, line);
+      continue;
+    }
+    const t = e.txId ? txs.get(e.txId) : undefined;
+    if (!t) continue;
+    const label =
+      t.type === 'transfer'
+        ? e.amount < 0
+          ? `העברה ל${place(t.toAccountId)}`
+          : `העברה מ${place(t.accountId)}`
+        : t.recurringId
+          ? t.note || cat(t.categoryId)
+          : cat(t.categoryId);
+    out.push({ key: t.id, version: t.updatedAt, date: e.date, amount: e.amount, label, note: t.recurringId ? 'הוראת קבע' : t.note, tx: t });
+  }
+  return [...out, ...charges.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** Ticks a line as checked against the source (or takes the tick off); it stays for the next checks. */
+export async function setVerified(db: IDBDatabase, verified: Record<string, string>, sourceId: string, line: CompareLine, on: boolean) {
+  const key = `${sourceId}|${line.key}`;
+  const next = { ...verified };
+  if (on) next[key] = line.version;
+  else delete next[key];
+  await saveMeta(db, 'verified', next);
+}
+
+/** Whether a line was ticked, as it is now (a tick on an older version of it doesn't count). */
+export const isVerified = (verified: Record<string, string>, sourceId: string, line: Pick<CompareLine, 'key' | 'version'>) =>
+  verified[`${sourceId}|${line.key}`] === line.version;

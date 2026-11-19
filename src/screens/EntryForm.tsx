@@ -1,4 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
+
+/** Cash expenses recorded from this day on need a few words on what they were for. */
+const CASH_NOTE_FROM = '2026-11-19';
 import { ongoingEvents, timeRoundOf } from '../data/calendar';
 import { Chips } from '../components/inputs';
 import { cardUsage, chargeOf, splitInstallments } from '../data/balance';
@@ -183,7 +186,10 @@ export function EntryForm(props: {
   const refundCards = methods.filter(m => m.kind === 'credit' && m.chargeDay);
   const refundCard = type === 'income' ? refundCards.find(m => m.id === accountId) : undefined;
 
+  // Cash leaves no statement to compare with: what it was for has to be written (from version 101 on)
+  const needsNote = type === 'expense' && method?.kind === 'cash' && !paidFromGoal && !(tx && tx.createdAt < CASH_NOTE_FROM);
   const valid =
+    (!needsNote || !!note.trim()) &&
     dateOk &&
     amount > 0 &&
     (type === 'expense' ? !!categoryId && !!methodId : type === 'income' ? !!categoryId && !!accountId : !!accountId && !!toAccountId && accountId !== toAccountId);
@@ -559,7 +565,14 @@ export function EntryForm(props: {
           )}
 
 
-          <input type="text" class="note-input" placeholder="הערה (לא חובה)" value={note} onInput={e => setNote(e.currentTarget.value)} />
+          <input
+            type="text"
+            class={`note-input ${needsNote && !note.trim() ? 'needed' : ''}`}
+            placeholder={needsNote ? 'מה קנית? (חובה במזומן)' : 'הערה (לא חובה)'}
+            value={note}
+            onInput={e => setNote(e.currentTarget.value)}
+          />
+          {needsNote && !note.trim() && <p class="small warn">במזומן אין פירוט להשוות אליו, אז כותבים מה קנית. זה יעזור להיזכר בבדיקת המזומן.</p>}
 
           <button disabled={!valid || saving || (!!gap && partOfGap === undefined)} onClick={save}>
             שמור

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ledger } from './balance';
 import { getAll, getMeta, openDb, putRecords } from './db';
-import { appBalance, canDeleteCheck, checkDue, checkMark, checkStatus, correctBalance, explainGap, logCheck, unknownBySource, gapFor, gapForChange, type BalanceCheck } from './reconcile';
+import { appBalance, canDeleteCheck, checkDue, checkMark, checkStatus, correctBalance, explainGap, logCheck, unknownBySource, compareLines, isVerified, gapFor, gapForChange, type BalanceCheck } from './reconcile';
 import type { Account, Category, Transaction } from './types';
 
 let n = 0;
@@ -150,5 +150,37 @@ describe('early checks and minor gaps', () => {
     expect(checkMark(100_00, 92_00, 10_00)).toBe('minor');
     expect(checkMark(100_00, 89_00, 10_00)).toBe('off');
     expect(checkMark(100_00, 99_00, 0)).toBe('off');
+  });
+});
+
+describe('the lines to compare a source by', () => {
+  it("are the source's own statement since a day: each transaction, and a card's charge as one line", () => {
+    const methods = [
+      { id: 'b', name: 'העברה', kind: 'bank' as const, accountId: 'bank', order: 0 },
+      { id: 'visa', name: 'ויזה', kind: 'credit' as const, accountId: 'bank', chargeDay: 2, order: 1 },
+    ];
+    const tx = (id: string, type: Transaction['type'], amount: number, date: string, extra: Partial<Transaction>): Transaction => ({ id, type, amount, date, categoryId: 'c', createdAt: '', updatedAt: id, ...extra });
+    const data = {
+      accounts: [bank, { id: 'bit', name: 'ביט', kind: 'app' as const, openingBalance: 0, order: 1 }],
+      methods,
+      categories: [{ id: 'c', name: 'סופר', kind: 'expense' as const, order: 0 }],
+      startDate: '2026-10-01',
+      transactions: [
+        tx('old', 'expense', 50_00, '2026-10-20', { methodId: 'b' }),
+        tx('v1', 'expense', 300_00, '2026-10-10', { methodId: 'visa' }),
+        tx('v2', 'expense', 200_00, '2026-10-25', { methodId: 'visa' }),
+        tx('rent', 'expense', 4_000_00, '2026-11-03', { methodId: 'b', recurringId: 'r', note: 'שכר דירה' }),
+        tx('toBit', 'transfer', 100_00, '2026-11-04', { accountId: 'bank', toAccountId: 'bit' }),
+      ],
+    };
+    const lines = compareLines(data, 'bank', '2026-11-01', '2026-11-05');
+    expect(lines.map(l => [l.date, l.label, l.amount])).toEqual([
+      ['2026-11-04', 'העברה לביט', -100_00],
+      ['2026-11-03', 'שכר דירה', -4_000_00],
+      ['2026-11-02', 'חיוב ויזה', -500_00],
+    ]);
+    expect(isVerified({ 'bank|rent': 'rent' }, 'bank', lines[1])).toBe(true);
+    // Edited since: the tick no longer counts
+    expect(isVerified({ 'bank|rent': 'older' }, 'bank', lines[1])).toBe(false);
   });
 });

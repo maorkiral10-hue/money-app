@@ -728,3 +728,23 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 @keyframes success-draw { to { stroke-dashoffset: 0; } }
 @keyframes success-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes success-fly { 0% { transform: translate(-50%, -50%); opacity: 1; } 100% { transform: translate(-50%, -50%) var(--t); opacity: 0; } }
+
+/* Looking for a gap: the meter, the lines to tick, and what to do if it isn't found */
+.gap-title { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.gap-closed-btn { margin-top: 10px; background: var(--pos); }
+.compare-list { padding: 8px 10px; }
+.compare-line { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+.compare-line.done .compare-body { opacity: .6; }
+.tick { flex: none; width: 24px; height: 24px; margin: 0; padding: 0; border-radius: 6px; border: 1.5px solid var(--line); background: var(--card); color: #fff; font-size: 14px; line-height: 1; }
+.tick.on { background: var(--pos); border-color: var(--pos); }
+.compare-body { flex: 1; display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 10px 0; background: none; color: var(--text); font-weight: 400; text-align: inherit; font-size: 14px; }
+.compare-list > .secondary { margin-top: 8px; }
+.not-found { padding: 6px 12px; }
+.not-found-head { display: flex; justify-content: space-between; width: 100%; margin: 0; padding: 8px 0; background: none; color: var(--text); font-weight: 600; text-align: inherit; }
+.not-found-options { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
+.nf-option { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--text); font-weight: 400; text-align: inherit; }
+.nf-option strong { display: block; margin-bottom: 2px; }
+.nf-icon { flex: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
+.nf-option.wait .nf-icon { background: var(--sav-soft); color: var(--sav); }
+.nf-option.unknown .nf-icon { background: var(--exp-soft); color: var(--neg); }
+.note-input.needed { border-color: var(--sav); }

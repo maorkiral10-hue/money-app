@@ -8,7 +8,7 @@ import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
 import { CardWeeklyCheck } from '../components/CardWeeklyCheck';
 import type { Transaction } from '../data/types';
-import { checkableCards, checkSources, appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, openGaps, recheckGap, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
+import { compareLines, isVerified, lastGoodCheck, setVerified, checkableCards, checkSources, appBalance, unknownBySource, sourcePreset, DEFAULT_GRACE_DAYS, openGaps, recheckGap, checkMark, canDeleteCheck, checkStatus, correctBalance, deleteCheck, defaultEvery, everyFor, keepRegularSchedule, logCheck, type CheckEvery, type CheckMode } from '../data/reconcile';
 import type { AppData } from '../data/store';
 
 const EVERY_OPTIONS: [CheckEvery, string][] = [
@@ -36,18 +36,27 @@ function cashSetAside(data: AppData, cashId: string) {
 /** Which part of the screen was open last, kept while the app is open. */
 let lastTab: 'check' | 'history' = 'check';
 
+/**
+ * A check with a gap being looked into, per source: what was typed and the gap it started with. Kept while
+ * the app is open, so going off to fix or add a line and coming back finds it as it was.
+ */
+const looking: Record<string, { real: number; initial: number; date: string }> = {};
+
+/** The sources the weekly check started with today, so coming back mid-way still counts "2 מתוך 4". */
+let weekly: { date: string; ids: string[] } | undefined;
+
 export function BalanceCheck(props: {
   db: IDBDatabase;
   data: AppData;
   onBack: () => void;
   onChange: () => void;
-  onAddMissing: (preset: QuickPreset) => void;
+  onAddMissing: (preset: QuickPreset, sourceId?: string) => void;
   /** Open on this source (the first one due, from the home screen's bubble). */
   accountId?: string;
   /** Checking a gap left open again: not a check of its own (see BalanceCheck.recheck). */
   recheck?: boolean;
   /** Opens a purchase (from a card's charge, to compare and fix). */
-  onEdit?: (tx: Transaction) => void;
+  onEdit?: (tx: Transaction, sourceId?: string) => void;
   /** Done with the checks: back to the home screen. */
   onHome: () => void;
 }) {
@@ -59,8 +68,10 @@ export function BalanceCheck(props: {
     setTabState(t);
   };
   // The weekly check goes through what's due, one after the other: how many there were when it began
-  const [dueAtStart] = useState(() => checkStatus(data, today).due.map(a => a.id));
-  const dueNow = checkStatus(data, today).due.map(a => a.id);
+  const [dueAtStart] = useState(() => {
+    if (weekly?.date !== today || !weekly.ids.length) weekly = { date: today, ids: checkStatus(data, today).due.map(a => a.id) };
+    return weekly.ids;
+  });
   // A check that came out right (or was made right): the success screen, before going on
   const [success, setSuccess] = useState<{ name: string; found: boolean } | null>(null);
   const [extra, setExtra] = useState(false);
@@ -81,9 +92,12 @@ export function BalanceCheck(props: {
     setDone('');
     setEarly(null);
   };
-  const [real, setReal] = useState(0);
-  const [typed, setTyped] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const resumed = !props.recheck && props.accountId ? looking[props.accountId] : undefined;
+  const fresh = resumed?.date === today ? resumed : undefined;
+  const [real, setReal] = useState(fresh?.real ?? 0);
+  const [typed, setTyped] = useState(!!fresh);
+  const [checked, setChecked] = useState(!!fresh);
+  const [notFoundOpen, setNotFoundOpen] = useState(false);
   const [done, setDone] = useState('');
   // Checked before its time: ask whether the next reminder counts from today or stays on schedule
   const [early, setEarly] = useState<'ask' | 'today' | 'regular' | null>(null);
@@ -127,6 +141,7 @@ export function BalanceCheck(props: {
     setDone('');
     await logCheck(props.db, { date: today, accountId: account.id, real, app, result: gap === 0 ? 'match' : 'gap', ...(!due && { early: true }) });
     if (mark !== 'off') setSuccess({ name: account.name, found: false });
+    else looking[account.id] = { real, initial: gap, date: today };
     props.onChange();
   };
 
@@ -136,6 +151,7 @@ export function BalanceCheck(props: {
     await correctBalance(props.db, data, account, real, app, today);
     if (early === 'regular') await keepRegularSchedule(props.db, account.id, today);
     setDone(`נרשמה ${what} "לא מזוהה" של ${formatMoney(Math.abs(gap))}. היתרה של ${account.name} עכשיו ${formatMoney(real)}.`);
+    delete looking[account.id];
     props.onChange();
   };
 
@@ -191,8 +207,8 @@ export function BalanceCheck(props: {
       <>
       {!props.recheck && (
         <p class="muted small check-step">
-          {dueAtStart.includes(accountId ?? '') && dueNow.includes(accountId ?? '')
-            ? `בדיקה ${dueAtStart.length - dueNow.length + 1} מתוך ${dueAtStart.length} · ${dueAtStart.map(id => name(id)).join(', ')}`
+          {dueAtStart.includes(accountId ?? '')
+            ? `בדיקה ${dueAtStart.indexOf(accountId ?? '') + 1} מתוך ${dueAtStart.length} · ${dueAtStart.map(id => name(id)).join(', ')}`
             : 'בדיקה נוספת'}
         </p>
       )}
@@ -217,9 +233,10 @@ export function BalanceCheck(props: {
           recheck={props.recheck}
           onBack={props.onBack}
           onChange={props.onChange}
-          onAddMissing={props.onAddMissing}
-          onEdit={props.onEdit}
+          onAddMissing={preset => props.onAddMissing(preset, card.id)}
+          onEdit={tx => props.onEdit?.(tx, card.id)}
           onSuccess={found => setSuccess({ name: card.name, found })}
+          onLeaveOpen={() => (nextDue ? pick(nextDue.id) : props.onHome())}
         />
       )}
       {!card && recheckOf && (
@@ -236,7 +253,7 @@ export function BalanceCheck(props: {
           {account?.kind === 'cash' && cashSetAside(data, account.id) && <span class="small muted block">{cashSetAside(data, account.id)}</span>}
           <MoneyInput
             key={accountId}
-            value={0}
+            value={real}
             onChange={v => {
               setReal(v);
               setTyped(true);
@@ -293,58 +310,31 @@ export function BalanceCheck(props: {
           )}
         </div>
       )}
-      {!card && !recheckOf && checked && account && !done && (
-        <div class={`card check-result ${mark === 'exact' ? 'inc-panel' : mark === 'minor' ? 'minor-panel' : 'exp-panel'}`}>
-          {mark === 'exact' ? (
-            <h2 class="inc">✓ מתאים בדיוק</h2>
-          ) : (
-            <>
-              {mark === 'minor' ? (
-                <h2 class="minor">✓✗ שינוי מינורי של {formatMoney(Math.abs(gap))}</h2>
-              ) : (
-                <h2 class="exp">✗ יש פער של {formatMoney(Math.abs(gap))}</h2>
-              )}
-              {restNote && <p class="small rest-note">{restNote}</p>}
-              {mark === 'minor' && <p class="muted small">בתוך הטווח שהגדרת ({formatMoney(data.checkTolerance)}), אז הבדיקה נחשבת תקינה.</p>}
-              <div class="line">
-                <span>באפליקציה</span>
-                <span>{formatMoney(app)}</span>
-              </div>
-              <div class="line">
-                <span>באמת</span>
-                <span>{formatMoney(real)}</span>
-              </div>
-              <p class="muted small">
-                {gap < 0
-                  ? 'יש פחות ממה שהאפליקציה חושבת: כנראה הוצאה שלא נרשמה.'
-                  : 'יש יותר ממה שהאפליקציה חושבת: כנראה הכנסה שלא נרשמה.'}
-              </p>
-              <button onClick={() => props.onAddMissing({ ...sourcePreset(data, account, gap), date: today })}>
-                {gap < 0 ? `להוסיף הוצאה של ${formatMoney(-gap)}` : `להוסיף הכנסה של ${formatMoney(gap)}`}
-              </button>
-              <button class="secondary" onClick={correct}>
-                לא מצאתי: לרשום את הפער כ"לא מזוהה"
-              </button>
-              <p class="muted small">
-                {gap < 0 ? 'תירשם הוצאה' : 'תירשם הכנסה'} של {formatMoney(Math.abs(gap))} בקטגוריה "לא מזוהה", והיתרה באפליקציה תהיה {formatMoney(real)}.
-              </p>
-              {mark === 'minor' ? (
-                <button class="link" onClick={props.onBack}>
-                  להשאיר ככה
-                </button>
-              ) : (
-                <>
-                  <button class="link" onClick={props.onBack}>
-                    להשאיר פתוח ל־{Math.min(data.gapGraceDays, graceCap)} {Math.min(data.gapGraceDays, graceCap) === 1 ? 'יום' : 'ימים'} ולחפש
-                  </button>
-                  <p class="muted small">
-                    בימים האלה כל מה שתרשום מלפני היום יקטין את הפער, ואפשר לבדוק שוב. מה שיישאר אחר כך יירשם לבד כ"לא מזוהה" (בתאריך של היום).
-                  </p>
-                </>
-              )}
-            </>
-          )}
-        </div>
+      {!card && !recheckOf && checked && account && !done && (mark === 'off' || !!looking[account.id]) && (
+        <GapLook
+          db={props.db}
+          data={data}
+          source={account}
+          real={real}
+          gap={gap}
+          initial={looking[account.id]?.initial ?? gap}
+          restNote={restNote}
+          graceDays={Math.min(data.gapGraceDays, graceCap)}
+          onEdit={tx => props.onEdit?.(tx, account.id)}
+          onAdd={() => props.onAddMissing({ ...sourcePreset(data, account, gap), date: today }, account.id)}
+          onClosed={() => {
+            delete looking[account.id];
+            setSuccess({ name: account.name, found: true });
+          }}
+          open={notFoundOpen}
+          onToggleOpen={() => setNotFoundOpen(!notFoundOpen)}
+          onLeaveOpen={() => {
+            delete looking[account.id];
+            if (nextDue) pick(nextDue.id);
+            else props.onHome();
+          }}
+          onUnknown={correct}
+        />
       )}
       {done && <div class="card note">{done}</div>}
       {!card && !recheckOf && checked && early === 'ask' && account && mark === 'off' && (
@@ -473,7 +463,7 @@ export function BalanceCheck(props: {
                         ? `שינוי מינורי של ${formatMoney(Math.abs(c.real - c.app))}`
                         : `פער של ${formatMoney(Math.abs(c.real - c.app))}`,
                     c.result === 'corrected' && 'נרשם כלא מזוהה',
-                    c.result === 'closed' && 'הפער נמצא ונסגר',
+                    c.result === 'closed' && 'תקינה · נמצא תוך כדי בדיקה',
                     canDeleteCheck(c) && 'בדיקה נוספת',
                   ]
                     .filter(Boolean)
@@ -611,3 +601,131 @@ function CheckSuccess(props: {
     </div>
   );
 }
+
+/**
+ * A source's gap being looked for: how much of it was found so far, every line since its last check that
+ * came out right (to compare one by one with the bank's or app's own list, ticking each — ticks stay for next
+ * time), adding what's missing, and once the gap is gone, "הפער נסגר!". If it can't be found, a folded line
+ * opens the two ways out: leave it open a few days, or record it as unexplained now.
+ */
+function GapLook(props: {
+  db: IDBDatabase;
+  data: AppData;
+  source: { id: string; name: string; kind: string };
+  real: number;
+  gap: number;
+  initial: number;
+  restNote?: string;
+  graceDays: number;
+  onEdit: (tx: Transaction) => void;
+  onAdd: () => void;
+  onClosed: () => void;
+  open: boolean;
+  onToggleOpen: () => void;
+  onLeaveOpen: () => void;
+  onUnknown: () => void;
+}) {
+  const { data, source, gap } = props;
+  const today = todayStr();
+  // Fixed for the look: closing the gap shouldn't shrink the list under the user's eyes
+  const [from] = useState(() => lastGoodCheck(data.balanceChecks, source.id) ?? data.startDate);
+  const lines = compareLines(data, source.id, from, today);
+  const [ticks, setTicks] = useState(data.verified);
+  const closed = Math.abs(gap) <= data.checkTolerance;
+  // Found so far: how much of the gap it started with is gone (while it points the same way)
+  const sameWay = Math.sign(gap) === Math.sign(props.initial);
+  const found = closed ? Math.abs(props.initial) : sameWay ? Math.max(0, Math.abs(props.initial) - Math.abs(gap)) : 0;
+  const share = props.initial ? Math.min(1, found / Math.abs(props.initial)) : 1;
+  const tick = async (line: (typeof lines)[number]) => {
+    const on = !isVerified(ticks, source.id, line);
+    const next = { ...ticks };
+    if (on) next[`${source.id}|${line.key}`] = line.version;
+    else delete next[`${source.id}|${line.key}`];
+    setTicks(next);
+    await setVerified(props.db, ticks, source.id, line, on);
+  };
+  const done = lines.filter(l => isVerified(ticks, source.id, l)).length;
+  return (
+    <>
+      <div class={`card check-result ${closed ? 'inc-panel' : 'exp-panel'}`}>
+        <div class="line gap-title">
+          <strong>{source.name}</strong>
+          <strong class={closed ? 'inc' : 'exp'}>{closed ? 'הכל מתאים' : gap < 0 ? `חסרים ${formatMoney(-gap)}` : `עודף של ${formatMoney(gap)}`}</strong>
+        </div>
+        <div class="bar gap-bar">
+          <span style={{ width: `${share * 100}%` }} />
+        </div>
+        <div class="muted small">
+          נמצאו {formatMoney(found)} מתוך {formatMoney(Math.abs(props.initial))}
+          {!sameWay && !closed ? ` · הפער התהפך: עכשיו ${gap < 0 ? 'חסרים' : 'עודף'} ${formatMoney(Math.abs(gap))}` : ''}
+        </div>
+        {closed && (
+          <button class="gap-closed-btn" onClick={props.onClosed}>
+            הפער נסגר!
+          </button>
+        )}
+        {props.restNote && !closed && <p class="small rest-note">{props.restNote}</p>}
+      </div>
+
+      <div class="card compare-list">
+        <p class="muted small">
+          {source.kind === 'cash' ? 'כל מה שנרשם במזומן' : `השווה מול האפליקציה של ${source.name}`} מאז {from === data.startDate ? 'תחילת המעקב' : `הבדיקה התקינה ב${dayLabel(from, today)}`} · ✓ = כבר נבדק ({done} מתוך {lines.length})
+        </p>
+        {lines.length === 0 && <p class="muted small">אין פעולות בתקופה הזו.</p>}
+        {lines.map(l => {
+          const on = isVerified(ticks, source.id, l);
+          return (
+            <div key={l.key} class={`compare-line ${on ? 'done' : ''}`}>
+              <button class={`tick ${on ? 'on' : ''}`} aria-label={on ? 'בטל סימון' : 'סמן כנבדק'} onClick={() => tick(l)}>
+                {on ? '✓' : ''}
+              </button>
+              <button class="compare-body" onClick={() => l.tx && props.onEdit(l.tx)} disabled={!l.tx}>
+                <span>
+                  {shortDay(l.date)} · {l.label}
+                  {l.note && <span class="muted"> · {l.note}</span>}
+                </span>
+                <span class={l.amount > 0 ? 'inc' : ''}>{formatMoney(l.amount, { sign: l.amount > 0 })}</span>
+              </button>
+            </div>
+          );
+        })}
+        <button class="secondary" onClick={props.onAdd}>
+          + להוסיף פעולה שחסרה
+        </button>
+      </div>
+
+      {!closed && (
+        <div class="card not-found">
+          <button class="not-found-head" onClick={props.onToggleOpen} aria-expanded={props.open}>
+            <span>לא מצאת? מה עושים עם {formatMoney(Math.abs(gap))}</span>
+            <span class={`chevron ${props.open ? 'open' : ''}`}>‹</span>
+          </button>
+          {props.open && (
+            <div class="not-found-options">
+              <button class="nf-option wait" onClick={props.onLeaveOpen}>
+                <span class="nf-icon">⏳</span>
+                <span>
+                  <strong>להשאיר פתוח ולחפש עוד</strong>
+                  <span class="small block">
+                    יש לך {props.graceDays} {props.graceDays === 1 ? 'יום' : 'ימים'} להיזכר. כל פעולה שתרשום מלפני היום תקטין את הפער. בסוף הזמן מה שנשאר יירשם כלא מזוהה.
+                  </span>
+                </span>
+              </button>
+              <button class="nf-option unknown" onClick={props.onUnknown}>
+                <span class="nf-icon">?</span>
+                <span>
+                  <strong>לרשום עכשיו כלא מזוהה</strong>
+                  <span class="small block">
+                    תירשם {gap < 0 ? 'הוצאה' : 'הכנסה'} של {formatMoney(Math.abs(gap))} בקטגוריה "לא מזוהה", והיתרה תתאים. אם תיזכר אחר כך, אפשר עדיין להסביר אותה.
+                  </span>
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+const shortDay = (d: string) => d.split('-').reverse().slice(0, 2).map(Number).join('.');

@@ -42,6 +42,8 @@ export interface AppData {
   gapGraceDays: number;
   /** Cards' open gaps already reminded of before their charge ("card id|charge day"). */
   cardGapReminded: string[];
+  /** Lines ticked as checked against the bank (or card, or app), per source: "source|line" → the line's version then. */
+  verified: Record<string, string>;
 }
 
 const byOrder = <T extends { order: number }>(a: T, b: T) => a.order - b.order;
@@ -71,6 +73,7 @@ export async function loadAll(db: IDBDatabase): Promise<AppData> {
     funds: (await getMeta<Fund[]>(db, 'funds')) ?? [],
     gapGraceDays: (await getMeta<number>(db, 'gapGraceDays')) ?? 3,
     cardGapReminded: (await getMeta<string[]>(db, 'cardGapReminded')) ?? [],
+    verified: (await getMeta<Record<string, string>>(db, 'verified')) ?? {},
   };
 }
 

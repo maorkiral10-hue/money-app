@@ -24,7 +24,7 @@ const data = {
   checkMode: 'together',
   checkEveryByAccount: {},
   checkTolerance: 0,
-  cardChecks: [], funds: [], gapGraceDays: 3, cardGapReminded: [],
+  cardChecks: [], funds: [], gapGraceDays: 3, cardGapReminded: [], verified: {},
 } as AppData;
 
 describe('the month, like a bank statement', () => {

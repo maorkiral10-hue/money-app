@@ -56,6 +56,8 @@ type Screen =
       settleEvent?: boolean;
       /** An unexplained gap's line opened as an ordinary transaction, not as "remembered what it was?". */
       plain?: boolean;
+      /** Where to go once it's saved or closed, instead of `from` (the balance check it was opened from). */
+      returnTo?: Screen;
     }
   | { name: 'recurring'; from: Place }
   | { name: 'recurringForm'; rec?: Recurring; from: Place }
@@ -317,7 +319,7 @@ export function App() {
     );
   } else if (screen.name === 'entry') {
     const entry = screen;
-    const back = () => go({ name: entry.from });
+    const back = () => go(entry.returnTo ?? { name: entry.from });
     content = (
       <EntryForm
         key={entry.tx?.id ?? `new-${JSON.stringify(entry.preset ?? {})}`}
@@ -394,11 +396,11 @@ export function App() {
         data={data}
         accountId={screen.accountId}
         recheck={screen.recheck}
-        onEdit={tx => go({ name: 'entry', tx, from })}
+        onEdit={(tx, sourceId) => go({ name: 'entry', tx, from, returnTo: { name: 'balanceCheck', from, accountId: sourceId ?? screen.accountId } })}
         onHome={() => go({ name: 'home' })}
         onBack={() => go({ name: from })}
         onChange={afterChange}
-        onAddMissing={preset => go({ name: 'entry', preset, from })}
+        onAddMissing={(preset, sourceId) => go({ name: 'entry', preset, from, returnTo: { name: 'balanceCheck', from, accountId: sourceId ?? screen.accountId } })}
       />
     );
   } else if (screen.name === 'budgetSetup') {

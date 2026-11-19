@@ -4,12 +4,15 @@ import { cardSide, openCardGaps, unconfirmedOnCard, upcomingCharge } from '../da
 import { dayLabel, todayStr } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { QuickPreset } from '../data/quick';
-import { checkMark, checkStatus, everyFor, keepRegularSchedule, logCheck, recheckGap } from '../data/reconcile';
+import { checkMark, checkStatus, everyFor, isVerified, keepRegularSchedule, logCheck, recheckGap, setVerified } from '../data/reconcile';
 import { openOccurrences } from '../data/recurring';
 import type { AppData } from '../data/store';
 import type { PaymentMethod, Transaction } from '../data/types';
 import { MoneyInput } from './inputs';
 import { StatementItems } from './StatementItems';
+
+/** A card's gap being looked into, kept while the app is open (going to fix a purchase and back finds it). */
+const looking: Record<string, { real: number; initial: number; date: string }> = {};
 
 const short = (d: string) => d.split('-').reverse().slice(0, 2).map(Number).join('.');
 
@@ -31,16 +34,20 @@ export function CardWeeklyCheck(props: {
   onEdit?: (tx: Transaction) => void;
   /** It came out right (or was made right while looking, `found`). */
   onSuccess?: (found: boolean) => void;
+  /** Not found now: left open until the charge day (on to the next check). */
+  onLeaveOpen?: () => void;
 }) {
   const { data, card } = props;
   const today = todayStr();
   const chargeDate = upcomingCharge(card, today);
   const app = cardSide(data, card, chargeDate, today);
-  const [real, setReal] = useState(0);
-  const [typed, setTyped] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const resumed = !props.recheck && looking[card.id]?.date === today ? looking[card.id] : undefined;
+  const [real, setReal] = useState(resumed?.real ?? 0);
+  const [typed, setTyped] = useState(!!resumed);
+  const [checked, setChecked] = useState(!!resumed);
+  const [notFoundOpen, setNotFoundOpen] = useState(false);
+  const [ticks, setTicks] = useState(data.verified);
   const [early, setEarly] = useState<'ask' | 'today' | 'regular' | null>(null);
-  const [showItems, setShowItems] = useState(false);
   const [recheckOf] = useState(() => (props.recheck ? openCardGaps(data, today).find(g => g.card.id === card.id) : undefined));
   // The open gap as it stands now (after this check, or the one left before)
   const open = openCardGaps(data, today).find(g => g.card.id === card.id);
@@ -59,7 +66,6 @@ export function CardWeeklyCheck(props: {
     if (recheckOf) {
       await recheckGap(props.db, { account: { id: card.id, name: card.name, kind: 'other', openingBalance: 0, order: 0 }, check: recheckOf.check, found: recheckOf.found, left: recheckOf.left, until: recheckOf.chargeDate }, real, today);
       setChecked(true);
-      if (Math.abs(gap) <= data.checkTolerance) props.onSuccess?.(true);
       props.onChange();
       return;
     }
@@ -69,12 +75,13 @@ export function CardWeeklyCheck(props: {
     setChecked(true);
     await logCheck(props.db, { date: today, accountId: card.id, real, app, result: mark === 'exact' ? 'match' : 'gap', chargeDate, ...(!due && { early: true }) });
     if (mark !== 'off' && due) props.onSuccess?.(false);
+    if (mark === 'off') looking[card.id] = { real, initial: gap, date: today };
     props.onChange();
   };
 
   // What to show once compared: for a recheck, the gap as it now stands
   const shown = recheckOf ? (open ? open.left : 0) : gap;
-  const closedNow = checked && (recheckOf ? !open || Math.abs(open.left) <= data.checkTolerance : mark !== 'off');
+  const closedNow = checked && (recheckOf ? !open || Math.abs(open.left) <= data.checkTolerance : Math.abs(gap) <= data.checkTolerance);
 
   return (
     <>
@@ -94,7 +101,7 @@ export function CardWeeklyCheck(props: {
           <span>כמה כתוב "לחיוב הקרוב" באפליקציה של חברת האשראי</span>
           <MoneyInput
             key={card.id}
-            value={0}
+            value={real}
             onChange={v => {
               setReal(v);
               setTyped(true);
@@ -115,26 +122,45 @@ export function CardWeeklyCheck(props: {
           {closedNow ? (
             <>
               <h2 class={mark === 'minor' && !recheckOf ? 'minor' : 'inc'}>
-                {recheckOf ? '✓ הפער נסגר' : mark === 'exact' ? '✓ מתאים בדיוק' : `✓✗ שינוי מינורי של ${formatMoney(Math.abs(gap))}`}
+                {recheckOf || looking[card.id] ? 'הכל מתאים' : mark === 'exact' ? '✓ מתאים בדיוק' : `✓✗ שינוי מינורי של ${formatMoney(Math.abs(gap))}`}
               </h2>
-              {recheckOf && <button onClick={props.onBack}>סיום</button>}
+              {(recheckOf || looking[card.id]) && (
+                <button
+                  class="gap-closed-btn"
+                  onClick={() => {
+                    delete looking[card.id];
+                    props.onSuccess?.(true);
+                  }}
+                >
+                  הפער נסגר!
+                </button>
+              )}
             </>
           ) : (
             <>
-              <h2 class="exp">
-                {recheckOf ? 'עדיין פער של' : '✗ יש פער של'} {formatMoney(Math.abs(shown))}
-              </h2>
+              <div class="line gap-title">
+                <strong>{card.name}</strong>
+                <strong class="exp">{shown > 0 ? `חסרות קניות של ${formatMoney(shown)}` : `רשום אצלך ${formatMoney(-shown)} יותר`}</strong>
+              </div>
+              {(() => {
+                const initial = looking[card.id]?.initial ?? recheckOf?.found ?? shown;
+                const sameWay = Math.sign(shown) === Math.sign(initial);
+                const found = sameWay ? Math.max(0, Math.abs(initial) - Math.abs(shown)) : 0;
+                return (
+                  <>
+                    <div class="bar gap-bar">
+                      <span style={{ width: `${initial ? Math.min(1, found / Math.abs(initial)) * 100 : 0}%` }} />
+                    </div>
+                    <div class="muted small">
+                      נמצאו {formatMoney(found)} מתוך {formatMoney(Math.abs(initial))}
+                    </div>
+                  </>
+                );
+              })()}
               {!recheckOf && (
-                <>
-                  <div class="line">
-                    <span>אצל חברת האשראי</span>
-                    <span>{formatMoney(real)}</span>
-                  </div>
-                  <div class="line">
-                    <span>אצלך</span>
-                    <span>{formatMoney(app)}</span>
-                  </div>
-                </>
+                <div class="muted small">
+                  אצל חברת האשראי {formatMoney(real)} · אצלך {formatMoney(app)}
+                </div>
               )}
               {open?.before && (
                 <div class="gap-split small">
@@ -154,32 +180,88 @@ export function CardWeeklyCheck(props: {
               )}
               <p class="muted small">
                 {shown > 0
-                  ? 'אצל חברת האשראי יש יותר: כנראה קנייה שלא נרשמה, או סכום שנרשם נמוך מדי.'
-                  : 'אצלך רשום יותר: אולי קנייה שעוד לא הגיעה לחברת האשראי (זה לוקח יום עד שלושה), זיכוי שלא נרשם, או משהו שנרשם פעמיים.'}{' '}
-                בדף הכרטיס אפשר להשוות שורה מול שורה:
-              </p>
-              <button class="secondary" onClick={() => setShowItems(!showItems)}>
-                {showItems ? 'להסתיר את הקניות' : `הקניות בחיוב של ${short(recheckOf?.chargeDate ?? chargeDate)} (${items.length})`}
-              </button>
-              {showItems && (
-                <StatementItems data={data} items={items} today={today} onEdit={tx => props.onEdit?.(tx)} edgeIds={edgeIds} />
-              )}
-              <button
-                onClick={() =>
-                  props.onAddMissing({ type: shown > 0 ? 'expense' : 'income', amount: Math.abs(shown), method: card.name, date: today, editAmount: true })
-                }
-              >
-                {shown > 0 ? '+ להוסיף קנייה שחסרה' : '+ להוסיף זיכוי שחסר'}
-              </button>
-              <button class="link" onClick={props.onBack}>
-                {recheckOf ? 'להמשיך לחפש' : 'להשאיר פתוח עד יום החיוב'}
-              </button>
-              <p class="muted small">
-                באשראי שום דבר לא נרשם לבד. אם לא תמצא, ביום החיוב ({dayLabel(recheckOf?.chargeDate ?? chargeDate, today)}) תסגור את זה בבדיקה הסופית של החיוב.
+                  ? 'כנראה קנייה שלא נרשמה, או סכום שנרשם נמוך מדי.'
+                  : 'אולי קנייה שעוד לא הגיעה לחברת האשראי (יום עד שלושה), זיכוי שלא נרשם, או משהו שנרשם פעמיים.'}
               </p>
             </>
           )}
         </div>
+      )}
+
+      {checked && !closedNow && (
+        <>
+          <div class="card compare-list">
+            <p class="muted small">
+              השווה מול הפירוט באפליקציה של חברת האשראי · החיוב של {short(recheckOf?.chargeDate ?? chargeDate)} · ✓ = כבר נבדק (
+              {items.filter(i => i.tx && isVerified(ticks, card.id, { key: i.tx.id, version: i.tx.updatedAt })).length} מתוך {items.filter(i => i.tx).length})
+            </p>
+            {items.map((i, n) => {
+              if (!i.tx) return null;
+              const line = { key: i.tx.id, version: i.tx.updatedAt };
+              const on = isVerified(ticks, card.id, line);
+              const label = i.tx.recurringId ? i.tx.note : data.categories.find(c => c.id === i.tx!.categoryId)?.name;
+              const notes = [
+                i.tx.type === 'income' && 'זיכוי',
+                i.tx.recurringId && 'הוראת קבע',
+                i.installment && `תשלום ${i.installment.n} מתוך ${i.installment.of}`,
+                edgeIds.has(i.tx.id) && 'אולי בחיוב הבא',
+                !i.tx.recurringId && i.tx.note,
+              ].filter(Boolean);
+              return (
+                <div key={`${i.tx.id}-${n}`} class={`compare-line ${on ? 'done' : ''}`}>
+                  <button
+                    class={`tick ${on ? 'on' : ''}`}
+                    aria-label={on ? 'בטל סימון' : 'סמן כנבדק'}
+                    onClick={async () => {
+                      const next = { ...ticks };
+                      if (on) delete next[`${card.id}|${line.key}`];
+                      else next[`${card.id}|${line.key}`] = line.version;
+                      setTicks(next);
+                      await setVerified(props.db, ticks, card.id, { ...line, date: '', amount: 0, label: '' }, !on);
+                    }}
+                  >
+                    {on ? '✓' : ''}
+                  </button>
+                  <button class="compare-body" onClick={() => props.onEdit?.(i.tx!)}>
+                    <span>
+                      {short(i.tx.date)} · {label}
+                      {notes.length > 0 && <span class="muted"> · {notes.join(' · ')}</span>}
+                    </span>
+                    <span class={i.amount < 0 ? 'inc' : ''}>{formatMoney(-i.amount, { sign: i.amount < 0 })}</span>
+                  </button>
+                </div>
+              );
+            })}
+            <button class="secondary" onClick={() => props.onAddMissing({ type: shown > 0 ? 'expense' : 'income', amount: Math.abs(shown), method: card.name, date: today, editAmount: true })}>
+              {shown > 0 ? '+ להוסיף קנייה שחסרה' : '+ להוסיף זיכוי שחסר'}
+            </button>
+          </div>
+          <div class="card not-found">
+            <button class="not-found-head" onClick={() => setNotFoundOpen(!notFoundOpen)} aria-expanded={notFoundOpen}>
+              <span>לא מצאת? מה עושים עם {formatMoney(Math.abs(shown))}</span>
+              <span class={`chevron ${notFoundOpen ? 'open' : ''}`}>‹</span>
+            </button>
+            {notFoundOpen && (
+              <div class="not-found-options">
+                <button
+                  class="nf-option wait"
+                  onClick={() => {
+                    delete looking[card.id];
+                    (props.onLeaveOpen ?? props.onBack)();
+                  }}
+                >
+                  <span class="nf-icon">📅</span>
+                  <span>
+                    <strong>להשאיר פתוח עד יום החיוב</strong>
+                    <span class="small block">
+                      באשראי הכל רשום אצל חברת האשראי, אז אין "לא מזוהה". ביום החיוב ({dayLabel(recheckOf?.chargeDate ?? chargeDate, today)}) תסגור את זה בבדיקה הסופית.
+                    </span>
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        </>
       )}
       {!recheckOf && checked && early === 'ask' && (
         <div class="card">
