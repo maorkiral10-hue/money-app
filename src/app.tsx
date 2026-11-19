@@ -476,7 +476,7 @@ export function App() {
     ) : t === 'goals' ? (
       <GoalsTab db={db} data={data} onOpen={g => go({ name: 'goal', id: g.id })} onNew={() => go({ name: 'goalForm' })} onChange={afterChange} />
     ) : t === 'dashboard' ? (
-      <Dashboard data={data} onEdit={tx => go({ name: 'entry', tx, from: 'dashboard' })} />
+      <Dashboard data={data} />
     ) : (
       <Home
         db={db}

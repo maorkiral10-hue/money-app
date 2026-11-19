@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 export type Tab = 'home' | 'budget' | 'goals' | 'dashboard';
 /** Right to left, as they appear on screen. New main screens are added here. */
-// Budget and dashboard are hidden for now (29.9.2026): the home screen is put in order first. Their screens
-// and saved settings stay; adding them back here brings them back.
-export const TABS: Tab[] = ['home', 'goals'];
+// Budget is hidden for now (29.9.2026): its screen and saved settings stay; adding it back here brings it back.
+// The dashboard came back rebuilt from scratch (19.11.2026).
+export const TABS: Tab[] = ['home', 'goals', 'dashboard'];
 
 const ICONS: Record<Tab, ComponentChildren> = {
   home: <path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z" />,
@@ -173,7 +173,7 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
           return;
         }
         const target = e.target as HTMLElement;
-        drag.current = target.closest('.swipe, .cal-area, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, horizontal: null };
+        drag.current = target.closest('.swipe, .cal-area, .no-tab-swipe, input, textarea, select') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, horizontal: null };
       }}
       onTouchMove={e => {
         const d = drag.current;
