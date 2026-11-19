@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { HBars, MoneyLine, PeriodBars, Pie, type Slice } from '../components/dashCharts';
+import { HBars, MoneyLine, PairBars, PeriodBars, Pie, type Slice } from '../components/dashCharts';
 import { Segmented } from '../components/inputs';
 import { statsTransactions } from '../data/budget';
 import { categoryColor } from '../data/colors';
@@ -15,12 +15,16 @@ import type { AppData } from '../data/store';
 
 const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 const SHORT = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
-const KINDS: [PeriodKind, string][] = [
+/** The periods to choose from at the top; "all" is everything since the app was first used. */
+type View = PeriodKind | 'all';
+const KINDS: [View, string][] = [
   ['week', 'שבוע'],
   ['month', 'חודש'],
   ['quarter', '3 חודשים'],
   ['year', 'שנה'],
+  ['all', 'מההתחלה'],
 ];
+const UNIT_MANY: Record<PeriodKind, string> = { week: 'שבועות', month: 'חודשים', quarter: 'רבעונים', year: 'שנים' };
 const UNIT: Record<PeriodKind, string> = { week: 'שבוע', month: 'חודש', quarter: '3 חודשים', year: 'שנה' };
 const THIS: Record<PeriodKind, string> = { week: 'השבוע', month: 'החודש', quarter: '3 החודשים האלה', year: 'השנה' };
 const BEFORE: Record<PeriodKind, string> = { week: 'שבוע קודם', month: 'חודש קודם', quarter: '3 החודשים הקודמים', year: 'שנה קודמת' };
@@ -31,7 +35,7 @@ const dd = (s: string) => {
 };
 
 /** Kept while the app is open: coming back to the tab finds the same period. */
-const kept: { kind: PeriodKind; k: number } = { kind: 'month', k: 0 };
+const kept: { view: View; k: number } = { view: 'month', k: 0 };
 
 const SECTIONS: { id: string; label: string; icon: ComponentChildren }[] = [
   { id: 'where', label: 'לאן הכסף הולך', icon: <><circle cx="12" cy="12" r="8" /><path d="M12 4v8l6 5" /></> },
@@ -39,6 +43,7 @@ const SECTIONS: { id: string; label: string; icon: ComponentChildren }[] = [
   { id: 'methods', label: 'אמצעי תשלום', icon: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></> },
   { id: 'spending', label: 'הוצאות לאורך זמן', icon: <><path d="M5 20V11" /><path d="M12 20V5" /><path d="M19 20v-6" /></> },
   { id: 'income', label: 'הכנסות', icon: <><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></> },
+  { id: 'versus', label: 'הכנסות מול הוצאות', icon: <><path d="M6 20V9" /><path d="M10 20V4" /><path d="M15 20v-8" /><path d="M19 20v-5" /></> },
   { id: 'liquid', label: 'הכסף הנזיל', icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></> },
   { id: 'unknown', label: 'כסף לא מזוהה', icon: <><circle cx="12" cy="12" r="8" /><path d="M10 9.5a2.2 2.2 0 1 1 3 2c-.7.3-1 .8-1 1.5" /><path d="M12 16.5v.01" /></> },
   { id: 'compare', label: 'השוואות', icon: <><path d="M7 4v16" /><path d="M17 4v16" /><path d="M4 8h6" /><path d="M14 16h6" /></> },
@@ -48,24 +53,28 @@ export function Dashboard(props: { data: AppData }) {
   const { data } = props;
   const today = todayStr();
   const startDay = data.monthStartDay;
-  const [kind, setKind] = useState<PeriodKind>(kept.kind);
+  const [view, setView] = useState<View>(kept.view);
   const [k, setK] = useState(kept.k);
   const [onSection, setOnSection] = useState(SECTIONS[0].id);
-  kept.kind = kind;
+  kept.view = view;
   kept.k = k;
+  const all = view === 'all';
+  // Since the start: bars of months (or of years, once there are more than twelve months)
+  const kind: PeriodKind = all ? (periodOf('month', -12, today, startDay).to >= data.startDate ? 'year' : 'month') : view;
 
   const txs = useMemo(() => statsTransactions(data), [data]);
   const liquid = useMemo(() => liquidByDay(data, today), [data, today]);
-  const p = periodOf(kind, k, today, startDay);
+  const p = all ? { from: data.startDate, to: today } : periodOf(kind, k, today, startDay);
   const running = p.to > today;
   const shownTo = running ? today : p.to;
   const stats = periodStats(data, { from: p.from, to: shownTo }, txs);
   const hasData = (q: Period) => q.to >= data.startDate;
-  const canBack = hasData(periodOf(kind, k - 1, today, startDay));
+  const canBack = !all && hasData(periodOf(kind, k - 1, today, startDay));
 
   const title = (q: Period) => {
     const a = parseDate(q.from);
     const b = parseDate(q.to);
+    if (all) return 'מאז שהתחלת';
     if (kind === 'week') return a.m0 === b.m0 ? `${a.d}–${b.d} ב${MONTHS[a.m0]}` : `${dd(q.from)}–${dd(q.to)}`;
     if (kind === 'month') return startDay === 1 ? `${MONTHS[a.m0]} ${a.y}` : `${dd(q.from)}–${dd(q.to)}`;
     if (kind === 'quarter') return `${SHORT[a.m0]}–${SHORT[(b.m0 + (startDay === 1 ? 0 : 11)) % 12]} ${b.y}`;
@@ -79,17 +88,28 @@ export function Dashboard(props: { data: AppData }) {
     return String(a.y);
   };
 
-  // "Over time": this period and the ones of the same length before it, oldest first
+  // "Over time": this period and the ones of the same length before it, oldest first. Every slot is drawn,
+  // the ones from before the app was used as empty places, so it's clear what each bar stands for.
   const series = useMemo(() => {
-    const list: { q: Period; s: ReturnType<typeof periodStats> }[] = [];
-    for (let j = k - BARS[kind] + 1; j <= k; j++) {
+    const list: { q: Period; s?: ReturnType<typeof periodStats> }[] = [];
+    let first = k - BARS[kind] + 1;
+    if (all) {
+      first = 0;
+      while (hasData(periodOf(kind, first - 1, today, startDay))) first--;
+    }
+    for (let j = first; j <= k; j++) {
       const q = periodOf(kind, j, today, startDay);
-      if (!hasData(q)) continue;
-      list.push({ q, s: periodStats(data, { from: q.from, to: q.to < today ? q.to : today }, txs) });
+      list.push({ q, s: hasData(q) ? periodStats(data, { from: q.from, to: q.to < today ? q.to : today }, txs) : undefined });
     }
     return list;
-  }, [data, txs, kind, k, today]);
-  const bars = (pick: (s: ReturnType<typeof periodStats>) => number) => series.map(x => ({ label: short(x.q), amount: pick(x.s) }));
+  }, [data, txs, kind, all, k, today]);
+  const bars = (pick: (s: ReturnType<typeof periodStats>) => number) =>
+    series.map(x => ({ label: short(x.q), amount: x.s ? pick(x.s) : 0, missing: !x.s, running: x.q.to > today, partial: !!x.s && x.q.from < data.startDate }));
+  const barsSub = all
+    ? `כל ה${UNIT_MANY[kind]} מאז שהתחלת, ${UNIT[kind]} בכל עמודה.`
+    : `${BARS[kind]} ${UNIT_MANY[kind]} אחרונים, ${UNIT[kind]} בכל עמודה. הכהה היא התקופה שבחרת${running ? ' (עד היום)' : ''}.`;
+  // Since the start there's no one chosen bar: all of them strong
+  const chosen = all ? -1 : series.length - 1;
 
   // Where the money went: spending by category, savings as a slice of its own; small ones fold into "other"
   const catName = (id: string) => data.categories.find(c => c.id === id)?.name ?? 'ללא קטגוריה';
@@ -117,9 +137,11 @@ export function Dashboard(props: { data: AppData }) {
   // The strip on the side: tap or slide along it to jump to a part
   const jump = (id: string) => {
     setOnSection(id);
-    document.getElementById(`dash-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const el = document.getElementById(`dash-${id}`);
+    if (el) glideTo(el);
   };
   const rail = useRef<HTMLDivElement>(null);
+  const railTouch = useRef<{ y: number; sliding: boolean } | null>(null);
   const slideTo = (y: number) => {
     const r = rail.current?.getBoundingClientRect();
     if (!r) return;
@@ -158,7 +180,6 @@ export function Dashboard(props: { data: AppData }) {
   }
 
   const fixedShare = stats.expenses ? Math.round((stats.fixed / stats.expenses) * 100) : 0;
-  const notOver = running ? ' (עוד לא נגמרה)' : '';
 
   return (
     <div class="dashboard">
@@ -166,14 +187,16 @@ export function Dashboard(props: { data: AppData }) {
         <div class="top">
           <h1>דשבורד</h1>
         </div>
-        <Segmented
-          options={KINDS}
-          value={kind}
-          onChange={v => {
-            setKind(v);
-            setK(0);
-          }}
-        />
+        <div class="period-pick">
+          <Segmented
+            options={KINDS}
+            value={view}
+            onChange={v => {
+              setView(v);
+              setK(0);
+            }}
+          />
+        </div>
         <div class="dash-nav">
           <button class="chip" aria-label="התקופה הקודמת" disabled={!canBack} onClick={() => setK(k - 1)}>
             ›
@@ -182,7 +205,7 @@ export function Dashboard(props: { data: AppData }) {
             <strong>{title(p)}</strong>
             <div class="muted small">{running ? `${dd(p.from)}–${dd(today)} (עד היום)` : `${dd(p.from)}–${dd(p.to)}`}</div>
           </div>
-          <button class="chip" aria-label="התקופה הבאה" disabled={k >= 0} onClick={() => setK(k + 1)}>
+          <button class="chip" aria-label="התקופה הבאה" disabled={all || k >= 0} onClick={() => setK(k + 1)}>
             ‹
           </button>
         </div>
@@ -242,11 +265,11 @@ export function Dashboard(props: { data: AppData }) {
             {stats.byMethod.length ? <HBars rows={stats.byMethod.map(m => ({ label: m.name, amount: m.amount }))} /> : <p class="muted small">לא נרשמו הוצאות בתקופה הזו</p>}
           </Section>
 
-          <Section id="spending" title="הוצאות לאורך זמן" sub={`כל עמודה היא ${UNIT[kind]}. הכהה היא התקופה שבחרת${notOver}.`}>
-            <PeriodBars bars={bars(s => s.expenses)} current={series.length - 1} color="var(--series-1)" soft="var(--series-1-soft)" />
+          <Section id="spending" title="הוצאות לאורך זמן" sub={barsSub}>
+            <PeriodBars bars={bars(s => s.expenses)} current={chosen} color="var(--series-1)" soft={all ? 'var(--series-1)' : 'var(--series-1-soft)'} />
           </Section>
 
-          <Section id="income" title="הכנסות" sub={`מאיפה הגיע הכסף בתקופה, ולמטה: כל עמודה היא ${UNIT[kind]}`}>
+          <Section id="income" title="הכנסות" sub={`מאיפה הגיע הכסף בתקופה שבחרת. למטה: ${barsSub}`}>
             <div class="legend">
               {stats.incomeByCategory.map(c => (
                 <div key={c.categoryId} class="legend-row">
@@ -257,7 +280,11 @@ export function Dashboard(props: { data: AppData }) {
               ))}
               {!stats.incomeByCategory.length && <p class="muted small">לא נרשמו הכנסות בתקופה הזו</p>}
             </div>
-            <PeriodBars bars={bars(s => s.income)} current={series.length - 1} color="var(--series-3)" soft="var(--series-3-soft)" />
+            <PeriodBars bars={bars(s => s.income)} current={chosen} color="var(--series-3)" soft={all ? 'var(--series-3)' : 'var(--series-3-soft)'} />
+          </Section>
+
+          <Section id="versus" title="הכנסות מול הוצאות" sub={barsSub}>
+            <PairBars bars={series.map(x => ({ label: short(x.q), income: x.s?.income ?? 0, expenses: x.s?.expenses ?? 0, missing: !x.s }))} current={chosen} />
           </Section>
 
           <Section id="liquid" title="הכסף הנזיל" sub='אותו מספר כמו "כסף נזיל עכשיו" בדף הבית, יום אחרי יום. לגרף זום משלו: הכפתורים, או שתי אצבעות. גרירה הצידה זזה בזמן.'>
@@ -268,11 +295,11 @@ export function Dashboard(props: { data: AppData }) {
           </Section>
 
           <Section id="unknown" title="כסף לא מזוהה" sub={`כמה נרשם כ"לא מזוהה" בבדיקות, בכל ${UNIT[kind]} בפני עצמו (לא מצטבר)`}>
-            <PeriodBars bars={bars(s => s.unknown)} current={series.length - 1} color="var(--series-other-strong)" soft="var(--series-other)" empty='לא נרשם כסף "לא מזוהה" בתקופות האלה' />
+            <PeriodBars bars={bars(s => s.unknown)} current={chosen} color="var(--series-other-strong)" soft={all ? 'var(--series-other-strong)' : 'var(--series-other)'} empty='לא נרשם כסף "לא מזוהה" בתקופות האלה' />
           </Section>
 
-          <Section id="compare" title="השוואות" sub={days !== undefined ? `כולן עד אותה נקודה: ${days + 1} הימים הראשונים של כל ${UNIT[kind]}` : 'תקופות שלמות באותו אורך'}>
-            <div class="dash-cmp">
+          <Section id="compare" title="השוואות" sub={all ? 'בתצוגה "מההתחלה" אין תקופה קודמת להשוות אליה. בחר שבוע, חודש, 3 חודשים או שנה.' : days !== undefined ? `כולן עד אותה נקודה: ${days + 1} הימים הראשונים של כל ${UNIT[kind]}` : 'תקופות שלמות באותו אורך'}>
+            {!all && <div class="dash-cmp">
               <div class="dash-cmp-row head">
                 <span />
                 <span>הכנסות</span>
@@ -293,7 +320,7 @@ export function Dashboard(props: { data: AppData }) {
                 const y = compared(k + YEAR_AGO[kind]);
                 return <CompareRow name="אותה תקופה אשתקד" s={y?.s} partial={y?.partial} />;
               })()}
-            </div>
+            </div>}
           </Section>
         </div>
 
@@ -301,11 +328,17 @@ export function Dashboard(props: { data: AppData }) {
           ref={rail}
           class="dash-rail no-tab-swipe"
           aria-label="קפיצה לחלק בדף"
-          onTouchStart={e => slideTo(e.touches[0].clientY)}
+          onTouchStart={e => (railTouch.current = { y: e.touches[0].clientY, sliding: false })}
           onTouchMove={e => {
+            const t = railTouch.current;
+            if (!t) return;
             e.preventDefault();
+            // A tap glides there (the click); only a real slide along the strip jumps from part to part
+            if (!t.sliding && Math.abs(e.touches[0].clientY - t.y) < 10) return;
+            t.sliding = true;
             slideTo(e.touches[0].clientY);
           }}
+          onTouchEnd={() => (railTouch.current = null)}
         >
           {SECTIONS.map(s => (
             <button key={s.id} class={onSection === s.id ? 'on' : ''} aria-label={s.label} onClick={() => jump(s.id)}>
@@ -318,6 +351,25 @@ export function Dashboard(props: { data: AppData }) {
       </div>
     </div>
   );
+}
+
+/** Scrolls the page down (or up) to a part smoothly, so it's clear it's the same page, a little further on. */
+let gliding = 0;
+function glideTo(el: HTMLElement) {
+  const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+  const from = scrollY;
+  const to = Math.max(0, Math.min(document.documentElement.scrollHeight - innerHeight, from + el.getBoundingClientRect().top - margin));
+  const ms = Math.min(700, 300 + Math.abs(to - from) / 6);
+  const start = performance.now();
+  const id = ++gliding;
+  const step = (now: number) => {
+    if (id !== gliding) return;
+    const f = Math.min(1, (now - start) / ms);
+    const ease = f < 0.5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2;
+    scrollTo(0, from + (to - from) * ease);
+    if (f < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 /** One part of the page, with an id the strip on the side jumps to. Top level, so its charts keep their state. */

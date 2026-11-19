@@ -790,3 +790,7 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .dash-cmp-row.bold { font-weight: 700; }
 .dash-cmp-row > span:not(:first-child) { text-align: end; }
 .dash-cmp-row .compare-none { grid-column: 2 / 4; }
+.chart .bar-missing { fill: none; stroke: var(--grid); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.chart .bar-value { font-size: 10px; fill: var(--muted); }
+.chart .bar-value.on { fill: var(--text); font-weight: 700; }
+.period-pick .segmented button { padding: 8px 2px; font-size: 14px; }

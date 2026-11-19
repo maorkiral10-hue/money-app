@@ -105,15 +105,15 @@ const TOP = 10;
 const BOTTOM = 136;
 
 /** One bar per period, the chosen one strong; tapping a bar shows its amount. Bars go down for minus. */
-export function PeriodBars(props: { bars: { label: string; amount: number }[]; current: number; color: string; soft: string; empty?: string }) {
+export function PeriodBars(props: { bars: { label: string; amount: number; missing?: boolean; running?: boolean; partial?: boolean }[]; current: number; color: string; soft: string; empty?: string }) {
   const [tapped, setTapped] = useState<number | null>(null);
   useEffect(() => setTapped(null), [props.bars.map(b => b.label).join()]);
   const n = props.bars.length;
   if (!n || props.bars.every(b => !b.amount)) return <p class="muted small">{props.empty ?? 'אין עדיין נתונים'}</p>;
   const max = Math.max(1, ...props.bars.map(b => b.amount));
   const min = Math.min(0, ...props.bars.map(b => b.amount));
-  const zero = TOP + ((BOTTOM - TOP) * max) / (max - min);
-  const scale = (BOTTOM - TOP) / (max - min);
+  const zero = TOP + 14 + ((BOTTOM - TOP - 14) * max) / (max - min);
+  const scale = (BOTTOM - TOP - 14) / (max - min);
   const slot = W / n;
   const bw = Math.min(28, slot - 10);
   const shown = tapped ?? props.current;
@@ -121,12 +121,21 @@ export function PeriodBars(props: { bars: { label: string; amount: number }[]; c
   return (
     <div>
       <p class="chart-readout">
-        {s && (
-          <>
-            <b>{s.label}:</b> {formatMoney(Math.abs(s.amount))}
-            {s.amount < 0 && <span class="muted"> (יותר כסף ממה שנרשם)</span>}
-          </>
-        )}
+        {s &&
+          (s.missing ? (
+            <>
+              <b>{s.label}:</b> <span class="muted">אין נתונים, עוד לא רשמת אז באפליקציה</span>
+            </>
+          ) : (
+            <>
+              <b>
+                {s.label}
+                {s.running ? ' (עד היום)' : s.partial ? ' (רק מאז שהתחלת לרשום)' : ''}:
+              </b>{' '}
+              {formatMoney(Math.abs(s.amount))}
+              {s.amount < 0 && <span class="muted"> (יותר כסף ממה שנרשם)</span>}
+            </>
+          ))}
       </p>
       <svg viewBox={`0 0 ${W} ${H}`} class="chart" role="img" aria-label="סכום לכל תקופה">
         <line x1="0" x2={W} y1={zero} y2={zero} class="baseline" />
@@ -144,7 +153,16 @@ export function PeriodBars(props: { bars: { label: string; amount: number }[]; c
           return (
             <g key={i} onClick={() => setTapped(i)}>
               <rect x={cx - slot / 2} y="0" width={slot} height={H} fill="transparent" />
-              {h > 0 && <path d={d} fill={i === props.current ? props.color : props.soft} />}
+              {b.missing ? (
+                <rect x={x} y={zero - 22} width={bw} height="22" rx="4" class="bar-missing" />
+              ) : (
+                h > 0 && <path d={d} fill={i === props.current ? props.color : props.soft} />
+              )}
+              {!b.missing && b.amount !== 0 && (
+                <text x={cx} y={b.amount >= 0 ? y - 4 : zero + h + 11} text-anchor="middle" class={`bar-value ${i === props.current ? 'on' : ''}`}>
+                  {shortMoney(b.amount)}
+                </text>
+              )}
               <text x={cx} y={H - 4} text-anchor="middle" class={`axis-label ${i === shown ? 'on' : ''}`}>
                 {b.label}
               </text>
@@ -155,6 +173,82 @@ export function PeriodBars(props: { bars: { label: string; amount: number }[]; c
     </div>
   );
 }
+
+/** Income next to spending for each period: two bars side by side, tap a period for both amounts. Facts only. */
+export function PairBars(props: { bars: { label: string; income: number; expenses: number; missing?: boolean }[]; current: number }) {
+  const [tapped, setTapped] = useState<number | null>(null);
+  useEffect(() => setTapped(null), [props.bars.map(b => b.label).join()]);
+  const n = props.bars.length;
+  if (!n || props.bars.every(b => !b.income && !b.expenses)) return <p class="muted small">אין עדיין נתונים</p>;
+  const max = Math.max(1, ...props.bars.flatMap(b => [b.income, b.expenses]));
+  const zero = BOTTOM;
+  const scale = (BOTTOM - TOP - 4) / max;
+  const slot = W / n;
+  const bw = Math.min(16, (slot - 8) / 2);
+  const shown = tapped ?? (props.current >= 0 ? props.current : n - 1);
+  const s = props.bars[shown];
+  const bar = (x: number, h: number, color: string) => {
+    if (h <= 0) return null;
+    const rr = Math.min(3, h, bw / 2);
+    const y = zero - h;
+    return <path d={`M${x},${zero} V${y + rr} Q${x},${y} ${x + rr},${y} H${x + bw - rr} Q${x + bw},${y} ${x + bw},${y + rr} V${zero} Z`} fill={color} />;
+  };
+  return (
+    <div>
+      <div class="chart-legend">
+        <span>
+          <span class="swatch" style={{ background: 'var(--series-3)' }} /> הכנסות
+        </span>
+        <span>
+          <span class="swatch" style={{ background: 'var(--series-1)' }} /> הוצאות
+        </span>
+      </div>
+      <p class="chart-readout">
+        {s &&
+          (s.missing ? (
+            <>
+              <b>{s.label}:</b> <span class="muted">אין נתונים, עוד לא רשמת אז באפליקציה</span>
+            </>
+          ) : (
+            <>
+              <b>{s.label}:</b> הכנסות {formatMoney(s.income)} · הוצאות {formatMoney(s.expenses)}
+            </>
+          ))}
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} class="chart" role="img" aria-label="הכנסות מול הוצאות לכל תקופה">
+        <line x1="0" x2={W} y1={zero} y2={zero} class="baseline" />
+        {props.bars.map((b, i) => {
+          const cx = W - slot * i - slot / 2;
+          const dim = props.current >= 0 && i !== props.current && i !== tapped;
+          return (
+            <g key={i} onClick={() => setTapped(i)} opacity={dim ? 0.45 : 1}>
+              <rect x={cx - slot / 2} y="0" width={slot} height={H} fill="transparent" />
+              {b.missing ? (
+                <rect x={cx - bw - 1} y={zero - 22} width={bw * 2 + 2} height="22" rx="4" class="bar-missing" />
+              ) : (
+                <>
+                  {/* income on the right, spending on the left, as the text reads */}
+                  {bar(cx + 1, b.income * scale, 'var(--series-3)')}
+                  {bar(cx - bw - 1, b.expenses * scale, 'var(--series-1)')}
+                </>
+              )}
+              <text x={cx} y={H - 4} text-anchor="middle" class={`axis-label ${i === shown ? 'on' : ''}`}>
+                {b.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/** An amount small enough to sit over a bar: 9,149 → "9.1K", 640 → "640". */
+const shortMoney = (agorot: number) => {
+  const v = Math.abs(agorot) / 100;
+  const t = v >= 10_000 ? `${Math.round(v / 1000)}K` : v >= 1000 ? `${Math.round(v / 100) / 10}K` : String(Math.round(v));
+  return agorot < 0 ? `-${t}` : t;
+};
 
 /** Amounts side by side as bars, e.g. how the spending was paid. */
 export function HBars(props: { rows: { label: string; amount: number }[] }) {
