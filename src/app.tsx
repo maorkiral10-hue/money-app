@@ -85,7 +85,8 @@ function takeQuickAddParam(): Screen | null {
  * which the app has no other way of noticing. Screens where you are typing are never left this way.
  */
 const AWAY_FOR_NEW_ENTRY = 10_000;
-const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup', 'goal', 'goalForm', 'eventForm'];
+// Screens a return to the app leaves as they are: something is being typed, or checked against the bank's own app
+const TYPING_SCREENS: Screen['name'][] = ['entry', 'recurringForm', 'settingsPage', 'budgetSetup', 'goal', 'goalForm', 'eventForm', 'balanceCheck'];
 
 function savedText(tx: Transaction, data: AppData) {
   const label = data.categories.find(c => c.id === tx.categoryId)?.name ?? (tx.type === 'transfer' ? 'העברה' : '');
@@ -394,6 +395,7 @@ export function App() {
         accountId={screen.accountId}
         recheck={screen.recheck}
         onEdit={tx => go({ name: 'entry', tx, from })}
+        onHome={() => go({ name: 'home' })}
         onBack={() => go({ name: from })}
         onChange={afterChange}
         onAddMissing={preset => go({ name: 'entry', preset, from })}

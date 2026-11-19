@@ -33,6 +33,9 @@ function cashSetAside(data: AppData, cashId: string) {
   return bits.length ? `מזומן ששמור לחיסכון · ${bits.join(' · ')}` : '';
 }
 
+/** Which part of the screen was open last, kept while the app is open. */
+let lastTab: 'check' | 'history' = 'check';
+
 export function BalanceCheck(props: {
   db: IDBDatabase;
   data: AppData;
@@ -45,18 +48,33 @@ export function BalanceCheck(props: {
   recheck?: boolean;
   /** Opens a purchase (from a card's charge, to compare and fix). */
   onEdit?: (tx: Transaction) => void;
+  /** Done with the checks: back to the home screen. */
+  onHome: () => void;
 }) {
   const { data } = props;
   const today = todayStr();
+  const [tab, setTabState] = useState(props.recheck ? 'check' : lastTab);
+  const setTab = (t: 'check' | 'history') => {
+    lastTab = t;
+    setTabState(t);
+  };
+  // The weekly check goes through what's due, one after the other: how many there were when it began
+  const [dueAtStart] = useState(() => checkStatus(data, today).due.map(a => a.id));
+  const dueNow = checkStatus(data, today).due.map(a => a.id);
+  // A check that came out right (or was made right): the success screen, before going on
+  const [success, setSuccess] = useState<{ name: string; found: boolean } | null>(null);
+  const [extra, setExtra] = useState(false);
   const accounts = data.accounts.filter(a => !a.archived && a.name.trim() && a.kind !== 'goal');
   const cards = checkableCards(data.methods);
-  const [accountId, setAccountId] = useState(props.accountId ?? accounts.find(a => a.kind === 'bank')?.id ?? accounts[0]?.id);
+  const [accountId, setAccountId] = useState(props.accountId ?? dueAtStart[0] ?? accounts.find(a => a.kind === 'bank')?.id ?? accounts[0]?.id);
   // A credit card is checked against its next charge, on its own panel
   const card = cards.find(c => c.id === accountId);
   // The sources still due a check, not counting the one on screen
   const nextDue = checkStatus(data, today).due.find(a => a.id !== accountId);
   const pick = (id: string) => {
     setAccountId(id);
+    setSuccess(null);
+    setExtra(false);
     setChecked(false);
     setTyped(false);
     setReal(0);
@@ -98,6 +116,7 @@ export function BalanceCheck(props: {
       await recheckGap(props.db, recheckOf, real, today);
       setChecked(true);
       setRecheckDone('');
+      if (Math.abs(gap) <= data.checkTolerance) setSuccess({ name: account.name, found: true });
       props.onChange();
       return;
     }
@@ -107,6 +126,7 @@ export function BalanceCheck(props: {
     setChecked(true);
     setDone('');
     await logCheck(props.db, { date: today, accountId: account.id, real, app, result: gap === 0 ? 'match' : 'gap', ...(!due && { early: true }) });
+    if (mark !== 'off') setSuccess({ name: account.name, found: false });
     props.onChange();
   };
 
@@ -127,14 +147,58 @@ export function BalanceCheck(props: {
           חזרה
         </button>
       </header>
-      <p class="muted small">
-        הקלד כמה יש באמת, כמו שרואים באפליקציה של הבנק (או של חברת האשראי), והאפליקציה תשווה.{' '}
-        {data.checkTolerance > 0 ? `פער עד ${formatMoney(data.checkTolerance)} נחשב שינוי מינורי (אפשר לשנות בהעדפות).` : 'כל פער נחשב חריגה (אפשר לקבוע טווח לשינוי מינורי בהעדפות).'}
-      </p>
-
       {!props.recheck && (
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            ['check', 'בדיקה שבועית'],
+            ['history', 'היסטוריה והעדפות'],
+          ]}
+        />
+      )}
+
+      {tab === 'check' && success && (
+        <CheckSuccess
+          name={success.name}
+          found={success.found}
+          next={nextDue}
+          onNext={() => nextDue && pick(nextDue.id)}
+          onHome={props.onHome}
+        >
+          {early === 'ask' && account && (
+            <div class="card">
+              <h2>בדקת לפני הזמן. מתי הבדיקה הבאה?</h2>
+              <div class="scope-buttons">
+                <button onClick={() => setEarly('today')}>לספור מהיום</button>
+                <button
+                  class="secondary"
+                  onClick={async () => {
+                    await keepRegularSchedule(props.db, account.id, today);
+                    setEarly('regular');
+                    props.onChange();
+                  }}
+                >
+                  להישאר בקצב הרגיל
+                </button>
+              </div>
+            </div>
+          )}
+        </CheckSuccess>
+      )}
+
+      {tab === 'check' && !success && (
+      <>
+      {!props.recheck && (
+        <p class="muted small check-step">
+          {dueAtStart.includes(accountId ?? '') && dueNow.includes(accountId ?? '')
+            ? `בדיקה ${dueAtStart.length - dueNow.length + 1} מתוך ${dueAtStart.length} · ${dueAtStart.map(id => name(id)).join(', ')}`
+            : 'בדיקה נוספת'}
+        </p>
+      )}
+      {!props.recheck && extra && (
         <div class="card">
-          <h2>איפה בודקים?</h2>
+          <h2>איזה אפיק לבדוק?</h2>
           <Chips items={accounts} value={accountId} onChange={pick} />
           {cards.length > 0 && (
             <>
@@ -155,6 +219,7 @@ export function BalanceCheck(props: {
           onChange={props.onChange}
           onAddMissing={props.onAddMissing}
           onEdit={props.onEdit}
+          onSuccess={found => setSuccess({ name: card.name, found })}
         />
       )}
       {!card && recheckOf && (
@@ -165,8 +230,9 @@ export function BalanceCheck(props: {
       {!card && (
       <div class="card">
         {recheckOf && <h2>כמה יש עכשיו באמת?</h2>}
+        {!recheckOf && account && <h2>{account.name}</h2>}
         <label class="field">
-          <span>כמה יש שם עכשיו באמת</span>
+          <span>{account?.kind === 'bank' ? 'כמה רואים באפליקציה של הבנק?' : account?.kind === 'cash' ? 'כמה מזומן יש באמת?' : 'כמה יש שם עכשיו באמת?'}</span>
           {account?.kind === 'cash' && cashSetAside(data, account.id) && <span class="small muted block">{cashSetAside(data, account.id)}</span>}
           <MoneyInput
             key={accountId}
@@ -281,7 +347,7 @@ export function BalanceCheck(props: {
         </div>
       )}
       {done && <div class="card note">{done}</div>}
-      {!card && !recheckOf && checked && early === 'ask' && account && (
+      {!card && !recheckOf && checked && early === 'ask' && account && mark === 'off' && (
         <div class="card">
           <h2>בדקת לפני הזמן. מתי הבדיקה הבאה?</h2>
           <div class="scope-buttons">
@@ -302,6 +368,30 @@ export function BalanceCheck(props: {
       {!recheckOf && checked && nextDue && (
         <button onClick={() => pick(nextDue.id)}>לבדיקה הבאה: {nextDue.name}</button>
       )}
+      {!props.recheck && !extra && (
+        <button class="link small" onClick={() => setExtra(true)}>
+          בדיקה נוספת של אפיק אחר ‹
+        </button>
+      )}
+      </>
+      )}
+
+      {tab === 'history' && (
+      <>
+      <div class="card">
+        <h2>מה נחשב תקין</h2>
+        <p class="muted small">פער עד הסכום הזה נחשב "שינוי מינורי" (✓✗) ולא חריגה (✗). 0 = כל פער נחשב חריגה.</p>
+        <label class="field">
+          <span>שינוי מינורי: עד</span>
+          <MoneyInput
+            value={data.checkTolerance}
+            onChange={async v => {
+              await setMeta(props.db, 'checkTolerance', v);
+              props.onChange();
+            }}
+          />
+        </label>
+      </div>
 
       <div class="card">
         <h2>פער שנשאר פתוח</h2>
@@ -412,9 +502,12 @@ export function BalanceCheck(props: {
           ))}
         </div>
       )}
+      </>
+      )}
     </>
   );
 }
+
 
 /**
  * Money that got away unexplained, per source, over all the history: the balance (pluses and minuses
@@ -474,6 +567,47 @@ function UnknownMoney(props: { data: AppData }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * A check that came out right, or was made right while looking: a big tick drawn in a circle, a few dots
+ * flying off, and what's next — the next source due, or back home once the weekly check is through.
+ */
+function CheckSuccess(props: {
+  name: string;
+  found: boolean;
+  next?: { id: string; name: string };
+  onNext: () => void;
+  onHome: () => void;
+  children?: preact.ComponentChildren;
+}) {
+  return (
+    <div class="check-success">
+      <div class="success-mark" aria-hidden="true">
+        <svg viewBox="0 0 120 120">
+          <circle class="success-ring" cx="60" cy="60" r="52" />
+          <path class="success-tick" d="M37 62 L53 78 L84 45" />
+        </svg>
+        {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
+          <span key={i} class={`confetti c${i}`} />
+        ))}
+      </div>
+      <h2>הבדיקה הושלמה בהצלחה</h2>
+      <p class="muted small">
+        {props.name}
+        {props.found ? ' · הפער נמצא תוך כדי בדיקה' : ''}
+      </p>
+      {props.children}
+      {props.next ? (
+        <button onClick={props.onNext}>הבא: {props.next.name} ‹</button>
+      ) : (
+        <p class="small success-done">סיימת את הבדיקה השבועית ✓</p>
+      )}
+      <button class="secondary" onClick={props.onHome}>
+        חזרה לדף הבית
+      </button>
     </div>
   );
 }

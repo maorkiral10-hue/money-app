@@ -29,6 +29,8 @@ export function CardWeeklyCheck(props: {
   onChange: () => void;
   onAddMissing: (preset: QuickPreset) => void;
   onEdit?: (tx: Transaction) => void;
+  /** It came out right (or was made right while looking, `found`). */
+  onSuccess?: (found: boolean) => void;
 }) {
   const { data, card } = props;
   const today = todayStr();
@@ -57,6 +59,7 @@ export function CardWeeklyCheck(props: {
     if (recheckOf) {
       await recheckGap(props.db, { account: { id: card.id, name: card.name, kind: 'other', openingBalance: 0, order: 0 }, check: recheckOf.check, found: recheckOf.found, left: recheckOf.left, until: recheckOf.chargeDate }, real, today);
       setChecked(true);
+      if (Math.abs(gap) <= data.checkTolerance) props.onSuccess?.(true);
       props.onChange();
       return;
     }
@@ -65,6 +68,7 @@ export function CardWeeklyCheck(props: {
     setEarly(!due && checkedBefore && everyFor(data, { id: card.id, name: card.name, kind: 'card' }) !== 'never' ? 'ask' : null);
     setChecked(true);
     await logCheck(props.db, { date: today, accountId: card.id, real, app, result: mark === 'exact' ? 'match' : 'gap', chargeDate, ...(!due && { early: true }) });
+    if (mark !== 'off' && due) props.onSuccess?.(false);
     props.onChange();
   };
 

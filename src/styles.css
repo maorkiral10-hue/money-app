@@ -706,3 +706,25 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .reserved-line { display: block; }
 .goal-moves { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
 .goal-moves .line { display: flex; justify-content: space-between; }
+
+/* The check: the step it's at, and the success screen */
+.check-step { margin: 8px 0; }
+.check-success { text-align: center; padding: 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.check-success h2 { margin: 4px 0 0; }
+.success-done { color: var(--pos); font-weight: 600; }
+.success-mark { position: relative; width: 140px; height: 140px; margin: 8px auto; }
+.success-mark svg { width: 140px; height: 140px; animation: success-pop .5s ease-out both; }
+.success-ring { fill: var(--inc-soft); stroke: var(--pos); stroke-width: 5; stroke-dasharray: 330; stroke-dashoffset: 330; animation: success-draw .7s ease-out forwards; }
+.success-tick { fill: none; stroke: var(--pos); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 80; stroke-dashoffset: 80; animation: success-draw .45s .6s ease-out forwards; }
+.confetti { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 50%; opacity: 0; animation: success-fly 1s ease-out both; }
+.confetti.c0 { background: #ef9f27; --t: translate(-80px, -70px); animation-delay: .85s; }
+.confetti.c1 { background: #5dcaa5; --t: translate(80px, -60px); animation-delay: .9s; }
+.confetti.c2 { background: #d4537e; --t: translate(-70px, 60px); animation-delay: .95s; }
+.confetti.c3 { background: #7f77dd; --t: translate(75px, 70px); animation-delay: 1s; }
+.confetti.c4 { background: #378add; --t: translate(0, -95px); width: 6px; height: 6px; animation-delay: .9s; }
+.confetti.c5 { background: #ef9f27; --t: translate(-95px, 5px); width: 6px; height: 6px; animation-delay: 1s; }
+.confetti.c6 { background: #5dcaa5; --t: translate(95px, 0); width: 6px; height: 6px; animation-delay: .95s; }
+.confetti.c7 { background: #d4537e; --t: translate(10px, 95px); width: 6px; height: 6px; animation-delay: 1.05s; }
+@keyframes success-draw { to { stroke-dashoffset: 0; } }
+@keyframes success-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes success-fly { 0% { transform: translate(-50%, -50%); opacity: 1; } 100% { transform: translate(-50%, -50%) var(--t); opacity: 0; } }
