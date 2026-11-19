@@ -82,6 +82,8 @@ export function BalanceCheck(props: {
   const card = cards.find(c => c.id === accountId);
   // The sources still due a check, not counting the one on screen
   const nextDue = checkStatus(data, today).due.find(a => a.id !== accountId);
+  // Nothing more due (checked ahead of time, say): the next source not checked yet today, in order
+  const nextExtra = nextDue ? undefined : checkSources(data).find(a => a.id !== accountId && !data.balanceChecks.some(c => c.accountId === a.id && c.date === today));
   const pick = (id: string) => {
     setAccountId(id);
     setSuccess(null);
@@ -178,8 +180,12 @@ export function BalanceCheck(props: {
         <CheckSuccess
           name={success.name}
           found={success.found}
-          next={nextDue}
-          onNext={() => nextDue && pick(nextDue.id)}
+          next={nextDue ?? nextExtra}
+          extra={!nextDue}
+          onNext={() => {
+            const n = nextDue ?? nextExtra;
+            if (n) pick(n.id);
+          }}
           onHome={props.onHome}
         >
           {early === 'ask' && account && (
@@ -569,6 +575,8 @@ function CheckSuccess(props: {
   name: string;
   found: boolean;
   next?: { id: string; name: string };
+  /** The next one isn't due (an extra check). */
+  extra?: boolean;
   onNext: () => void;
   onHome: () => void;
   children?: preact.ComponentChildren;
@@ -591,9 +599,11 @@ function CheckSuccess(props: {
       </p>
       {props.children}
       {props.next ? (
-        <button onClick={props.onNext}>הבא: {props.next.name} ‹</button>
+        <button onClick={props.onNext}>
+          {props.extra ? `עוד בדיקה: ${props.next.name}` : `הבא: ${props.next.name}`} ‹
+        </button>
       ) : (
-        <p class="small success-done">סיימת את הבדיקה השבועית ✓</p>
+        <p class="small success-done">{props.extra ? 'כל האפיקים נבדקו היום ✓' : 'סיימת את הבדיקה השבועית ✓'}</p>
       )}
       <button class="secondary" onClick={props.onHome}>
         חזרה לדף הבית
