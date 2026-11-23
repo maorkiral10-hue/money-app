@@ -87,7 +87,7 @@ export function TabBar(props: { current: Tab; onSelect: (tab: Tab) => void; onAd
       {indicator && (
         <span
           class="tab-indicator"
-          style={{ left: `${indicator.left}px`, width: `${indicator.width}px`, transition: drag.settle ? 'left .22s ease-out, width .22s ease-out' : 'none' }}
+          style={{ left: `${indicator.left}px`, width: `${indicator.width}px`, transition: drag.settle ? 'left .45s cubic-bezier(.34,1.56,.64,1), width .45s cubic-bezier(.34,1.56,.64,1)' : 'none' }}
         />
       )}
       {TABS.slice(0, half).map(item)}
@@ -116,8 +116,11 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
   const shownIndex = useRef(i);
   const byDrag = useRef(false);
   const enter = useRef('');
+  // The screen that came in by a drag was already on show: no entrance for it
+  const dragged = useRef(false);
   if (shownIndex.current !== i) {
     enter.current = byDrag.current ? '' : i > shownIndex.current ? 'enter-from-left' : 'enter-from-right';
+    dragged.current = byDrag.current;
     shownIndex.current = i;
     byDrag.current = false;
   }
@@ -206,7 +209,7 @@ export function SwipeTabs(props: { current: Tab; onSelect: (tab: Tab) => void; r
         else finish(undefined, 0);
       }}
     >
-      <div key={props.current} class={`tab-panel ${enter.current}`} style={{ transform: `translateX(${dx}px)`, transition: animating ? 'transform .22s ease-out' : 'none' }}>
+      <div key={props.current} class={`tab-panel ${enter.current} ${byDrag.current || dragged.current ? '' : 'stagger'}`} style={{ transform: `translateX(${dx}px)`, transition: animating ? 'transform .22s ease-out' : 'none' }}>
         {props.render(props.current)}
       </div>
       {neighbour && (

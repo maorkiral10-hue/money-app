@@ -475,7 +475,7 @@ export function MoneyLine(props: { days: { date: string; amount: number }[] }) {
             );
           })}
           <path d={area} class="money-line-area" />
-          <path d={line} class="money-line-path" />
+          <path d={line} class="money-line-path" pathLength={1} />
           {t !== null && (
             <>
               <line x1={x(t)} x2={x(t)} y1="8" y2={LB} class="gridline strong" />

@@ -1,46 +1,62 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { formatMoney } from '../data/money';
 
-const DURATION = 650;
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+const isDigit = (c: string) => DIGITS.includes(c);
 
 /**
- * An amount that counts up quickly to its value when it first appears, and from the old value to the
- * new one when it changes. Skipped for people who turned motion down in the phone's accessibility settings.
+ * An amount whose digits roll into place like a counter: up from zero when it first appears, and each digit
+ * on its own to the new value when it changes (the ones on the right first). Separators and the ₪ stay still.
+ * Skipped for people who turned motion down in the phone's accessibility settings.
  */
 export function AnimatedMoney(props: { value: number; sign?: boolean }) {
-  const [shown, setShown] = useState(reducedMotion() ? props.value : 0);
-  const from = useRef(shown);
-
+  const text = formatMoney(props.value, { sign: props.sign });
+  // First paint at zero, then roll to the value on the next frame
+  const [rolled, setRolled] = useState(reducedMotion());
   useEffect(() => {
-    if (reducedMotion()) {
-      setShown(props.value);
-      return;
-    }
-    const start = performance.now();
-    const origin = from.current;
-    let frame = 0;
-    const step = (now: number) => {
-      const t = Math.min(1, (now - start) / DURATION);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const v = Math.round(origin + (props.value - origin) * eased);
-      from.current = v;
-      setShown(v);
-      if (t < 1) frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    // If frames don't run (app in the background, a paused screen), land on the real amount anyway
-    const land = setTimeout(() => {
-      from.current = props.value;
-      setShown(props.value);
-    }, DURATION + 80);
+    if (rolled) return;
+    const f = requestAnimationFrame(() => requestAnimationFrame(() => setRolled(true)));
+    // frames don't run with the app in the background: land anyway
+    const land = setTimeout(() => setRolled(true), 120);
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(f);
       clearTimeout(land);
     };
-  }, [props.value]);
+  }, []);
 
-  // Whole shekels while counting, so the digits don't jitter; the exact amount once it lands
-  const landed = shown === props.value;
-  return <>{formatMoney(landed ? shown : Math.round(shown / 100) * 100, { sign: props.sign })}</>;
+  // The number itself (first digit to last) rolls in a left-to-right run of its own; what's around it
+  // (the sign, the ₪, the direction marks) stays as plain text, so it sits where it always did
+  const chars = [...text];
+  const first = chars.findIndex(isDigit);
+  if (first < 0) return <>{text}</>;
+  let last = chars.length - 1;
+  while (!isDigit(chars[last])) last--;
+  const number = chars.slice(first, last + 1);
+  // Digits are counted from the right, so a digit keeps its column when the amount grows a digit on the left
+  let place = number.filter(isDigit).length;
+  return (
+    <span class="odo" role="img" aria-label={text}>
+      {chars.slice(0, first).join('')}
+      <span class="odo-num" aria-hidden="true">
+        {number.map((c, i) => {
+          if (!isDigit(c)) return <span key={`s${i}`}>{c}</span>;
+          const p = place--;
+          const d = rolled ? Number(c) : 0;
+          return (
+            <span key={`d${p}`} class="odo-digit">
+              {/* invisible: gives the column its own digit's width */}
+              <span class="odo-size">{c}</span>
+              <span class="odo-col" style={{ transform: `translateY(${-d * 10}%)`, transitionDelay: `${(p - 1) * 45}ms` }}>
+                {DIGITS.map(x => (
+                  <span key={x}>{x}</span>
+                ))}
+              </span>
+            </span>
+          );
+        })}
+      </span>
+      {chars.slice(last + 1).join('')}
+    </span>
+  );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
+import { AddSheet } from './components/AddSheet';
 import { addDays, todayStr } from './data/dates';
 import { deleteRecord, getMeta, openDb, putRecords, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
@@ -115,6 +116,10 @@ export function App() {
   const lastTab = useRef<Tab>('home');
   if ((TABS as string[]).includes(screen.name)) lastTab.current = screen.name as Tab;
   const [menuOpen, setMenuOpen] = useState(false);
+  // The "+" sheet ("מה רושמים?"), and how the next screen comes in: rising (a form) or pushed in from the side
+  const [addOpen, setAddOpen] = useState(false);
+  const screenSeq = useRef(0);
+  const screenRise = useRef(false);
   // The day chosen in the home screen's calendar: "+" records on it; a new entry's day becomes it
   const homeDay = useRef(todayStr());
   // Calendar events asked about: checked every half minute, so one ending while the app is open pops up too
@@ -279,6 +284,9 @@ export function App() {
       return;
     }
     setMenuOpen(false);
+    setAddOpen(false);
+    screenSeq.current++;
+    screenRise.current = s.name === 'entry' || s.name === 'eventForm';
     setScreen(s);
     scrollTo(0, 0);
   };
@@ -580,10 +588,21 @@ export function App() {
             />
           </div>
           <SwipeTabs current={tab} onSelect={t => go({ name: t })} render={renderTab} />
-          <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() =>
-              go({ name: 'entry', from: tab, ...(tab === 'home' && homeDay.current !== todayStr() && { preset: { date: homeDay.current } }) })
-            }
-          />
+          <TabBar current={tab} onSelect={t => go({ name: t })} onAdd={() => setAddOpen(true)} />
+          {(() => {
+            // For the day chosen on the home screen (another day than today), as before
+            const day = tab === 'home' ? homeDay.current : todayStr();
+            return (
+              <AddSheet
+                open={addOpen}
+                date={day}
+                today={todayStr()}
+                onClose={() => setAddOpen(false)}
+                onPick={type => go({ name: 'entry', from: tab, preset: { type, ...(day !== todayStr() && { date: day }) } })}
+                onEvent={() => go({ name: 'eventForm', date: day, from: tab })}
+              />
+            );
+          })()}
           {goalPay &&
             (() => {
               const g = summarize(data, today).goals.find(x => x.account.id === goalPay.goalId);
@@ -801,7 +820,10 @@ export function App() {
           />
         </>
       ) : (
-        content
+        // A new screen comes in moving: a form rises from the bottom, other screens slide in from the side
+        <div key={screenSeq.current} class={`screen-in ${screenRise.current ? 'rise' : 'push'}`}>
+          {content}
+        </div>
       )}
     </>
   );
