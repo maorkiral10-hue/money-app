@@ -19,7 +19,7 @@ const MONEY_SETTINGS: [MenuTarget, string][] = [
   ['methods', 'אמצעי תשלום וכרטיסי אשראי'],
   ['categories', 'קטגוריות'],
   ['recurring', 'הכנסות והוצאות קבועות'],
-  ['check', 'בדיקה מול הבנק'],
+  ['check', 'תמונת מצב'],
   ['preferences', 'העדפות'],
 ];
 

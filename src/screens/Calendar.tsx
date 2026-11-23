@@ -659,7 +659,7 @@ function DayView(props: {
             <button key={t.id} class="tx" onClick={() => props.onEditTx(t)}>
               <div>
                 <div>
-                  <CategoryMark id={t.categoryId} categories={props.data.categories} />
+                  <CategoryMark small id={t.categoryId} categories={props.data.categories} />
                   {name(t.categoryId)}
                 </div>
                 {t.note && <div class="muted small">{t.note}</div>}

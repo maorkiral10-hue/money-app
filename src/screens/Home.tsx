@@ -4,9 +4,9 @@ import { whenRecorded } from '../components/OpenGapCard';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
-import { periodKey, periodStart } from '../data/dashboard';
+import { periodKey } from '../data/dashboard';
 import { liquidByDay } from '../data/dash';
-import { addDays } from '../data/dates';
+import { dayInMonth, parseDate } from '../data/dates';
 import { todayStr } from '../data/dates';
 import { checkMark, checkStatus } from '../data/reconcile';
 import { formatMoney } from '../data/money';
@@ -42,11 +42,12 @@ export function Home(props: {
   const today = todayStr();
   const summary = useMemo(() => summarize(data, today), [data, today]);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  // The liquid money day by day: the last 30 days drawn under the number, and how it moved since the month began
+  // The liquid money day by day: the last 30 days drawn under the number, and against the same day last month
+  // (the month's last day when last month was shorter); nothing when the app wasn't used yet then
   const days = useMemo(() => liquidByDay(data, today), [data, today]);
-  const monthBegan = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
-  const before = days.find(d => d.date === addDays(monthBegan, -1));
-  const sinceMonth = before ? summary.liquid - before.amount : undefined;
+  const monthAgo = dayInMonth(today, -1, parseDate(today).d);
+  const then = days.find(d => d.date === monthAgo);
+  const sinceMonth = then ? summary.liquid - then.amount : undefined;
   const spark = days.slice(-30);
   const [calendarDay, setCalendarDay] = useState(props.day);
   const checkState = useMemo(() => checkStatus(data, today), [data, today]);
@@ -96,7 +97,7 @@ export function Home(props: {
         </div>
         {sinceMonth !== undefined && sinceMonth !== 0 && (
           <div class={`small since-month ${sinceMonth > 0 ? 'inc' : 'exp'}`}>
-            {formatMoney(sinceMonth, { sign: true })} מתחילת החודש
+            {formatMoney(sinceMonth, { sign: true })} לעומת {parseDate(monthAgo).d}.{parseDate(monthAgo).m0 + 1}
           </div>
         )}
         {spark.length > 2 && <Spark values={spark.map(d => d.amount)} />}

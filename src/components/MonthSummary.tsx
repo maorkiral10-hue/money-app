@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
+import { CategoryMark } from './CategoryMark';
 import { openCardGaps } from '../data/cardCheck';
 import { AnimatedMoney } from './AnimatedMoney';
 import { CardLine } from './CardLine';
@@ -159,7 +160,7 @@ export function MonthSummary(props: {
                   <div>
                     <div>{t.note}</div>
                     <div class="muted small">
-                      <span class="cat-dot" style={{ background: categoryColor(t.categoryId, data.categories) }} />
+                      <CategoryMark small id={t.categoryId} categories={data.categories} />
                       {[name(t.categoryId ?? ''), upcoming ? `${income ? 'ייכנס' : 'יירד'} ב־${shortDate(t.date)}` : dayLabel(t.date, today)].join(' · ')}
                     </div>
                   </div>
@@ -305,7 +306,7 @@ export function MonthSummary(props: {
               <button class="bar-row" onClick={() => setOpenCategory(openCategory === c.categoryId ? null : c.categoryId)}>
                 <div class="line">
                   <span>
-                    <span class="cat-dot" style={{ background: categoryColor(c.categoryId, data.categories) }} />
+                    <CategoryMark small id={c.categoryId} categories={data.categories} />
                     {name(c.categoryId)}
                   </span>
                   <span class="exp">
@@ -355,7 +356,7 @@ export function MonthSummary(props: {
               <button class="bar-row" onClick={() => setOpenCategory(openCategory === r.categoryId ? null : r.categoryId)}>
                 <div class="line">
                   <span>
-                    <span class="cat-dot" style={{ background: categoryColor(r.categoryId, data.categories) }} />
+                    <CategoryMark small id={r.categoryId} categories={data.categories} />
                     {name(r.categoryId)}
                   </span>
                   <span class="inc">

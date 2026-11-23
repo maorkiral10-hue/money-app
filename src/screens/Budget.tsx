@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { CategoryMark } from '../components/CategoryMark';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MoneyInput, Segmented } from '../components/inputs';
 import { budgetStatus, monthCommitments, usualSpending, type Budget, type BudgetLine } from '../data/budget';
@@ -97,7 +98,7 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
               <div key={c.rec.id} class="tx">
                 <div>
                   <div>
-                    <span class="cat-dot" style={{ background: categoryColor(c.rec.categoryId, data.categories) }} />
+                    <CategoryMark small id={c.rec.categoryId} categories={data.categories} />
                     {c.rec.name}
                   </div>
                   <div class="muted small">
@@ -120,7 +121,7 @@ export function BudgetTab(props: { data: AppData; onEdit: () => void }) {
               <div key={c.categoryId} class="budget-row">
                 <div class="line">
                   <span>
-                    <span class="cat-dot" style={{ background: categoryColor(c.categoryId, data.categories) }} />
+                    <CategoryMark small id={c.categoryId} categories={data.categories} />
                     {name(c.categoryId)}
                   </span>
                   <span class={left >= 0 ? '' : 'exp'}>
@@ -266,7 +267,7 @@ export function BudgetSetup(props: { db: IDBDatabase; data: AppData; onDone: () 
               .map(c => (
                 <label key={c.id} class="field budget-field">
                   <span>
-                    <span class="cat-dot" style={{ background: categoryColor(c.id, data.categories) }} />
+                    <CategoryMark small id={c.id} categories={data.categories} />
                     {c.name}
                     {usual.byCategory[c.id] ? <span class="muted small"> · {usualText(usual.byCategory[c.id])}</span> : null}
                   </span>

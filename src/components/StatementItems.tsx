@@ -1,5 +1,5 @@
 import type { StatementItem } from '../data/balance';
-import { categoryColor } from '../data/colors';
+import { CategoryMark } from './CategoryMark';
 import { dayLabel } from '../data/dates';
 import { formatMoney } from '../data/money';
 import type { AppData } from '../data/store';
@@ -24,7 +24,7 @@ export function StatementItems(props: {
           <button key={`${item.tx.id}-${i}`} class="tx" onClick={() => !item.tx!.id.startsWith('expected:') && props.onEdit(item.tx!)}>
             <div>
               <div>
-                <span class="cat-dot" style={{ background: categoryColor(item.tx.categoryId, data.categories) }} />
+                <CategoryMark small id={item.tx.categoryId} categories={data.categories} />
                 {item.tx.recurringId ? item.tx.note : catName(item.tx.categoryId)}
               </div>
               <div class="muted small">
