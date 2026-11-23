@@ -106,8 +106,8 @@ export function Dashboard(props: { data: AppData }) {
   const bars = (pick: (s: ReturnType<typeof periodStats>) => number) =>
     series.map(x => ({ label: short(x.q), amount: x.s ? pick(x.s) : 0, missing: !x.s, running: x.q.to > today, partial: !!x.s && x.q.from < data.startDate }));
   const barsSub = all
-    ? `כל ה${UNIT_MANY[kind]} מאז שהתחלת, ${UNIT[kind]} בכל עמודה.`
-    : `${BARS[kind]} ${UNIT_MANY[kind]} אחרונים, ${UNIT[kind]} בכל עמודה. הכהה היא התקופה שבחרת${running ? ' (עד היום)' : ''}.`;
+    ? `כל ה${UNIT_MANY[kind]} מאז שהתחלת.`
+    : `${BARS[kind]} ${UNIT_MANY[kind]} אחרונים. הכהה: התקופה שבחרת.`;
   // Since the start there's no one chosen bar: all of them strong
   const chosen = all ? -1 : series.length - 1;
 
@@ -288,7 +288,7 @@ export function Dashboard(props: { data: AppData }) {
             <PairBars bars={series.map(x => ({ label: short(x.q), income: x.s?.income ?? 0, expenses: x.s?.expenses ?? 0, saved: x.s?.saved ?? 0, missing: !x.s }))} current={chosen} />
           </Section>
 
-          <Section id="liquid" title="הכסף הנזיל" sub='אותו מספר כמו "כסף נזיל עכשיו" בדף הבית, יום אחרי יום. לגרף זום משלו: הכפתורים, או שתי אצבעות. גרירה הצידה זזה בזמן.'>
+          <Section id="liquid" title="הכסף הנזיל" sub="כמו בדף הבית, יום אחרי יום. צבוט לזום, גרור לזוז בזמן.">
             <div class="liquid-now">
               <strong>{formatMoney(liquid[liquid.length - 1]?.amount ?? 0)}</strong> <span class="muted small">היום</span>
             </div>

@@ -81,7 +81,7 @@ export function DeleteSheet(props: { db: IDBDatabase; data: AppData; rec: Recurr
   };
   return (
     <Sheet title={`למחוק את "${rec.name}"?`}>
-      <p class="muted small">מחיקה היא להוראה שנוספה בטעות. אם היא הייתה אמיתית ונגמרה, עדיף "להפסיק": כך היא נשארת ב"הסתיימו".</p>
+      <p class="muted small">רק אם נוספה בטעות. אם נגמרה, עדיף "להפסיק".</p>
       {recorded.length > 0 ? (
         <>
           <p class="small">

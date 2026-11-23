@@ -45,7 +45,7 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
         </header>
       )}
       <p class="muted small">
-        לשיקוף בלבד: הכסף הזה לא נספר בכסף הנזיל ולא בחודש. מעדכנים יתרה מהדוח או מהאתר של הקרן, מתי שנוח. בין עדכון לעדכון מתווסף לבד מה שהפקדת בהוראת קבע או בהפקדה נוספת.
+        לא נספר בכסף הנזיל. עדכן יתרה מהדוח מתי שנוח, וההפקדות מתווספות לבד.
       </p>
 
       {funds.length > 0 && (
@@ -321,7 +321,7 @@ function DepositForm(props: { db: IDBDatabase; fund: Fund; data: AppData; onCanc
       <Chips items={methods} value={methodId} onChange={setMethodId} />
       <p class="field-label">קטגוריה</p>
       <Chips items={categories} value={categoryId} onChange={setCategoryId} />
-      {!savingCats.length && <p class="muted small">כדאי לסמן קטגוריה כ"חיסכון" (בהגדרות הקטגוריות), כדי שההפקדה תופיע באריח החיסכון ולא בהוצאות.</p>}
+      {!savingCats.length && <p class="muted small">סמן קטגוריה כ"חיסכון" בהגדרות, כדי שההפקדה לא תיספר בהוצאות.</p>}
       <div class="hero-buttons">
         <button disabled={!ok} onClick={add}>
           לרשום הפקדה

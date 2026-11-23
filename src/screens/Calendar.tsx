@@ -388,7 +388,7 @@ export function CalendarScreen(props: {
       {zoom !== 'year' && (
         <DayView data={props.data} date={selected} today={today} events={dayEvents} txs={txByDate.get(selected) ?? []} onEdit={props.onEdit} onEditTx={props.onEditTx} />
       )}
-      <p class="muted small center">הסכומים כאן לתכנון בלבד. הם לא משנים את היתרה, התקציב או עובר ושב.</p>
+      <p class="muted small center">הסכומים כאן לתכנון בלבד.</p>
     </>
   );
 }
@@ -1002,12 +1002,12 @@ export function EventForm(props: {
           <>
             <p class="field-label">לאיזו קטגוריה</p>
             <Chips items={eventCategories} value={categoryId} onChange={setCategoryId} />
-            <p class="muted small">כל מה שתרשום לאירוע ייכנס לקטגוריה הזו (אפשר לשנות בכל הוצאה).</p>
+            <p class="muted small">מה שתרשום לאירוע ייכנס לכאן.</p>
             {noCategory && <p class="small warn">בחר קטגוריה</p>}
           </>
         )}
         {type !== 'none' && (
-          <p class="muted small">לא נכנס לתקציב וליתרה. כשהאירוע ייגמר, תקפוץ שאלה כמה זה עלה (או הכניס) בפועל, ותוכל לרשום את זה.</p>
+          <p class="muted small">לתכנון בלבד. בסוף האירוע תישאל כמה עלה בפועל.</p>
         )}
       </section>
 

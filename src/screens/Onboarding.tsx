@@ -41,7 +41,7 @@ export function Onboarding(props: { db: IDBDatabase; onDone: () => void }) {
       {step === 0 && (
         <>
           <h1>איפה הכסף שלך נמצא?</h1>
-          <p class="muted">סמן כל מקום שיש בו כסף שאתה יכול להשתמש בו, וכתוב כמה יש בו היום. הסכום של כולם יהיה המספר הגדול במסך הראשי.</p>
+          <p class="muted">איפה יש לך כסף, וכמה יש בכל מקום היום.</p>
           <div class="card">
             <AccountsEditor items={accounts} onChange={setAccounts} balanceLabel="כמה יש בו היום" />
           </div>
@@ -55,7 +55,7 @@ export function Onboarding(props: { db: IDBDatabase; onDone: () => void }) {
         <>
           <h1>איך אתה משלם?</h1>
           <p class="muted">
-            סמן את מה שאתה משתמש בו. לכרטיס אשראי כתוב באיזה יום בחודש הוא יורד מהבנק, וכמה כבר צברת עליו לחיוב הקרוב. את הסכום הזה רואים באפליקציה של הכרטיס.
+            סמן במה אתה משלם. לכרטיס אשראי: יום החיוב וכמה צברת עד עכשיו.
           </p>
           <div class="card">
             <MethodsEditor items={methods} accounts={named(accounts)} onChange={setMethods} />

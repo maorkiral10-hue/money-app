@@ -14,7 +14,7 @@ export function UpdateBanner() {
   if (!needRefresh) return null;
   return (
     <div class="card banner">
-      <p>גרסה חדשה מוכנה. הנתונים שלך לא יימחקו, ולפני המעבר יישמר עותק בטיחות.</p>
+      <p>גרסה חדשה מוכנה. הנתונים שלך נשמרים.</p>
       <button onClick={() => updateServiceWorker(true)}>עדכן עכשיו</button>
     </div>
   );

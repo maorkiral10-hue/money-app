@@ -61,7 +61,7 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
       {active.length === 0 ? (
         <div class="card locked">
           <h2>עוד אין יעדים</h2>
-          <p class="muted">חופשה, רכב, כרית ביטחון… לכל יעד יש "קופה" משלו. מעבירים אליה כסף מהכסף הנזיל, ואפשר גם להחזיר.</p>
+          <p class="muted">לכל יעד קופה משלו. מעבירים אליה כסף, ואפשר להחזיר.</p>
           <button onClick={props.onNew}>יעד ראשון</button>
         </div>
       ) : (
@@ -290,7 +290,7 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
           <>
             <p class="field-label">על מה</p>
             <Chips items={expenseCategories} value={categoryId} onChange={setSpendCategory} />
-            <p class="muted small">נרשם כהוצאה בקטגוריה הזאת, והכסף יורד מהיעד (לא מהכסף הנזיל).</p>
+            <p class="muted small">הכסף יורד מהיעד, לא מהכסף הנזיל.</p>
           </>
         ) : (
           inside ? (
@@ -429,7 +429,7 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
       <section>
         <h2>לאיזו קטגוריה</h2>
         <Chips items={categories} value={categoryId} onChange={setCategoryId} />
-        <p class="muted small">כשתוציא את הכסף מהיעד (למשל כשתשלם על החופשה), זו תהיה הוצאה בקטגוריה הזאת.</p>
+        <p class="muted small">כשתשלם מהיעד, ההוצאה תיכנס לקטגוריה הזאת.</p>
       </section>
 
       <section>
@@ -468,8 +468,8 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
           {(
             [
               ['deposit', 'בצד: פיקדון או חשבון נפרד', 'הכסף יוצא מהכסף הנזיל.'],
-              ['envelope', 'בצד: מזומן במעטפה', 'כסף שלא סופרים עם הארנק. יוצא מהכסף הנזיל.'],
-              ['inside', 'בתוך הכסף הנזיל', 'נשאר בבנק (או במזומן, בביט), רק מסומן כשמור. בבדיקה מול הבנק הוא נספר.'],
+              ['envelope', 'בצד: מזומן במעטפה', 'לא נספר עם הארנק. יוצא מהכסף הנזיל.'],
+              ['inside', 'בתוך הכסף הנזיל', 'נשאר בבנק, רק מסומן כשמור.'],
             ] as const
           ).map(([id, title, hint]) => (
             <button key={id} type="button" class={`tile place-tile ${place === id ? 'on' : ''}`} onClick={() => setPlace(id)}>

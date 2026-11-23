@@ -54,7 +54,7 @@ export function VariableDueCard(props: {
         {askEnd ? (
           <>
             <h2>לבטל את "{rec.name}"?</h2>
-            <p class="muted small">אם תבטל, היא לא תופיע יותר. אם לא, היא תחזור בחודש הבא כרגיל.</p>
+            <p class="muted small">אם תבטל, היא לא תופיע יותר.</p>
             <div class="hero-buttons">
               <button onClick={() => end(true)}>כן, לבטל</button>
               <button class="secondary" onClick={() => end(false)}>

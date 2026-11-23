@@ -71,7 +71,7 @@ export function DataScreen(props: {
       <div class="card">
         <h2>גיבוי לקובץ</h2>
         <p class="muted">
-          שומר את כל הנתונים בקובץ אחד. באייפון בחר "שמור בקבצים", ועדיף בתיקייה ב-iCloud Drive, כדי שהגיבוי יישמר גם אם הטלפון יאבד.
+          קובץ אחד עם הכל. שמור אותו ב־iCloud Drive, כדי שיישאר גם אם הטלפון יאבד.
         </p>
         <p class="muted">{props.lastBackupAt ? `גיבוי אחרון: ${fmtDate(props.lastBackupAt)}` : 'עדיין לא בוצע גיבוי.'}</p>
         <button onClick={doExport}>שמור גיבוי</button>

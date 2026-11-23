@@ -281,7 +281,7 @@ export function MonthSummary(props: {
               </button>
             );
           })}
-          <p class="muted small">כסף שעבר לחיסכון יורד מהחשבון, אבל הוא עדיין שלך: הוא לא נספר בהוצאות.</p>
+          <p class="muted small">עדיין שלך, ולא נספר בהוצאות.</p>
         </div>
       )}
 

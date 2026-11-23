@@ -120,8 +120,8 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
       {props.page !== 'preferences' && (
         <p class="muted small">
           {props.page === 'accounts'
-            ? 'שינויים נשמרים מיד. ביטול סימון מסתיר מהטופס, אבל תנועות קודמות נשארות כמו שהן.'
-            : 'שינויים נשמרים מיד. כדי למחוק, החלק שורה שמאלה. תנועות שכבר נרשמו נשארות כמו שהן.'}
+            ? 'נשמר מיד. ביטול סימון מסתיר מהטופס.'
+            : 'נשמר מיד. החלק שמאלה כדי למחוק.'}
         </p>
       )}
 
@@ -160,7 +160,7 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
             <label class="toggle-row">
               <span>
                 פתיחה ישר על הזנה חדשה
-                <span class="muted small block">כשפותחים את האפליקציה, או חוזרים אליה אחרי 10 שניות ומעלה (לא באמצע הקלדה)</span>
+                <span class="muted small block">בכל פתיחה של האפליקציה</span>
               </span>
               <input type="checkbox" checked={data.openOnEntry} onChange={e => setting('openOnEntry')(e.currentTarget.checked)} />
             </label>

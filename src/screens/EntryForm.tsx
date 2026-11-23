@@ -390,7 +390,7 @@ export function EntryForm(props: {
 
       {step === 'goal' && (
         <div class="event-step">
-          <p class="muted small center">הוצאה בשביל מה שחוסכים אליו (למשל טיסה לחופשה), ששולמה בכסף אחר. היא תיספר ב"שולם על היעד".</p>
+          <p class="muted small center">שילמת על היעד מכסף אחר? היא תיספר ב"שולם על היעד".</p>
           <div class="tiles">
             {activeGoals.map(g => (
               <button key={g.id} class={`tile event-tile ${goalId === g.id ? 'on' : ''}`} onClick={() => pickGoal(g.id)}>
@@ -442,7 +442,7 @@ export function EntryForm(props: {
             <>
               <p class="field-label">זיכוי לכרטיס אשראי</p>
               <Chips items={refundCards} value={accountId} onChange={setAccountId} />
-              <p class="muted small">למשל החזרת מוצר: הסכום יורד מהחיוב הבא של הכרטיס ומשחרר מסגרת.</p>
+              <p class="muted small">יורד מהחיוב הבא של הכרטיס.</p>
             </>
           )}
         </>
@@ -451,7 +451,7 @@ export function EntryForm(props: {
       {step === 'from' && (
         <>
           {transferChips(accountId, setAccountId)}
-          <p class="muted small">למשל משיכת מזומן מהכספומט, העברה מביט לבנק, או הפקדה ליעד חיסכון. זה לא הוצאה, הכסף רק עובר ממקום למקום.</p>
+          <p class="muted small">כסף שעובר בין המקומות שלך. לא הוצאה.</p>
         </>
       )}
 
@@ -474,8 +474,8 @@ export function EntryForm(props: {
             })}
             <input type="date" class="chip" max={today} value={date} onChange={e => e.currentTarget.value && setDate(e.currentTarget.value)} />
           </div>
-          {!dateOk && <p class="small warn">אי אפשר לרשום תנועה בתאריך עתידי. לתאריך עתידי רושמים אירוע.</p>}
-          {date < data.startDate && <p class="muted small">התאריך לפני תחילת המעקב, ולכן התנועה לא תשנה את היתרה (היא כבר כלולה ביתרת הפתיחה).</p>}
+          {!dateOk && <p class="small warn">לתאריך עתידי רושמים אירוע.</p>}
+          {date < data.startDate && <p class="muted small">לפני תחילת המעקב: לא ישנה את היתרה.</p>}
         </div>
       )}
 
@@ -572,7 +572,7 @@ export function EntryForm(props: {
             value={note}
             onInput={e => setNote(e.currentTarget.value)}
           />
-          {needsNote && !note.trim() && <p class="small warn">במזומן אין פירוט להשוות אליו, אז כותבים מה קנית. זה יעזור להיזכר בבדיקת המזומן.</p>}
+          {needsNote && !note.trim() && <p class="small warn">כתוב מה קנית, כדי להיזכר בבדיקת המזומן.</p>}
 
           <button disabled={!valid || saving || (!!gap && partOfGap === undefined)} onClick={save}>
             שמור

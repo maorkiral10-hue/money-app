@@ -369,7 +369,7 @@ export function BalanceCheck(props: {
       <>
       <div class="card">
         <h2>מה נחשב תקין</h2>
-        <p class="muted small">פער עד הסכום הזה נחשב "שינוי מינורי" (✓✗) ולא חריגה (✗). 0 = כל פער נחשב חריגה.</p>
+        <p class="muted small">פער עד הסכום הזה נחשב מינורי (✓✗). 0 = כל פער הוא חריגה.</p>
         <label class="field">
           <span>שינוי מינורי: עד</span>
           <MoneyInput
@@ -384,7 +384,7 @@ export function BalanceCheck(props: {
 
       <div class="card">
         <h2>פער שנשאר פתוח</h2>
-        <p class="muted small">כמה ימים פער מחכה שתמצא אותו, לפני שהוא נרשם לבד כ"לא מזוהה" (לא יותר מתדירות הבדיקה). בכרטיסי אשראי הפער מחכה ליום החיוב ולא נרשם לבד.</p>
+        <p class="muted small">כמה ימים לחפש פער לפני שהוא נרשם כ"לא מזוהה". באשראי מחכים ליום החיוב.</p>
         <Segmented
           value={String(data.gapGraceDays)}
           onChange={async (v: string) => {
@@ -511,7 +511,7 @@ function UnknownMoney(props: { data: AppData }) {
   return (
     <div class="card unknown-money">
       <h2 class="list-title">כסף לא מזוהה</h2>
-      <p class="muted small">פערים שנרשמו כ"לא מזוהה" מכל הבדיקות. כל מה שנזכרת בו אחר כך יורד מכאן.</p>
+      <p class="muted small">מכל הבדיקות. מה שנזכרת בו אחר כך יורד מכאן.</p>
       <div class="unknown-totals">
         <div>
           <div class="muted small">סך הכסף הלא מזוהה</div>

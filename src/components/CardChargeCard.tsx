@@ -93,7 +93,7 @@ export function CardChargeCard(props: {
   const edgeList = edges.length > 0 && (
     <div class="edge-list">
       <p class="field-label">קניות קרובות ליום החיוב</p>
-      <p class="muted small">לפעמים הן נכנסות לחיוב הזה ולפעמים לחיוב הבא, לפי מתי העסק מעביר אותן. איפה כל אחת?</p>
+      <p class="muted small">הן יכולות ליפול בחיוב הזה או בבא. איפה כל אחת?</p>
       {edges.map(e => (
         <div key={e.tx.id} class="edge-item">
           <div class="line">
@@ -189,8 +189,8 @@ export function CardChargeCard(props: {
             </div>
             <p class="muted small">
               {gap > 0
-                ? 'חויב יותר ממה שרשמת: כנראה חסרות קניות, או שסכום נרשם נמוך מדי.'
-                : 'חויב פחות ממה שרשמת: אולי היה זיכוי, קנייה נרשמה פעמיים, או שסכום נרשם גבוה מדי.'}{' '}
+                ? 'חויב יותר: כנראה חסרה קנייה.'
+                : 'חויב פחות: אולי זיכוי, או קנייה שנרשמה פעמיים.'}{' '}
               לחיוב הזה נכנסות קניות מ־{short(win.from)} עד {short(win.to)}.
             </p>
             {explains && (

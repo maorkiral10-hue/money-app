@@ -28,8 +28,8 @@ export function MonthStartPicker(props: { value: number; onChange: (day: number)
       )}
       <p class="muted small">
         {props.value === 1
-          ? 'חודש רגיל, מה-1 עד סוף החודש. הכי נוח להשוואה עם פירוט הבנק.'
-          : `כל חודש כספי יתחיל ב-${props.value} ויסתיים ב-${props.value - 1} בחודש שאחריו. מתאים למי שחי ממשכורת למשכורת.`}
+          ? 'מה־1 עד סוף החודש, כמו בבנק.'
+          : `מה־${props.value} עד ה־${props.value - 1} בחודש הבא.`}
       </p>
     </>
   );
