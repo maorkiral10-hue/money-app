@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { ACCENTS, loadTheme, saveTheme, type Theme } from '../theme';
+import { ACCENTS, FONTS, loadTheme, saveTheme, type Theme } from '../theme';
 
 /** "ערכת נושא": dark or light, and the main color. Everything changes at once, as it's chosen. */
 export function ThemeScreen(props: { onBack: () => void }) {
@@ -19,7 +19,7 @@ export function ThemeScreen(props: { onBack: () => void }) {
           חזרה
         </button>
       </header>
-      <p class="muted">איך האפליקציה נראית אצלך. השינוי קורה מיד, ונשמר במכשיר הזה.</p>
+      <p class="muted">השינוי קורה מיד ונשמר במכשיר.</p>
 
       <div class="muted small">מצב</div>
       <div class="theme-seg" role="group" aria-label="מצב">
@@ -42,8 +42,22 @@ export function ThemeScreen(props: { onBack: () => void }) {
         ))}
       </div>
 
+      <div class="muted small">פונט</div>
+      <div class="font-picks">
+        {FONTS.map(f => (
+          <button key={f.id} class={`font-pick ${theme.font === f.id ? 'on' : ''}`} aria-pressed={theme.font === f.id} onClick={() => choose({ font: f.id })}>
+            {/* each sample in its own set, so it can be seen before it's chosen */}
+            <span class="font-sample" style={{ fontFamily: `Font-${f.id}` }}>
+              <span class="font-sample-name">{f.name}</span>
+              <span class="font-sample-num">42,138</span>
+            </span>
+            <span class="muted small">{f.feel}</span>
+          </button>
+        ))}
+      </div>
+
       <div class="card">
-        <p class="muted small">הצבע הראשי צובע כפתורים, קישורים, את היום הנבחר וכותרות של גרפים. הכנסות תמיד בירוק, הוצאות באדום וחיסכון בכתום.</p>
+        <p class="muted small">הכנסות תמיד בירוק, הוצאות באדום וחיסכון בכתום.</p>
         <div class="money-key small">
           <span class="inc">● הכנסות</span>
           <span class="exp">● הוצאות</span>

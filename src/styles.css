@@ -1,14 +1,47 @@
 /*
- * Fonts (both under the SIL Open Font License, kept inside the app so they work offline). One family, "App":
- * Karantina for the letters, drawn larger than its size (it's narrow), and Space Grotesk for digits and the
- * signs around them, so every amount reads the same wherever it is. The digits' faces come last, so they win; each weight range is the same for both fonts (a browser picks one range).
+ * Fonts, all under the SIL Open Font License and kept inside the app so they work offline. Six sets to choose
+ * from in "ערכת נושא" (src/theme.ts), each a family of its own: letters in one font and, in most sets, digits
+ * (and the signs around them) in another that suits it, through unicode-range. Each is drawn larger or smaller
+ * than its CSS size (size-adjust) so every set reads at about the same size.
  */
-@font-face { font-family: App; src: url('./fonts/karantina-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 160%; }
-@font-face { font-family: App; src: url('./fonts/karantina-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 160%; }
-@font-face { font-family: App; src: url('./fonts/karantina-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 160%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
-@font-face { font-family: App; src: url('./fonts/karantina-hebrew-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 160%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
-@font-face { font-family: App; src: url('./fonts/space-grotesk-latin-500-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
-@font-face { font-family: App; src: url('./fonts/space-grotesk-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-poster; src: url('./fonts/karantina-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 160%; }
+@font-face { font-family: Font-poster; src: url('./fonts/karantina-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 160%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-poster; src: url('./fonts/karantina-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 160%; }
+@font-face { font-family: Font-poster; src: url('./fonts/karantina-hebrew-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 160%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-poster; src: url('./fonts/barlow-condensed-latin-500-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 118%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-poster; src: url('./fonts/barlow-condensed-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 118%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-soft; src: url('./fonts/fredoka-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; }
+@font-face { font-family: Font-soft; src: url('./fonts/fredoka-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-soft; src: url('./fonts/fredoka-latin-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; }
+@font-face { font-family: Font-soft; src: url('./fonts/fredoka-hebrew-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-magazine; src: url('./fonts/frank-ruhl-libre-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 108%; }
+@font-face { font-family: Font-magazine; src: url('./fonts/frank-ruhl-libre-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 108%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-magazine; src: url('./fonts/frank-ruhl-libre-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 108%; }
+@font-face { font-family: Font-magazine; src: url('./fonts/frank-ruhl-libre-hebrew-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 108%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-magazine; src: url('./fonts/fraunces-latin-500-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-magazine; src: url('./fonts/fraunces-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-notebook; src: url('./fonts/playpen-sans-hebrew-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 92%; }
+@font-face { font-family: Font-notebook; src: url('./fonts/playpen-sans-hebrew-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 92%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-notebook; src: url('./fonts/playpen-sans-hebrew-latin-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 92%; }
+@font-face { font-family: Font-notebook; src: url('./fonts/playpen-sans-hebrew-hebrew-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 92%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-terminal; src: url('./fonts/ibm-plex-sans-hebrew-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; }
+@font-face { font-family: Font-terminal; src: url('./fonts/ibm-plex-sans-hebrew-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-terminal; src: url('./fonts/ibm-plex-sans-hebrew-latin-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; }
+@font-face { font-family: Font-terminal; src: url('./fonts/ibm-plex-sans-hebrew-hebrew-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-terminal; src: url('./fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 96%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-terminal; src: url('./fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 96%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-headline; src: url('./fonts/suez-one-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; }
+@font-face { font-family: Font-headline; src: url('./fonts/suez-one-latin-400-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; }
+@font-face { font-family: Font-headline; src: url('./fonts/suez-one-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 100%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-headline; src: url('./fonts/suez-one-hebrew-400-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 100%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: Font-headline; src: url('./fonts/sora-latin-600-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 94%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: Font-headline; src: url('./fonts/sora-latin-800-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 94%; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+:root { --app-font: Font-poster; }
+:root[data-font="soft"] { --app-font: Font-soft; }
+:root[data-font="magazine"] { --app-font: Font-magazine; }
+:root[data-font="notebook"] { --app-font: Font-notebook; }
+:root[data-font="terminal"] { --app-font: Font-terminal; }
+:root[data-font="headline"] { --app-font: Font-headline; }
 
 /*
  * The theme (chosen in "ערכת נושא", src/theme.ts): dark or light, and a main color. Dark with mint is the
@@ -38,7 +71,7 @@
 html { touch-action: manipulation; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font: 16px/1.5 App, -apple-system, "Segoe UI", system-ui, sans-serif;
+  font: 16px/1.5 var(--app-font), -apple-system, "Segoe UI", system-ui, sans-serif;
   transition: background-color .4s ease, color .4s ease;
   padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);
   -webkit-tap-highlight-color: transparent;
@@ -838,3 +871,10 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .swatch-pick.on { color: var(--text); }
 .money-key { display: flex; gap: 14px; margin-top: 6px; }
 .home-date { display: block; color: var(--muted); font-size: 14px; line-height: 1.1; }
+.font-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 8px 0 18px; }
+.font-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; padding: 12px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; font-weight: 400; text-align: start; transition: border-color .25s, transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.font-pick:active { transform: scale(.97); }
+.font-pick.on { border: 2px solid var(--accent); padding: 11px; }
+.font-sample { display: flex; align-items: baseline; justify-content: space-between; width: 100%; gap: 6px; }
+.font-sample-name { font-size: 20px; font-weight: 700; }
+.font-sample-num { font-size: 18px; font-weight: 700; direction: ltr; }

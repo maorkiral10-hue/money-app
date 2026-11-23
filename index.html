@@ -16,6 +16,7 @@
       var t = JSON.parse(localStorage.getItem('theme') || 'null') || {};
       document.documentElement.dataset.mode = t.mode === 'light' ? 'light' : 'dark';
       document.documentElement.dataset.accent = t.accent || 'mint';
+      document.documentElement.dataset.font = t.font || 'poster';
     } catch (e) {}
   </script>
 </head>

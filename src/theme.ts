@@ -3,10 +3,12 @@
 
 export type ThemeMode = 'dark' | 'light';
 export type Accent = 'mint' | 'purple' | 'coral' | 'sky' | 'pink' | 'gold';
+export type FontSet = 'poster' | 'soft' | 'magazine' | 'notebook' | 'terminal' | 'headline';
 
 export interface Theme {
   mode: ThemeMode;
   accent: Accent;
+  font: FontSet;
 }
 
 /** Each main color: its name, and its step on a dark and on a light background (the same as styles.css). */
@@ -19,8 +21,18 @@ export const ACCENTS: { id: Accent; name: string; dark: string; light: string }[
   { id: 'gold', name: 'זהב', dark: '#ffd166', light: '#a87400' },
 ];
 
+/** The font sets (their faces are in styles.css): a name and what it feels like. */
+export const FONTS: { id: FontSet; name: string; feel: string }[] = [
+  { id: 'poster', name: 'פוסטר', feel: 'גבוה, צר ונועז' },
+  { id: 'soft', name: 'רך', feel: 'מעוגל וידידותי' },
+  { id: 'magazine', name: 'מגזין', feel: 'סריף קלאסי' },
+  { id: 'notebook', name: 'פנקס', feel: 'כמו כתב יד' },
+  { id: 'terminal', name: 'מסוף', feel: 'טכני ומדויק' },
+  { id: 'headline', name: 'כותרת', feel: 'עבה ובולט' },
+];
+
 const KEY = 'theme';
-export const DEFAULT_THEME: Theme = { mode: 'dark', accent: 'mint' };
+export const DEFAULT_THEME: Theme = { mode: 'dark', accent: 'mint', font: 'poster' };
 const BACKGROUND: Record<ThemeMode, string> = { dark: '#0a0e1a', light: '#f3f5fa' };
 
 export function loadTheme(): Theme {
@@ -29,6 +41,7 @@ export function loadTheme(): Theme {
     return {
       mode: t?.mode === 'light' ? 'light' : 'dark',
       accent: ACCENTS.some(a => a.id === t?.accent) ? t!.accent! : DEFAULT_THEME.accent,
+      font: FONTS.some(f => f.id === t?.font) ? t!.font! : DEFAULT_THEME.font,
     };
   } catch {
     return DEFAULT_THEME;
@@ -39,6 +52,7 @@ export function applyTheme(t: Theme) {
   const root = document.documentElement;
   root.dataset.mode = t.mode;
   root.dataset.accent = t.accent;
+  root.dataset.font = t.font;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', BACKGROUND[t.mode]);
 }
 
