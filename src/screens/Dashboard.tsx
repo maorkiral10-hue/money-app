@@ -145,10 +145,12 @@ export function Dashboard(props: { data: AppData }) {
   };
   const rail = useRef<HTMLDivElement>(null);
   const railTouch = useRef<{ y: number; sliding: boolean } | null>(null);
+  const [bubble, setBubble] = useState<{ label: string; y: number } | null>(null);
   const slideTo = (y: number) => {
     const r = rail.current?.getBoundingClientRect();
     if (!r) return;
     const i = Math.max(0, Math.min(SECTIONS.length - 1, Math.floor(((y - r.top) / r.height) * SECTIONS.length)));
+    setBubble({ label: SECTIONS[i].label, y: y - r.top });
     if (SECTIONS[i].id !== onSection) {
       setOnSection(SECTIONS[i].id);
       document.getElementById(`dash-${SECTIONS[i].id}`)?.scrollIntoView({ block: 'start' });
@@ -190,17 +192,23 @@ export function Dashboard(props: { data: AppData }) {
         <div class="top">
           <h1>דשבורד</h1>
         </div>
-        <div class="period-pick">
-          <Segmented
-            options={KINDS}
-            value={view}
-            onChange={v => {
-              setView(v);
-              setK(0);
-            }}
-          />
+        <div class="period-chips" role="group" aria-label="תקופה">
+          {KINDS.map(([v, label]) => (
+            <button
+              key={v}
+              class={`chip ${view === v ? 'on' : ''}`}
+              aria-pressed={view === v}
+              onClick={() => {
+                setView(v);
+                setK(0);
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div class="dash-nav">
+      </div>
+      <div class="dash-nav">
           <button class="chip" aria-label="התקופה הקודמת" disabled={!canBack} onClick={() => setK(k - 1)}>
             ›
           </button>
@@ -211,7 +219,6 @@ export function Dashboard(props: { data: AppData }) {
           <button class="chip" aria-label="התקופה הבאה" disabled={all || k >= 0} onClick={() => setK(k + 1)}>
             ‹
           </button>
-        </div>
       </div>
 
       <div class="dash-body">
@@ -225,7 +232,7 @@ export function Dashboard(props: { data: AppData }) {
               <div class="muted small">הוצאות</div>
               <div class="stat-value"><AnimatedMoney value={stats.expenses} /></div>
             </div>
-            <div class="stat sav-panel">
+            <div class="stat">
               <div class="muted small">חיסכון</div>
               <div class="stat-value sav"><AnimatedMoney value={stats.saved} /></div>
             </div>
@@ -301,28 +308,34 @@ export function Dashboard(props: { data: AppData }) {
           </Section>
 
           <Section id="compare" title="השוואות" sub={all ? 'בתצוגה "מההתחלה" אין תקופה קודמת להשוות אליה. בחר שבוע, חודש, 3 חודשים או שנה.' : days !== undefined ? `כולן עד אותה נקודה: ${days + 1} הימים הראשונים של כל ${UNIT[kind]}` : 'תקופות שלמות באותו אורך'}>
-            {!all && <div class="dash-cmp">
-              <div class="dash-cmp-row head">
-                <span />
-                <span>הכנסות</span>
-                <span>הוצאות</span>
-              </div>
-              <CompareRow name={k === 0 ? THIS[kind] : title(p)} s={stats} bold />
-              <CompareRow name={BEFORE[kind]} s={prevs[0]?.s} partial={prevs[0]?.partial} />
-              {prevs.every(x => x) ? (
-                <CompareRow
-                  name="ממוצע 3 קודמים"
-                  s={{ income: prevs.reduce((a, x) => a + x!.s.income, 0) / 3, expenses: prevs.reduce((a, x) => a + x!.s.expenses, 0) / 3 }}
-                  partial={prevs.some(x => x!.partial)}
-                />
-              ) : (
-                <CompareRow name="ממוצע 3 קודמים" />
-              )}
-              {kind !== 'year' && (() => {
-                const y = compared(k + YEAR_AGO[kind]);
-                return <CompareRow name="אותה תקופה אשתקד" s={y?.s} partial={y?.partial} />;
+            {!all &&
+              (() => {
+                const yearAgo = kind !== 'year' ? compared(k + YEAR_AGO[kind]) : undefined;
+                const rows: { name: string; s?: { income: number; expenses: number }; partial?: boolean; bold?: boolean }[] = [
+                  { name: k === 0 ? THIS[kind] : title(p), s: stats, bold: true },
+                  { name: BEFORE[kind], s: prevs[0]?.s, partial: prevs[0]?.partial },
+                  prevs.every(x => x)
+                    ? {
+                        name: 'ממוצע 3 קודמים',
+                        s: { income: prevs.reduce((a, x) => a + x!.s.income, 0) / 3, expenses: prevs.reduce((a, x) => a + x!.s.expenses, 0) / 3 },
+                        partial: prevs.some(x => x!.partial),
+                      }
+                    : { name: 'ממוצע 3 קודמים' },
+                  ...(kind !== 'year' ? [{ name: 'אותה תקופה אשתקד', s: yearAgo?.s, partial: yearAgo?.partial }] : []),
+                ];
+                const max = Math.max(1, ...rows.flatMap(r => (r.s ? [r.s.income, r.s.expenses] : [])));
+                return (
+                  <div class="dash-cmp">
+                    {rows.map(r => (
+                      <CompareRow key={r.name} {...r} max={max} />
+                    ))}
+                    <div class="money-key small">
+                      <span class="inc">● הכנסות</span>
+                      <span class="exp">● הוצאות</span>
+                    </div>
+                  </div>
+                );
               })()}
-            </div>}
           </Section>
         </div>
 
@@ -340,8 +353,16 @@ export function Dashboard(props: { data: AppData }) {
             t.sliding = true;
             slideTo(e.touches[0].clientY);
           }}
-          onTouchEnd={() => (railTouch.current = null)}
+          onTouchEnd={() => {
+            railTouch.current = null;
+            setBubble(null);
+          }}
         >
+          {bubble && (
+            <span class="rail-bubble" style={{ top: `${bubble.y}px` }} key={bubble.label}>
+              {bubble.label}
+            </span>
+          )}
           {SECTIONS.map(s => (
             <button key={s.id} class={onSection === s.id ? 'on' : ''} aria-label={s.label} onClick={() => jump(s.id)}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -390,28 +411,40 @@ function glideTo(el: HTMLElement) {
 function Section(s: { id: string; title: string; sub: string; children: ComponentChildren }) {
   return (
     <section id={`dash-${s.id}`} class="dash-section">
-      <h2>{s.title}</h2>
-      <p class="muted small dash-sub">{s.sub}</p>
-      {s.children}
+      <div class="sec-label">
+        <span>{s.title}</span>
+      </div>
+      <div class="card dash-card">
+        <p class="muted small dash-sub">{s.sub}</p>
+        {s.children}
+      </div>
     </section>
   );
 }
 
-function CompareRow(props: { name: string; s?: { income: number; expenses: number }; bold?: boolean; partial?: boolean }) {
+/** One line of the comparisons: its name, and two bars (in, out) against the biggest; a tap shows the amounts. */
+function CompareRow(props: { name: string; s?: { income: number; expenses: number }; bold?: boolean; partial?: boolean; max: number }) {
+  const [open, setOpen] = useState(false);
+  const round = (n: number) => formatMoney(Math.round(n / 100) * 100);
   return (
-    <div class={`dash-cmp-row ${props.bold ? 'bold' : ''}`}>
-      <span>
+    <button class={`dash-cmp-row ${props.bold ? 'bold' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} disabled={!props.s}>
+      <span class="dash-cmp-name">
         {props.name}
         {props.partial && <span class="muted small"> (חלקי)</span>}
       </span>
       {props.s ? (
-        <>
-          <span>{formatMoney(Math.round(props.s.income / 100) * 100)}</span>
-          <span>{formatMoney(Math.round(props.s.expenses / 100) * 100)}</span>
-        </>
+        <span class="dash-cmp-bars">
+          <span class="dash-cmp-bar inc-bar" style={{ width: `${(props.s.income / props.max) * 100}%` }} />
+          <span class="dash-cmp-bar exp-bar" style={{ width: `${(props.s.expenses / props.max) * 100}%` }} />
+          {open && (
+            <span class="dash-cmp-amounts small">
+              <span class="inc">{round(props.s.income)}</span> · <span class="exp">{round(props.s.expenses)}</span>
+            </span>
+          )}
+        </span>
       ) : (
-        <span class="muted small compare-none">אין עדיין נתונים</span>
+        <span class="muted small">אין עדיין נתונים</span>
       )}
-    </div>
+    </button>
   );
 }
