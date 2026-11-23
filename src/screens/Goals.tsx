@@ -1,5 +1,8 @@
 import { useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
+import { Icon } from '../components/Icon';
+import { periodKey, periodStart } from '../data/dashboard';
+import { totalEstimated } from '../data/funds';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { summarize } from '../data/balance';
 import { addDays, dayLabel, todayStr } from '../data/dates';
@@ -39,85 +42,133 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
   const active = goals.filter(g => !g.account.archived);
   const total = active.reduce((a, g) => a + g.balance, 0);
   const reservedTotal = active.filter(g => g.account.goalPlace === 'inside').reduce((a, g) => a + g.balance, 0);
+  // Moved into the goals this financial month (less what was taken back out, not to pay for them)
+  const monthKey = periodKey(today, data.monthStartDay);
+  const from = periodStart(monthKey, data.monthStartDay);
+  const goalIds = new Set(goals.map(x => x.account.id));
+  const movedThisMonth = data.transactions
+    .filter(t => t.type === 'transfer' && t.date >= from && t.date <= today && goalIds.has(t.accountId ?? '') !== goalIds.has(t.toAccountId ?? ''))
+    .reduce((s, t) => (goalIds.has(t.toAccountId ?? '') ? s + t.amount : t.coverFor ? s : s - t.amount), 0);
+  const longTotal = totalEstimated(data.funds, data.transactions, today);
 
   return (
     <>
       <header class="top">
         <h1>הקופות שלי</h1>
       </header>
+      {/* each side with its own total (never one sum: long-term savings aren't mixed with the liquid money) */}
       <Segmented
         value={part}
         onChange={pick}
         options={[
-          ['goals', 'יעדים'],
-          ['long', 'לטווח ארוך'],
+          ['goals', `יעדים · ${formatMoney(total)}`],
+          ['long', `לטווח ארוך · ${formatMoney(longTotal)}`],
         ]}
       />
       {part === 'long' ? (
         <FundsScreen embedded db={props.db} data={data} onBack={() => pick('goals')} onChange={props.onChange} />
       ) : (
-      <>
-
-      {active.length === 0 ? (
-        <div class="card locked">
-          <h2>עוד אין יעדים</h2>
-          <p class="muted">לכל יעד קופה משלו. מעבירים אליה כסף, ואפשר להחזיר.</p>
-          <button onClick={props.onNew}>יעד ראשון</button>
-        </div>
-      ) : (
         <>
-          <div class="card hero">
-            <div class="muted small">נחסך ביעדים</div>
-            <div class="big-number sav">
-              <AnimatedMoney value={total} />
+          {active.length === 0 ? (
+            <div class="card locked">
+              <h2>עוד אין יעדים</h2>
+              <p class="muted">לכל יעד קופה משלו. מעבירים אליה כסף, ואפשר להחזיר.</p>
+              <button onClick={props.onNew}>יעד ראשון</button>
             </div>
-            <div class="muted small">
-              {reservedTotal > 0 && reservedTotal < total
-                ? `מתוכם ${formatMoney(reservedTotal)} בתוך הכסף הנזיל (רק מסומן), והשאר בצד`
-                : reservedTotal > 0
-                  ? 'הכל בתוך הכסף הנזיל, רק מסומן כשמור'
-                  : 'בצד, ולא נספר בכסף הנזיל'}
-            </div>
-          </div>
-          {active.map(({ account: g, balance }) => {
-            const plan = goalPlan(g, balance, data.transactions, today);
-            return (
-              <button key={g.id} class="card goal-card" onClick={() => props.onOpen(g)}>
-                <div class="line">
-                  <span class="goal-name">{g.name}</span>
-                  <span class="sav">
-                    <AnimatedMoney value={balance} />
-                    {g.goalTarget ? <span class="muted small"> מתוך {formatMoney(g.goalTarget)}</span> : null}
-                  </span>
+          ) : (
+            <>
+              <div class="card hero sav-hero">
+                <div class="muted small">נחסך ביעדים</div>
+                <div class="big-number sav">
+                  <AnimatedMoney value={total} />
                 </div>
-                {plan.progress !== undefined && (
-                  <div class={`bar goal-bar ${plan.reached ? 'done' : ''}`}>
-                    <span style={{ width: `${Math.min(1, plan.progress) * 100}%` }} />
+                {movedThisMonth !== 0 && (
+                  <div class={`small ${movedThisMonth > 0 ? 'inc' : 'exp'}`}>
+                    {formatMoney(movedThisMonth, { sign: true })} {movedThisMonth > 0 ? 'הועברו החודש' : 'נלקחו החודש'}
                   </div>
                 )}
                 <div class="muted small">
-                  {plan.reached
-                    ? '🎉 היעד הושג'
-                    : [
-                        placeText(g, data),
-                        g.goalDate && `עד ${shortDate(g.goalDate)}`,
-                        plan.perMonth && `צריך ${formatMoney(plan.perMonth)} בחודש`,
-                        plan.perMonth && plan.thisMonth > 0 && (plan.leftThisMonth ? `החודש הועבר ${formatMoney(plan.thisMonth)}` : 'החודש ✓'),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
+                  {reservedTotal > 0 && reservedTotal < total
+                    ? `${formatMoney(reservedTotal)} בתוך הכסף הנזיל · ${formatMoney(total - reservedTotal)} בצד`
+                    : reservedTotal > 0
+                      ? 'הכל בתוך הכסף הנזיל, רק מסומן כשמור'
+                      : 'בצד, ולא נספר בכסף הנזיל'}
                 </div>
+              </div>
+              {active.map(({ account: goal, balance }) => {
+                const plan = goalPlan(goal, balance, data.transactions, today);
+                const tags: { text: string; tone?: 'ok' | 'due' }[] = plan.reached
+                  ? []
+                  : [
+                      goal.goalDate ? { text: `עד ${shortDate(goal.goalDate)}` } : undefined,
+                      plan.perMonth ? { text: `${formatMoney(plan.perMonth)} בחודש` } : undefined,
+                      plan.perMonth && plan.thisMonth > 0 && !plan.leftThisMonth ? { text: 'החודש', tone: 'ok' as const } : undefined,
+                      plan.perMonth && plan.leftThisMonth ? { text: `נשאר להעביר ${formatMoney(plan.leftThisMonth)}`, tone: 'due' as const } : undefined,
+                      { text: placeText(goal, data) },
+                    ].filter((x): x is { text: string; tone?: 'ok' | 'due' } => !!x && !!x.text);
+                return (
+                  <button key={goal.id} class={`card goal-card ${plan.reached ? 'reached' : ''}`} onClick={() => props.onOpen(goal)}>
+                    <div class="goal-top">
+                      <GoalRing progress={plan.progress} reached={plan.reached} />
+                      <div class="goal-text">
+                        <div class="goal-name">{goal.name}</div>
+                        <div class="muted small">
+                          {plan.reached ? (
+                            <span class="sav">
+                              הושג · <AnimatedMoney value={balance} />
+                            </span>
+                          ) : (
+                            <>
+                              <span class="sav goal-amount">
+                                <AnimatedMoney value={balance} />
+                              </span>
+                              {goal.goalTarget ? <> מתוך {formatMoney(goal.goalTarget)}</> : ' · בלי סכום יעד'}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {tags.length > 0 && (
+                      <div class="goal-tags">
+                        {tags.map(t => (
+                          <span key={t.text} class={`goal-tag ${t.tone ?? ''}`}>
+                            {t.tone === 'ok' && <Icon name="check" size={13} />}
+                            {t.text}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              <button class="add-card" onClick={props.onNew}>
+                <Icon name="plus" size={16} /> יעד חדש
               </button>
-            );
-          })}
-          <button class="secondary" onClick={props.onNew}>
-            + יעד חדש
-          </button>
+            </>
+          )}
         </>
       )}
-      </>
-      )}
     </>
+  );
+}
+
+/** How full a goal is, as a ring that fills in: the share in the middle, ∞ with no target, a check once reached. */
+function GoalRing(props: { progress?: number; reached?: boolean }) {
+  const r = 22;
+  const c = 2 * Math.PI * r;
+  const share = props.reached ? 1 : Math.min(1, Math.max(0, props.progress ?? 0));
+  return (
+    <span class={`goal-ring ${props.reached ? 'done' : ''}`}>
+      <svg viewBox="0 0 52 52" width="52" height="52" aria-hidden="true">
+        <circle cx="26" cy="26" r={r} class="goal-ring-track" />
+        {props.progress !== undefined || props.reached ? (
+          <circle cx="26" cy="26" r={r} class="goal-ring-fill" style={{ '--len': `${share * c}px`, '--full': `${c}px` }} />
+        ) : null}
+      </svg>
+      <span class="goal-ring-label">
+        {props.reached ? <Icon name="check" size={18} /> : props.progress === undefined ? '∞' : `${Math.round(share * 100)}%`}
+      </span>
+    </span>
   );
 }
 
@@ -246,7 +297,7 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
         </div>
         <div class="small">
           {plan.reached
-            ? `🎉 היעד הושג${nums.surplus > 0 ? ` · יש ${formatMoney(nums.surplus)} מעבר` : ''}`
+            ? `היעד הושג${nums.surplus > 0 ? ` · יש ${formatMoney(nums.surplus)} מעבר` : ''}`
             : plan.perMonth
               ? `כדי להגיע ${goal.goalDate ? `עד ${shortDate(goal.goalDate)}` : 'בזמן'}: ${formatMoney(plan.perMonth)} בחודש${plan.monthsLeft ? ` (${plan.monthsLeft} חודשים)` : ''}`
               : ''}

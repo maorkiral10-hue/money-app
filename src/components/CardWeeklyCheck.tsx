@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { Icon } from './Icon';
 import { cardStatements, edgeCharges } from '../data/balance';
 import { cardSide, openCardGaps, unconfirmedOnCard, upcomingCharge } from '../data/cardCheck';
 import { dayLabel, todayStr } from '../data/dates';
@@ -251,7 +252,9 @@ export function CardWeeklyCheck(props: {
                     (props.onLeaveOpen ?? props.onBack)();
                   }}
                 >
-                  <span class="nf-icon">📅</span>
+                  <span class="nf-icon">
+                    <Icon name="calendar" size={20} />
+                  </span>
                   <span>
                     <strong>להשאיר פתוח עד יום החיוב</strong>
                     <span class="small block">

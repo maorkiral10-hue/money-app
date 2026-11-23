@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { Icon } from './components/Icon';
 import { UpdateBanner } from './components/UpdateBanner';
 import { AddSheet } from './components/AddSheet';
 import { Presence } from './components/Presence';
@@ -163,7 +164,7 @@ export function App() {
       if (settled.length) {
         loaded = await loadAll(d);
         const s = settled[0];
-        setToast({ text: s.closed ? `🎉 הפער ב${s.account.name} נסגר! הכל מתאים` : `נרשם "לא מזוהה" של ${formatMoney(Math.abs(s.amount))} ב${s.account.name} (נגמרו ימי החיפוש)` });
+        setToast({ text: s.closed ? `הפער ב${s.account.name} נסגר! הכל מתאים` : `נרשם "לא מזוהה" של ${formatMoney(Math.abs(s.amount))} ב${s.account.name} (נגמרו ימי החיפוש)` });
       }
     }
     // Monthly goal deposits a real standing order makes: recorded on their day (stopping once the goal is reached)
@@ -360,7 +361,7 @@ export function App() {
             const a = after.find(g => g.account.id === b.account.id && g.check.date === b.check.date);
             // Made up in full: it closed while saving
             if (!a && loaded.balanceChecks.some(c => c.accountId === b.account.id && c.date === b.check.date && c.result === 'closed')) {
-              setToast({ text: `🎉 הפער ב${b.account.name} נסגר! הכל מתאים` });
+              setToast({ text: `הפער ב${b.account.name} נסגר! הכל מתאים` });
             }
             if (a && Math.abs(a.left) < Math.abs(b.left)) {
               setGapDrop({ accountId: a.account.id, from: Math.abs(b.left) });
@@ -563,7 +564,10 @@ export function App() {
       {toast && (
         // key: a new message restarts the bubble's appear-and-fade
         <div key={toast.text + (toast.undoId ?? '')} class="toast-bubble" role="status">
-          <span>{toast.text.startsWith('🎉') ? '' : '✓ '}{toast.text}</span>
+          <span class="toast-text">
+            <Icon name={toast.text.includes('נסגר') ? 'sparkle' : 'check'} size={16} />
+            {toast.text}
+          </span>
           {toast.undoId && (
             <button
               class="link"

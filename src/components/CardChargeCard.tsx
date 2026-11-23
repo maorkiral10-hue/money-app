@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { Icon } from './Icon';
 import type { Statement } from '../data/balance';
 import { chargeWindow, edgeItems, movedTo, saveCardCheck } from '../data/cardCheck';
 import { addDays, dayLabel, todayStr } from '../data/dates';
@@ -135,7 +136,7 @@ export function CardChargeCard(props: {
             </p>
             {props.openGap && (
               <p class="small rest-note">
-                ⚠ בבדיקה מ{dayLabel(props.openGap.date, today)} נשאר פער פתוח של {formatMoney(Math.abs(props.openGap.left))}.
+                <Icon name="alert" size={15} /> בבדיקה מ{dayLabel(props.openGap.date, today)} נשאר פער פתוח של {formatMoney(Math.abs(props.openGap.left))}.
               </p>
             )}
             {differs ? (

@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { AnimatedMoney } from '../components/AnimatedMoney';
+import { Icon } from '../components/Icon';
 import { Chips, MoneyInput } from '../components/inputs';
 import { dayLabel, todayStr } from '../data/dates';
 import { putRecords } from '../data/db';
@@ -9,6 +10,8 @@ import { savingsCategoryIds } from '../data/budget';
 import type { AppData } from '../data/store';
 import type { Transaction } from '../data/types';
 
+/** The letter on a fund's mark: the word that tells the kinds apart (two of them start with ק). */
+const KIND_MARK: Partial<Record<FundKind, string>> = { pension: 'פ', hishtalmut: 'ה', gemel: 'ג', gemelInvest: 'ש' };
 const kindName = (k: FundKind) => FUND_KINDS.find(([id]) => id === k)?.[1] ?? '';
 const fullDate = (d: string) => d.split('-').reverse().map(Number).join('.');
 
@@ -50,7 +53,7 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
       </p>
 
       {funds.length > 0 && (
-        <div class="card fund-total">
+        <div class="card hero sav-hero fund-total">
           <div class="muted small">סך הכל{total !== totalSaved(funds) ? ' (משוער)' : ''}</div>
           <div class="big-number sav">
             <AnimatedMoney value={total} />
@@ -64,26 +67,28 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
 
       {showHistory && <History db={props.db} funds={funds} onSave={save} />}
 
+      {funds.length > 0 && <div class="card fund-list">
       {funds.map(f => {
         const last = latest(f);
         const since = depositsSince(f, data.transactions, today);
         const open = openId === f.id;
         return (
-          <div key={f.id} class="card fund">
+          <div key={f.id} class="fund">
             <button class="fund-head" onClick={() => setOpenId(open ? null : f.id)} aria-expanded={open}>
-              <div class="line">
-                <span>
-                  <strong>{f.name}</strong>
+              <span class="fund-mark" aria-hidden="true">
+                {KIND_MARK[f.kind] ?? f.name.trim().slice(0, 1)}
+              </span>
+              <span class="fund-text">
+                <span class="fund-name">
+                  {f.name}
                   {kindName(f.kind) !== f.name && <span class="muted small"> · {kindName(f.kind)}</span>}
                 </span>
-                <span>
-                  <span class="sav">{last ? <AnimatedMoney value={last.balance + since} /> : '—'}</span>
-                  <span class={`chevron small-chevron ${open ? 'open' : ''}`}> ‹</span>
+                <span class="muted small block">
+                  {since > 0 ? <>{formatMoney(since, { sign: true })} מאז הדוח</> : last ? `מהדוח · ${Number(last.date.slice(8))}.${Number(last.date.slice(5, 7))}` : 'עוד אין יתרה'}
                 </span>
-              </div>
-              <div class="muted small">
-                {since > 0 ? `משוער: ${formatMoney(last!.balance)} מהדוח (${dayLabel(last!.date, today)}) + ${formatMoney(since)} שהופקדו מאז` : last && `מהדוח, ${dayLabel(last.date, today)}`}
-              </div>
+              </span>
+              <span class="sav fund-amount">{last ? <AnimatedMoney value={last.balance + since} /> : '—'}</span>
+              <span class={`chevron small-chevron ${open ? 'open' : ''}`}>‹</span>
             </button>
             {open && (
               <div class="fund-stats">
@@ -135,7 +140,7 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
                   props.onChange();
                 }}
               />
-            ) : (
+            ) : open && (
               <div class="fund-buttons">
                 <button class="secondary small-btn" onClick={() => setUpdating(f.id)}>
                   עדכון יתרה מהדוח
@@ -148,6 +153,7 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
           </div>
         );
       })}
+      </div>}
 
       {adding ? (
         <AddFund
@@ -159,8 +165,8 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
           }}
         />
       ) : (
-        <button class="secondary" onClick={() => setAdding(true)}>
-          + קופה
+        <button class="add-card" onClick={() => setAdding(true)}>
+          <Icon name="plus" size={16} /> קופה
         </button>
       )}
     </>

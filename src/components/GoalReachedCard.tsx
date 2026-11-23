@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { Icon } from './Icon';
 import { formatMoney } from '../data/money';
 import type { Account } from '../data/types';
 import { Chips } from './inputs';
@@ -24,7 +25,9 @@ export function GoalReachedCard(props: {
     <div class="event-popup" role="dialog" aria-modal="true">
       <div class="event-popup-backdrop" />
       <div class="card pending event-popup-card open-gap">
-        <h2>🎉 הגעת ליעד "{props.goal.name}"!</h2>
+        <h2>
+          <Icon name="sparkle" size={20} class="sav" /> הגעת ליעד "{props.goal.name}"!
+        </h2>
         <p>
           יש ביעד {formatMoney(props.surplus)} מעבר ל־{formatMoney(props.goal.goalTarget ?? 0)}. מה לעשות איתם?
         </p>

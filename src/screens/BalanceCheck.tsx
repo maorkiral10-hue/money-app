@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { Icon } from '../components/Icon';
 import { periodKey, periodStart } from '../data/dashboard';
 import { summarize } from '../data/balance';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
@@ -161,7 +162,7 @@ export function BalanceCheck(props: {
   return (
     <>
       <header class="top">
-        <h1>{recheckOf ? `בדיקה חוזרת · ${recheckOf.account.name}` : props.recheck && card ? `בדיקה חוזרת · ${card.name}` : 'בדיקה מול הבנק'}</h1>
+        <h1>{recheckOf ? `בדיקה חוזרת · ${recheckOf.account.name}` : props.recheck && card ? `בדיקה חוזרת · ${card.name}` : 'תמונת מצב'}</h1>
         <button class="link" onClick={props.onBack}>
           חזרה
         </button>
@@ -715,7 +716,9 @@ function GapLook(props: {
           {props.open && (
             <div class="not-found-options">
               <button class="nf-option wait" onClick={props.onLeaveOpen}>
-                <span class="nf-icon">⏳</span>
+                <span class="nf-icon">
+                  <Icon name="clock" size={20} />
+                </span>
                 <span>
                   <strong>להשאיר פתוח ולחפש עוד</strong>
                   <span class="small block">

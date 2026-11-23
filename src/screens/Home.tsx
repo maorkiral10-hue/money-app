@@ -66,7 +66,7 @@ export function Home(props: {
         // Stays until every source that's due has been checked
         <button class="check-due" onClick={() => props.onOpenCheck(checkState.due[0].id)}>
           <span class="check-due-title">
-            {checkState.checked === 0 && data.checkMode === 'together' ? 'הגיע הזמן לבדוק מול הבנק' : `נדרשת בדיקה: ${checkState.due.map(a => a.name).join(', ')}`}
+            {checkState.checked === 0 && data.checkMode === 'together' ? 'הגיע הזמן לתמונת מצב' : `נדרשת בדיקה: ${checkState.due.map(a => a.name).join(', ')}`}
           </span>
           <span class="small">
             {data.checkMode === 'together' && checkState.checked > 0
