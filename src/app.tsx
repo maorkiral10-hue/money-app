@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { UpdateBanner } from './components/UpdateBanner';
 import { AddSheet } from './components/AddSheet';
+import { Presence } from './components/Presence';
 import { addDays, todayStr } from './data/dates';
 import { deleteRecord, getMeta, openDb, putRecords, setMeta } from './data/db';
 import { listSafetyCopies, type SafetyCopy } from './data/safety';
@@ -603,6 +604,7 @@ export function App() {
               />
             );
           })()}
+          <Presence>
           {goalPay &&
             (() => {
               const g = summarize(data, today).goals.find(x => x.account.id === goalPay.goalId);
@@ -641,6 +643,8 @@ export function App() {
                 />
               );
             })()}
+          </Presence>
+          <Presence>
           {earlyAsk && (
             <EarlyRecordCard
               key={`${earlyAsk.rec.id}|${earlyAsk.occurrence}`}
@@ -655,6 +659,8 @@ export function App() {
               }}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && askVariable && !menuOpen && !earlyAsk && (
             <VariableDueCard
               key={`${askVariable.rec.id}|${askVariable.occurrence}`}
@@ -670,6 +676,8 @@ export function App() {
               onDone={afterChange}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && !askVariable && askGap && !menuOpen && !earlyAsk && (
             <OpenGapCard
               key={`${askGap.account.id}|${askGap.check.date}`}
@@ -696,6 +704,8 @@ export function App() {
               }}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && !askVariable && !askGap && !askCard && remindCard && !menuOpen && !earlyAsk && (
             <CardGapReminder
               key={`${remindCard.card.id}|${remindCard.chargeDate}`}
@@ -707,6 +717,8 @@ export function App() {
               onDone={() => reminded(remindCard)}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && !askVariable && !askGap && askCard && !menuOpen && !earlyAsk && (
             <CardChargeCard
               key={`${askCard.card.id}|${askCard.charge.date}|${askCard.actual ?? ''}`}
@@ -727,6 +739,8 @@ export function App() {
               onAdd={(type, date) => go({ name: 'entry', from: tab, preset: { type, date, method: askCard.card.name } })}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && !askVariable && !askGap && !askCard && !remindCard && askDeposit && !menuOpen && !earlyAsk && (
             <GoalDepositCard
               key={`${askDeposit.goal.id}|${askDeposit.date}`}
@@ -750,6 +764,8 @@ export function App() {
               onLater={() => setLaterIds(ids => [...ids, `deposit|${askDeposit.goal.id}|${askDeposit.date}`])}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && !askVariable && !askGap && !askCard && !remindCard && !askDeposit && reached && !menuOpen && !earlyAsk && (
             <GoalReachedCard
               key={reached.goal.id}
@@ -779,6 +795,8 @@ export function App() {
               onLater={() => setLaterIds(ids => [...ids, `reached|${reached.goal.id}`])}
             />
           )}
+          </Presence>
+          <Presence>
           {!goalPay && !askVariable && !askGap && !askCard && !remindCard && !askDeposit && !reached && askEvent && !menuOpen && (
             <EventDoneCard
               key={`${askEvent.id}|${askEvent.date}`}
@@ -810,6 +828,7 @@ export function App() {
               }
             />
           )}
+          </Presence>
           <SideMenu
             open={menuOpen}
             section={menuSection}

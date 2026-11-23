@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MoneyLine, PairBars, Parts, PeriodBars, type Slice } from '../components/dashCharts';
 import { Segmented } from '../components/inputs';
 import { statsTransactions } from '../data/budget';
@@ -218,21 +219,21 @@ export function Dashboard(props: { data: AppData }) {
           <div class="stat-row">
             <div class="stat">
               <div class="muted small">הכנסות</div>
-              <div class="stat-value inc">{formatMoney(stats.income)}</div>
+              <div class="stat-value inc"><AnimatedMoney value={stats.income} /></div>
             </div>
             <div class="stat">
               <div class="muted small">הוצאות</div>
-              <div class="stat-value">{formatMoney(stats.expenses)}</div>
+              <div class="stat-value"><AnimatedMoney value={stats.expenses} /></div>
             </div>
             <div class="stat sav-panel">
               <div class="muted small">חיסכון</div>
-              <div class="stat-value sav">{formatMoney(stats.saved)}</div>
+              <div class="stat-value sav"><AnimatedMoney value={stats.saved} /></div>
             </div>
           </div>
 
           <Section id="where" title="לאן הכסף הולך" sub="ההוצאות והחיסכון של התקופה, לפי סוג. לחיצה על חלק מראה את הסכום.">
             {slices.length ? (
-              <Parts id="where" slices={slices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} centerNote={stats.saved ? `+ ${formatMoney(stats.saved)} לחיסכון` : undefined} />
+              <Parts key={`where-${view}-${k}`} id="where" slices={slices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} centerNote={stats.saved ? `+ ${formatMoney(stats.saved)} לחיסכון` : undefined} />
             ) : (
               <p class="muted small">לא נרשמו הוצאות בתקופה הזו</p>
             )}
@@ -265,7 +266,7 @@ export function Dashboard(props: { data: AppData }) {
 
           <Section id="methods" title="אמצעי תשלום" sub="כמה יצא מכל כרטיס, מהבנק ובמזומן, לפי יום הקנייה">
             {methodSlices.length ? (
-              <Parts id="methods" slices={methodSlices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} />
+              <Parts key={`methods-${view}-${k}`} id="methods" slices={methodSlices} centerLabel='סה"כ הוצאות' centerValue={formatMoney(stats.expenses)} />
             ) : (
               <p class="muted small">לא נרשמו הוצאות בתקופה הזו</p>
             )}
@@ -277,7 +278,7 @@ export function Dashboard(props: { data: AppData }) {
 
           <Section id="income" title="הכנסות" sub={`מאיפה הגיע הכסף בתקופה שבחרת. למטה: ${barsSub}`}>
             {incomeSlices.length ? (
-              <Parts id="income" slices={incomeSlices} centerLabel='סה"כ הכנסות' centerValue={formatMoney(stats.income)} />
+              <Parts key={`income-${view}-${k}`} id="income" slices={incomeSlices} centerLabel='סה"כ הכנסות' centerValue={formatMoney(stats.income)} />
             ) : (
               <p class="muted small">לא נרשמו הכנסות בתקופה הזו</p>
             )}

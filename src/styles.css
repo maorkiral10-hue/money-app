@@ -140,9 +140,11 @@ section { margin: 16px 0; }
 body { padding-bottom: calc(env(safe-area-inset-bottom) + 100px); }
 
 /* entry form */
-.segmented { display: flex; background: var(--soft); border-radius: 10px; padding: 3px; margin: 12px 0; }
-.segmented button { margin: 0; background: none; color: var(--text); font-weight: 500; padding: 8px; }
-.segmented button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 700; }
+.segmented { position: relative; display: flex; background: var(--soft); border-radius: 10px; padding: 3px; margin: 12px 0; }
+.segmented button { position: relative; z-index: 1; flex: 1; margin: 0; background: none; color: var(--muted); font-weight: 500; padding: 8px; transition: color .3s; }
+.segmented button.on { color: var(--text); font-weight: 700; }
+.segmented button:active:not(:disabled) { transform: none; }
+.segmented-ind { position: absolute; top: 3px; bottom: 3px; right: 3px; border-radius: 8px; background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); transition: transform .45s cubic-bezier(.34, 1.4, .64, 1), background-color .4s; }
 .money-input { display: flex; align-items: center; gap: 6px; }
 .money-input input { flex: 1; font: inherit; font-size: 16px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; min-width: 0; }
 .money-input.big input { font-size: 38px; font-weight: 700; text-align: center; border: 0; background: none; padding: 6px 0; }
@@ -332,8 +334,8 @@ button.continue { margin-top: 22px; }
 .tab-panel.neighbour { position: absolute; left: 0; right: 0; }
 .floating-settings { position: fixed; top: calc(env(safe-area-inset-top) + 12px); right: 16px; z-index: 11; }
 .swipe-tabs .top h1 { margin-inline-start: 52px; }
-.tab-panel.enter-from-left { animation: from-left .22s ease-out; }
-.tab-panel.enter-from-right { animation: from-right .22s ease-out; }
+.tab-panel.enter-from-left { animation: from-left .38s cubic-bezier(.16, 1, .3, 1); }
+.tab-panel.enter-from-right { animation: from-right .38s cubic-bezier(.16, 1, .3, 1); }
 @keyframes from-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @keyframes from-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
 .tabbar { position: fixed; }
@@ -391,7 +393,7 @@ button.continue { margin-top: 22px; }
 
 /* "החודש": income and spending tiles open their breakdown underneath */
 button.stat { margin: 0; width: auto; font: inherit; color: var(--text); font-weight: 400; cursor: pointer; }
-.stat.tappable { transition: background .15s, border-color .15s; }
+.stat.tappable { transition: background-color .3s, border-color .3s, transform .2s cubic-bezier(.34, 1.56, .64, 1); }
 :root { --inc-soft: #eaf6ef; --exp-soft: #fcecea; }
 :root:not([data-mode="light"]) { --inc-soft: color-mix(in srgb, var(--pos) 14%, var(--card)); --exp-soft: color-mix(in srgb, var(--neg) 14%, var(--card)); }
 .stat.on.inc-bg { background: var(--inc-soft); border-color: var(--pos); }
@@ -505,8 +507,8 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
 .cal-mini-day.today { outline: 1.5px solid var(--accent); }
 .cal-hint { margin: 8px 0 0; }
 .cal-area > div { will-change: transform; }
-.cal-area .enter-from-left { animation: from-left .22s ease-out; }
-.cal-area .enter-from-right { animation: from-right .22s ease-out; }
+.cal-area .enter-from-left { animation: from-left .34s cubic-bezier(.16, 1, .3, 1); }
+.cal-area .enter-from-right { animation: from-right .34s cubic-bezier(.16, 1, .3, 1); }
 .cal-area .zoom-enter-in { animation: zoom-enter-in .32s cubic-bezier(.2,.8,.2,1); }
 .cal-area .zoom-enter-out { animation: zoom-enter-out .32s cubic-bezier(.2,.8,.2,1); }
 @keyframes zoom-enter-in { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: scale(1); } }
@@ -546,8 +548,8 @@ button.cal-add { margin: 0 0 10px; }
 
 /* the question after a calendar event: a pop-up over the main screens */
 .event-popup { position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.event-popup-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.35); animation: fade-in .2s ease-out; }
-.event-popup-card { position: relative; width: 100%; max-width: 420px; margin: 0; box-shadow: 0 10px 30px rgba(0,0,0,.2); animation: pop-in .25s cubic-bezier(.2,.8,.2,1); }
+.event-popup-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.45); animation: fade-in .3s ease-out; }
+.event-popup-card { position: relative; width: 100%; max-width: 420px; margin: 0; box-shadow: 0 10px 30px rgba(0,0,0,.2); animation: pop-in .45s cubic-bezier(.16, 1, .3, 1); }
 .event-popup-later { display: block; margin: 10px auto 0; color: var(--muted); }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop-in { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
@@ -945,3 +947,71 @@ button:active:not(:disabled), .tile:active { transform: scale(.96); }
   .odo-col, .add-sheet-panel, .add-sheet-backdrop { transition: none; }
   button:active:not(:disabled), .tile:active, .tab-add:active { transform: none; }
 }
+
+/*
+ * Motion, part 2: nothing changes in one jump. What's picked springs a little; what opens unfolds; what
+ * changes crossfades. Short (a fifth to half a second), so it's felt more than watched.
+ */
+/* the "+" sheet: rises, and follows the finger when pulled down */
+.add-sheet-panel { transition: transform .5s cubic-bezier(.32, .72, 0, 1); touch-action: none; }
+.add-sheet-panel.dragging { transition: none; }
+
+/* the pie: the picked slice comes away, the rest step back */
+.pie-slice { transition: transform .45s cubic-bezier(.34, 1.56, .64, 1), opacity .3s; }
+.pie-slice.away { opacity: .45; }
+.pie-center { animation: swap-in .35s var(--ease-out) backwards; }
+.legend-row { transition: background-color .25s, font-weight .25s; border-radius: 8px; }
+.legend-row.on { background: var(--soft); }
+@keyframes swap-in { from { opacity: 0; transform: translateY(5px); } }
+.chart-readout { animation: swap-in .3s var(--ease-out) backwards; }
+.chart path, .chart rect { transition: fill .3s, opacity .3s; }
+
+/* picked: chips, calendar days, the day switch, tabs on the strip */
+.chip { transition: background-color .3s, color .3s, border-color .3s, transform .2s var(--ease-spring); }
+.chip.on { animation: pick .35s var(--ease-spring); }
+.cal-day { transition: background-color .3s, color .3s; }
+.cal-day.on { animation: pick .35s var(--ease-spring); }
+.day-switch button { transition: background-color .3s, color .3s, box-shadow .3s; }
+.dash-rail button { transition: background-color .3s, color .3s, border-color .3s, transform .2s var(--ease-spring); }
+.swatch-pick .dot::after { animation: ring-in .35s var(--ease-spring); }
+@keyframes pick { 40% { transform: scale(1.08); } }
+@keyframes ring-in { from { transform: scale(.7); opacity: 0; } }
+.tick.on { animation: pick .35s var(--ease-spring); }
+
+/* what opens unfolds: breakdowns, details, the money sources, "other" in the pie */
+.breakdown-panel, .bar-detail, .section-body, .upcoming, .pie-inside, .not-found-options, .side-sub.open > div {
+  animation: unfold .4s var(--ease-out) backwards; transform-origin: 50% 0;
+}
+@keyframes unfold { from { opacity: 0; transform: translateY(-8px) scaleY(.96); } }
+
+/* the form: each step comes in, its title changes softly */
+.wizard > * { animation: step-in .4s var(--ease-out) backwards; }
+.wizard > .step-title { animation: swap-in .35s var(--ease-out) backwards; }
+@keyframes step-in { from { opacity: 0; transform: translateX(-18px); } }
+
+/* the side menu: its lines arrive one after another */
+.side-menu.open .side-menu-item, .side-menu.open .side-menu-foot { animation: step-in .45s var(--ease-out) backwards; }
+.side-menu.open .side-menu-item:nth-of-type(2) { animation-delay: .05s; }
+.side-menu.open .side-menu-item:nth-of-type(3) { animation-delay: .1s; }
+.side-menu.open .side-menu-item:nth-of-type(4) { animation-delay: .15s; }
+.side-menu.open .side-menu-foot { animation-delay: .2s; }
+
+/* progress fills from empty */
+.goal-bar span, .bar span { animation: grow-x .9s var(--ease-out) backwards; transform-origin: 100% 50%; }
+
+/* the theme changes softly everywhere */
+.card, .stat, .tile, .tabbar, .segmented, .day-switch { transition: background-color .4s, border-color .4s, color .4s, transform .2s var(--ease-spring); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pie-slice, .legend-row, .chip, .cal-day, .day-switch button, .dash-rail button, .segmented-ind, .add-sheet-panel { transition: none; }
+  .pie-center, .chart-readout, .chip.on, .cal-day.on, .tick.on, .swatch-pick .dot::after, .breakdown-panel, .bar-detail, .section-body, .upcoming, .pie-inside,
+  .not-found-options, .side-sub.open > div, .wizard > *, .side-menu.open .side-menu-item, .side-menu.open .side-menu-foot, .goal-bar span, .bar span { animation: none; }
+}
+
+/* a pop-up leaving: fades and sinks, can't be tapped (components/Presence.tsx) */
+.presence-leaving { pointer-events: none; }
+.presence-leaving .event-popup-backdrop { animation: fade-out .26s ease-in forwards; }
+.presence-leaving .event-popup-card { animation: pop-out .26s cubic-bezier(.4, 0, 1, 1) forwards; }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes pop-out { to { opacity: 0; transform: translateY(14px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .presence-leaving .event-popup-backdrop, .presence-leaving .event-popup-card { animation: none; opacity: 0; } }

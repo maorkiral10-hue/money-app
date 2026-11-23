@@ -42,7 +42,7 @@ export function Pie(props: { slices: Slice[]; centerLabel: string; centerValue: 
               const a1 = angle + span;
               angle = a1;
               const mid = (a0 + a1) / 2;
-              const push = s.key === sel ? 7 : 0;
+              const push = s.key === sel ? 9 : 0;
               const dx = push * Math.cos(mid);
               const dy = push * Math.sin(mid);
               const large = span > Math.PI ? 1 : 0;
@@ -57,7 +57,7 @@ export function Pie(props: { slices: Slice[]; centerLabel: string; centerValue: 
               const [lx, ly] = point(mid, (R + r) / 2);
               const share = s.amount / total;
               return (
-                <g key={s.key} transform={`translate(${dx} ${dy})`} onClick={() => toggle(s.key)} class="pie-slice">
+                <g key={s.key} style={{ transform: `translate(${dx}px, ${dy}px)` }} onClick={() => toggle(s.key)} class={`pie-slice ${sel === null ? '' : sel === s.key ? 'picked' : 'away'}`}>
                   <path d={d} fill={s.color} fill-rule="evenodd" />
                   {share >= 0.05 && (
                     <text x={lx} y={ly} class="pie-pct" text-anchor="middle" dominant-baseline="central">
@@ -68,7 +68,7 @@ export function Pie(props: { slices: Slice[]; centerLabel: string; centerValue: 
               );
             })}
         </svg>
-        <div class="pie-center">
+        <div class="pie-center" key={sel ?? 'all'}>
           <span class="muted small">{chosen ? chosen.label : props.centerLabel}</span>
           <strong>{chosen ? formatMoney(chosen.amount) : props.centerValue}</strong>
           <span class="muted small">{chosen ? pct(chosen.amount, total) : props.centerNote}</span>
@@ -120,7 +120,7 @@ export function PeriodBars(props: { bars: { label: string; amount: number; missi
   const s = props.bars[shown];
   return (
     <div>
-      <p class="chart-readout">
+      <p class="chart-readout" key={shown}>
         {s &&
           (s.missing ? (
             <>

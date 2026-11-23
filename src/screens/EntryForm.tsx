@@ -350,7 +350,9 @@ export function EntryForm(props: {
           <span key={s} class={s === step ? 'on' : ''} />
         ))}
       </div>
-      <h1 class="step-title">{titles[step]}</h1>
+      <h1 class="step-title" key={step}>
+        {titles[step]}
+      </h1>
 
       {step === 'type' && future && !tx && (
         <p class="muted small future-note">{dayLabel(date, today)} עוד לא הגיע: אפשר לרשום אירוע עם צפי, ומה שיצא או נכנס בפועל נרשם כשהוא קורה.</p>

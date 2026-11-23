@@ -34,8 +34,12 @@ export function Chips<T extends { id: string; name: string }>(props: { items: T[
 }
 
 export function Segmented<V extends string>(props: { options: [V, string][]; value: V; onChange: (v: V) => void }) {
+  const n = props.options.length;
+  const at = Math.max(0, props.options.findIndex(([v]) => v === props.value));
   return (
     <div class="segmented">
+      {/* slides to the chosen option (right to left, like the options) */}
+      <span class="segmented-ind" style={{ width: `calc((100% - 6px) / ${n})`, transform: `translateX(${-at * 100}%)` }} />
       {props.options.map(([v, label]) => (
         <button type="button" key={v} class={props.value === v ? 'on' : ''} onClick={() => props.onChange(v)}>
           {label}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { dayLabel } from '../data/dates';
 import type { TxType } from '../data/types';
 
@@ -15,21 +15,48 @@ export function AddSheet(props: {
   onPick: (type: TxType) => void;
   onEvent: () => void;
 }) {
-  // Kept on screen while it slides away
+  // On screen while it slides in and away; "up" turns on a frame after it's drawn closed, so it rises
   const [shown, setShown] = useState(props.open);
+  const [up, setUp] = useState(false);
+  const [pull, setPull] = useState(0);
+  const start = useRef<number | null>(null);
   useEffect(() => {
-    if (props.open) setShown(true);
-    else {
-      const t = setTimeout(() => setShown(false), 380);
-      return () => clearTimeout(t);
+    if (props.open) {
+      setShown(true);
+      setPull(0);
+      const f = requestAnimationFrame(() => requestAnimationFrame(() => setUp(true)));
+      const t = setTimeout(() => setUp(true), 60);
+      return () => {
+        cancelAnimationFrame(f);
+        clearTimeout(t);
+      };
     }
+    setUp(false);
+    const t = setTimeout(() => setShown(false), 420);
+    return () => clearTimeout(t);
   }, [props.open]);
   if (!shown) return null;
   const future = props.date > props.today;
   return (
-    <div class={`add-sheet ${props.open ? 'open' : ''}`}>
+    <div class={`add-sheet ${up ? 'open' : ''}`}>
       <div class="add-sheet-backdrop" onClick={props.onClose} />
-      <div class="add-sheet-panel" role="dialog" aria-label="מה רושמים?">
+      <div
+        class={`add-sheet-panel ${start.current !== null ? 'dragging' : ''}`}
+        role="dialog"
+        aria-label="מה רושמים?"
+        style={pull && up ? { transform: `translateY(${pull}px)` } : undefined}
+        // Pulled down far enough, it closes; otherwise it springs back
+        onTouchStart={e => (start.current = e.touches[0].clientY)}
+        onTouchMove={e => {
+          if (start.current === null) return;
+          setPull(Math.max(0, e.touches[0].clientY - start.current));
+        }}
+        onTouchEnd={() => {
+          start.current = null;
+          if (pull > 90) props.onClose();
+          else setPull(0);
+        }}
+      >
         <span class="add-sheet-grip" />
         <h2>מה רושמים?</h2>
         {props.date !== props.today && <p class="muted small">ל{dayLabel(props.date, props.today)}</p>}
