@@ -1113,3 +1113,50 @@ button:active:not(:disabled), .tile:active { transform: scale(.96); }
 .dash-cmp-amounts { animation: swap-in .3s var(--ease-out) backwards; }
 @media (prefers-reduced-motion: reduce) { .rail-bubble, .dash-cmp-bar, .dash-cmp-amounts { animation: none; } }
 .dash-section { scroll-margin-top: calc(env(safe-area-inset-top) + 86px); }
+
+/* תמונת מצב (v119): steps, a centred typing card, the gap with a ring, lines by day, a timeline, a list of preferences */
+.check-steps { display: flex; justify-content: space-between; position: relative; margin: 4px 6px 12px; }
+.check-steps::before { content: ''; position: absolute; top: 16px; right: 18px; left: 18px; height: 2px; background: var(--line); }
+.check-step-dot { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; width: auto; margin: 0; padding: 0; background: none; color: var(--muted); font-weight: 400; font-size: 12px; }
+.check-step-mark { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; background: var(--card); border: 2px solid var(--line); transition: background-color .3s, border-color .3s, color .3s; }
+.check-step-dot.done .check-step-mark { background: color-mix(in srgb, var(--pos) 18%, var(--card)); border-color: color-mix(in srgb, var(--pos) 55%, var(--line)); color: var(--pos); }
+.check-step-dot.now { color: var(--text); font-weight: 700; }
+.check-step-dot.now .check-step-mark { border-color: var(--accent); color: var(--accent); animation: pick .4s var(--ease-spring); }
+.check-step-name { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.check-input-card { text-align: center; padding: 16px; }
+.check-input-name { font-size: 26px; margin: 2px 0 4px; }
+.check-input-card .field > span { text-align: center; }
+.check-amount input { border: 2px solid var(--accent) !important; border-radius: 14px !important; background: var(--bg) !important; padding: 8px !important; }
+.gap-hero { background: color-mix(in srgb, var(--sav) 9%, var(--card)); border-color: color-mix(in srgb, var(--sav) 30%, var(--line)); }
+.gap-hero.closed { background: color-mix(in srgb, var(--pos) 9%, var(--card)); border-color: color-mix(in srgb, var(--pos) 30%, var(--line)); }
+.gap-hero-top { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.gap-hero-text { flex: 1; }
+.gap-hero-amount { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.found-ring { position: relative; flex: none; width: 64px; height: 64px; }
+.found-ring svg { transform: rotate(-90deg); }
+.found-ring-track { fill: none; stroke: color-mix(in srgb, var(--sav) 20%, var(--card)); stroke-width: 6; }
+.found-ring-fill { fill: none; stroke: var(--sav); stroke-width: 6; stroke-linecap: round; stroke-dasharray: var(--len) var(--full); transition: stroke-dasharray .8s var(--ease-out); }
+.found-ring.closed .found-ring-fill { stroke: var(--pos); }
+.found-ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: var(--sav); }
+.found-ring.closed .found-ring-label { color: var(--pos); }
+.info-note { display: flex; gap: 8px; align-items: flex-start; margin: -4px 0 12px; padding: 8px 12px; border-radius: 12px; background: var(--soft); color: var(--muted); }
+.info-note .icon { margin-top: 2px; }
+.compare-head { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.compare-day { color: var(--muted); padding: 8px 0 2px; }
+.compare-label { display: inline-flex; align-items: center; min-width: 0; }
+.tick.round { border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.tick.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.compare-add { margin: 10px 0 4px; }
+.unknown-line { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: start; color: var(--text); font-weight: 600; }
+button.card.unknown-line { margin: 0 0 14px; padding: 14px; }
+.unknown-line.inner { margin: 0 0 4px; padding: 0; background: none; border-radius: 0; }
+.pref-list { padding: 2px 14px; }
+.pref-row { border-top: 1px solid var(--line); }
+.pref-row:first-child { border-top: 0; }
+.pref-head { display: flex; justify-content: space-between; align-items: center; width: 100%; margin: 0; padding: 13px 0; background: none; color: var(--text); font-weight: 500; border-radius: 0; text-align: start; }
+.pref-body { padding: 0 0 12px; animation: unfold .4s var(--ease-out) backwards; }
+.check-timeline .tx { position: relative; padding-inline-start: 18px; }
+.check-timeline .tx::before { content: ''; position: absolute; right: 0; top: 50%; width: 9px; height: 9px; margin-top: -4px; border-radius: 50%; background: var(--neg); }
+.check-timeline .tx.tl-exact::before { background: var(--pos); }
+.check-timeline .tx.tl-minor::before { background: var(--sav); }
+.check-timeline .tx::after { content: ''; position: absolute; right: 4px; top: 0; bottom: 0; width: 1.5px; background: var(--line); z-index: -1; }

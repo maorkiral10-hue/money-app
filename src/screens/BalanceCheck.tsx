@@ -1,5 +1,7 @@
+import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { Icon } from '../components/Icon';
+import { CategoryMark } from '../components/CategoryMark';
 import { periodKey, periodStart } from '../data/dashboard';
 import { summarize } from '../data/balance';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
@@ -213,13 +215,27 @@ export function BalanceCheck(props: {
 
       {tab === 'check' && !success && (
       <>
-      {!props.recheck && (
-        <p class="muted small check-step">
-          {dueAtStart.includes(accountId ?? '')
-            ? `בדיקה ${dueAtStart.indexOf(accountId ?? '') + 1} מתוך ${dueAtStart.length} · ${dueAtStart.map(id => name(id)).join(', ')}`
-            : 'בדיקה נוספת'}
-        </p>
-      )}
+      {!props.recheck &&
+        (dueAtStart.includes(accountId ?? '') ? (
+          (() => {
+            const stillDue = new Set(checkStatus(data, today).due.map(a => a.id));
+            return (
+              <div class="check-steps" role="list">
+                {dueAtStart.map(id => {
+                  const done = !stillDue.has(id) && id !== accountId;
+                  return (
+                    <button key={id} role="listitem" class={`check-step-dot ${done ? 'done' : ''} ${id === accountId ? 'now' : ''}`} onClick={() => pick(id)}>
+                      <span class="check-step-mark">{done ? <Icon name="check" size={15} /> : name(id).trim().slice(0, 1)}</span>
+                      <span class="check-step-name">{name(id)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()
+        ) : (
+          <p class="muted small check-step">בדיקה נוספת</p>
+        ))}
       {!props.recheck && extra && (
         <div class="card">
           <h2>איזה אפיק לבדוק?</h2>
@@ -253,14 +269,24 @@ export function BalanceCheck(props: {
         </p>
       )}
       {!card && (
-      <div class="card">
+      <div class="card check-input-card">
         {recheckOf && <h2>{account?.name}: יתרה מעודכנת (לא חובה)</h2>}
-        {!recheckOf && account && <h2>{account.name}</h2>}
+        {!recheckOf && account && (
+          <>
+            {dueAtStart.includes(accountId ?? '') && (
+              <div class="muted small">
+                {dueAtStart.indexOf(accountId ?? '') + 1} מתוך {dueAtStart.length}
+              </div>
+            )}
+            <h2 class="check-input-name">{account.name}</h2>
+          </>
+        )}
         <label class="field">
           <span>{account?.kind === 'bank' ? 'כמה רואים באפליקציה של הבנק?' : account?.kind === 'cash' ? 'כמה מזומן יש באמת?' : 'כמה יש שם עכשיו באמת?'}</span>
           {account?.kind === 'cash' && cashSetAside(data, account.id) && <span class="small muted block">{cashSetAside(data, account.id)}</span>}
           <MoneyInput
             key={accountId}
+            class="big check-amount"
             value={real}
             onChange={v => {
               setReal(v);
@@ -368,8 +394,12 @@ export function BalanceCheck(props: {
 
       {tab === 'history' && (
       <>
-      <div class="card">
-        <h2>מה נחשב תקין</h2>
+      <UnknownMoney data={data} />
+      <div class="sec-label">
+        <span>העדפות</span>
+      </div>
+      <div class="card pref-list">
+      <PrefRow title="מה נחשב תקין" value={`עד ${formatMoney(data.checkTolerance)}`}>
         <p class="muted small">פער עד הסכום הזה נחשב מינורי (✓✗). 0 = כל פער הוא חריגה.</p>
         <label class="field">
           <span>שינוי מינורי: עד</span>
@@ -381,10 +411,9 @@ export function BalanceCheck(props: {
             }}
           />
         </label>
-      </div>
+      </PrefRow>
 
-      <div class="card">
-        <h2>פער שנשאר פתוח</h2>
+      <PrefRow title="ימים לחפש פער" value={`${data.gapGraceDays} ${data.gapGraceDays === 1 ? 'יום' : 'ימים'}`}>
         <p class="muted small">כמה ימים לחפש פער לפני שהוא נרשם כ"לא מזוהה". באשראי מחכים ליום החיוב.</p>
         <Segmented
           value={String(data.gapGraceDays)}
@@ -394,10 +423,9 @@ export function BalanceCheck(props: {
           }}
           options={[1, 2, 3, 5, 7].map(n => [String(n), n === DEFAULT_GRACE_DAYS ? `${n} (רגיל)` : String(n)] as [string, string])}
         />
-      </div>
+      </PrefRow>
 
-      <div class="card">
-        <h2>תזכורת</h2>
+      <PrefRow title="תדירות ותזכורת" value={data.checkMode === 'together' ? (EVERY_OPTIONS.find(([v]) => v === data.checkEvery)?.[1] ?? '') : 'לכל אחד בנפרד'}>
         <p class="muted small">כשמגיע הזמן, מופיעה בראש מסך הבית בועה שנשארת עד שבודקים.</p>
         <Segmented
           value={data.checkMode}
@@ -443,15 +471,17 @@ export function BalanceCheck(props: {
             ))}
           </div>
         )}
+      </PrefRow>
       </div>
 
-      <UnknownMoney data={data} />
-
       {data.balanceChecks.length > 0 && (
-        <div class="card list">
-          <h2 class="list-title">בדיקות קודמות</h2>
+        <>
+        <div class="sec-label">
+          <span>בדיקות אחרונות</span>
+        </div>
+        <div class="card list check-timeline">
           {data.balanceChecks.slice(0, 8).map((c, i) => (
-            <div key={i} class="tx">
+            <div key={i} class={`tx tl-${c.result === 'closed' ? 'exact' : checkMark(c.real, c.app, data.checkTolerance)}`}>
               <div>
                 <div>{name(c.accountId)}</div>
                 <div class="muted small">
@@ -470,10 +500,7 @@ export function BalanceCheck(props: {
                     .join(' · ')}
                 </div>
               </div>
-              {(() => {
-                const m = c.result === 'closed' ? 'exact' : checkMark(c.real, c.app, data.checkTolerance);
-                return <div class={m === 'exact' ? 'inc' : m === 'minor' ? 'minor' : 'exp'}>{m === 'exact' ? '✓' : m === 'minor' ? '✓✗' : '✗'}</div>;
-              })()}
+
               {canDeleteCheck(c) && (
               <button
                 class="link small check-delete"
@@ -491,6 +518,7 @@ export function BalanceCheck(props: {
             </div>
           ))}
         </div>
+        </>
       )}
       </>
       )}
@@ -503,16 +531,47 @@ export function BalanceCheck(props: {
  * Money that got away unexplained, per source, over all the history: the balance (pluses and minuses
  * offset) and the total either way, the number to bring down. Tapping a source shows each gap.
  */
+/** A preference as a line in a list: its name and its value; a tap opens what changes it. */
+function PrefRow(props: { title: string; value: string; children: preact.ComponentChildren }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div class="pref-row">
+      <button class="pref-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span>{props.title}</span>
+        <span class="muted">
+          {props.value} <span class={`chevron ${open ? 'open' : ''}`}>‹</span>
+        </span>
+      </button>
+      {open && <div class="pref-body">{props.children}</div>}
+    </div>
+  );
+}
+
 function UnknownMoney(props: { data: AppData }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [shown, setShown] = useState(false);
   const u = unknownBySource(props.data);
   if (!u.sources.length) return null;
   const today = todayStr();
   const signed = (n: number) => (n === 0 ? formatMoney(0) : formatMoney(n, { sign: true }));
+  if (!shown)
+    return (
+      <button class="card unknown-line" onClick={() => setShown(true)} aria-expanded="false">
+        <span>כסף לא מזוהה, מכל הבדיקות</span>
+        <span class="sav">
+          {formatMoney(u.total)} <span class="chevron">‹</span>
+        </span>
+      </button>
+    );
   return (
     <div class="card unknown-money">
-      <h2 class="list-title">כסף לא מזוהה</h2>
-      <p class="muted small">מכל הבדיקות. מה שנזכרת בו אחר כך יורד מכאן.</p>
+      <button class="unknown-line inner" onClick={() => setShown(false)} aria-expanded="true">
+        <span>כסף לא מזוהה, מכל הבדיקות</span>
+        <span class="sav">
+          {formatMoney(u.total)} <span class="chevron open">‹</span>
+        </span>
+      </button>
+      <p class="muted small">מה שנזכרת בו אחר כך יורד מכאן.</p>
       <div class="unknown-totals">
         <div>
           <div class="muted small">סך הכסף הלא מזוהה</div>
@@ -612,6 +671,21 @@ function CheckSuccess(props: {
  * time), adding what's missing, and once the gap is gone, "הפער נסגר!". If it can't be found, a folded line
  * opens the two ways out: leave it open a few days, or record it as unexplained now.
  */
+/** How much of a gap was found, as a ring that fills; a check once it closed. */
+function FoundRing(props: { share: number; closed: boolean }) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  return (
+    <span class={`found-ring ${props.closed ? 'closed' : ''}`}>
+      <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+        <circle cx="32" cy="32" r={r} class="found-ring-track" />
+        {(props.share > 0 || props.closed) && <circle cx="32" cy="32" r={r} class="found-ring-fill" style={{ '--len': `${props.share * c}px`, '--full': `${c}px` }} />}
+      </svg>
+      <span class="found-ring-label">{props.closed ? <Icon name="check" size={20} /> : `${Math.round(props.share * 100)}%`}</span>
+    </span>
+  );
+}
+
 function GapLook(props: {
   db: IDBDatabase;
   data: AppData;
@@ -660,13 +734,20 @@ function GapLook(props: {
   const done = lines.filter(l => isVerified(ticks, source.id, l)).length;
   return (
     <>
-      <div class={`card check-result ${closed ? 'inc-panel' : 'exp-panel'}`}>
-        <div class="line gap-title">
-          <strong>{source.name}</strong>
-          <strong class={closed ? 'inc' : 'exp'}>{closed ? 'הכל מתאים' : gap < 0 ? `חסרים ${formatMoney(-gap)}` : `עודף של ${formatMoney(gap)}`}</strong>
-        </div>
-        <div class="bar gap-bar">
-          <span style={{ width: `${share * 100}%` }} />
+      <div class={`card check-result gap-hero ${closed ? 'closed' : ''}`}>
+        <div class="gap-hero-top">
+          <div class="gap-hero-text">
+            <div class="muted small">{source.name}</div>
+            {closed ? (
+              <div class="gap-hero-amount inc">הכל מתאים</div>
+            ) : (
+              <>
+                <div class="gap-hero-amount sav">{formatMoney(Math.abs(gap))}</div>
+                <div class="muted small">{gap < 0 ? 'חסרים באפליקציה' : 'עודף באפליקציה'}</div>
+              </>
+            )}
+          </div>
+          <FoundRing share={share} closed={closed} />
         </div>
         <div class="muted small">
           נמצאו {formatMoney(found)} מתוך {formatMoney(Math.abs(props.initial))}
@@ -677,33 +758,46 @@ function GapLook(props: {
             הפער נסגר!
           </button>
         )}
-        {props.restNote && !closed && <p class="small rest-note">{props.restNote}</p>}
       </div>
+      {props.restNote && !closed && (
+        <p class="info-note small">
+          <Icon name="info" size={16} />
+          <span>{props.restNote}</span>
+        </p>
+      )}
 
       <div class="card compare-list">
-        <p class="muted small">
-          {source.kind === 'cash' ? 'כל מה שנרשם במזומן' : `השווה מול האפליקציה של ${source.name}`} מאז {from === data.startDate ? 'תחילת המעקב' : from.split('-').reverse().slice(0, 2).map(Number).join('.')} · ✓ = כבר נבדק ({done} מתוך {lines.length})
-        </p>
+        <div class="compare-head small">
+          <span>השווה שורה שורה, מאז {from === data.startDate ? 'תחילת המעקב' : from.split('-').reverse().slice(0, 2).map(Number).join('.')}</span>
+          <span class="muted">
+            {done} מתוך {lines.length} סומנו
+          </span>
+        </div>
         {lines.length === 0 && <p class="muted small">אין פעולות בתקופה הזו.</p>}
-        {lines.map(l => {
+        {lines.map((l, i) => {
           const on = isVerified(ticks, source.id, l);
           return (
+            <Fragment key={l.key}>
+            {/* a day's lines together, under the day */}
+            {(i === 0 || lines[i - 1].date !== l.date) && <div class="compare-day small">{shortDay(l.date)}</div>}
             <div key={l.key} class={`compare-line ${on ? 'done' : ''}`}>
-              <button class={`tick ${on ? 'on' : ''}`} aria-label={on ? 'בטל סימון' : 'סמן כנבדק'} onClick={() => tick(l)}>
-                {on ? '✓' : ''}
+              <button class={`tick round ${on ? 'on' : ''}`} aria-label={on ? 'בטל סימון' : 'סמן כנבדק'} onClick={() => tick(l)}>
+                {on && <Icon name="check" size={14} />}
               </button>
               <button class="compare-body" onClick={() => l.tx && props.onEdit(l.tx)} disabled={!l.tx}>
-                <span>
-                  {shortDay(l.date)} · {l.label}
+                <span class="compare-label">
+                  <CategoryMark small id={l.tx?.categoryId} categories={data.categories} transfer={!l.tx || l.tx.type === 'transfer'} />
+                  {l.label}
                   {l.note && <span class="muted"> · {l.note}</span>}
                 </span>
                 <span class={l.amount > 0 ? 'inc' : ''}>{formatMoney(l.amount, { sign: l.amount > 0 })}</span>
               </button>
             </div>
+            </Fragment>
           );
         })}
-        <button class="secondary" onClick={props.onAdd}>
-          + להוסיף פעולה שחסרה
+        <button class="add-card compare-add" onClick={props.onAdd}>
+          <Icon name="plus" size={16} /> להוסיף פעולה שחסרה
         </button>
       </div>
 
