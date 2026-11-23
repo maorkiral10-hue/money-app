@@ -201,10 +201,10 @@ export function PairBars(props: { bars: { label: string; income: number; expense
     <div>
       <div class="chart-legend">
         <span>
-          <span class="swatch" style={{ background: 'var(--series-3)' }} /> הכנסות
+          <span class="swatch" style={{ background: 'var(--pos)' }} /> הכנסות
         </span>
         <span>
-          <span class="swatch" style={{ background: 'var(--series-1)' }} /> הוצאות
+          <span class="swatch" style={{ background: 'var(--neg)' }} /> הוצאות
         </span>
         <span>
           <span class="swatch" style={{ background: 'var(--sav)' }} /> חיסכון
@@ -236,9 +236,9 @@ export function PairBars(props: { bars: { label: string; income: number; expense
               ) : (
                 <>
                   {/* income on the right, spending on the left, as the text reads */}
-                  {bar(cx + 1, b.income * scale, 'var(--series-3)')}
+                  {bar(cx + 1, b.income * scale, 'var(--pos)')}
                   {/* what left the liquid money: spending, and savings on top of it in its own color */}
-                  {bar(cx - bw - 1, b.expenses * scale, 'var(--series-1)', zero, !b.saved)}
+                  {bar(cx - bw - 1, b.expenses * scale, 'var(--neg)', zero, !b.saved)}
                   {bar(cx - bw - 1, b.saved * scale, 'var(--sav)', zero - b.expenses * scale)}
                 </>
               )}

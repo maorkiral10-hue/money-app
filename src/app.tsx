@@ -39,6 +39,7 @@ import { Dashboard } from './screens/Dashboard';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { RecurringForm, RecurringList } from './screens/Recurring';
+import { ThemeScreen } from './screens/ThemeScreen';
 import { MenuButton, SideMenu, SettingsPageScreen, type MenuSection, type MenuTarget, type SettingsPage } from './screens/Settings';
 
 type Place = 'home' | 'budget' | 'goals' | 'dashboard' | 'settings' | 'calendar';
@@ -68,7 +69,8 @@ type Screen =
   | { name: 'eventForm'; event?: CalendarEvent; date?: string; time?: string; from?: Place }
   | { name: 'balanceCheck'; from: Place; accountId?: string; recheck?: boolean }
   | { name: 'data'; from: Place }
-  | { name: 'funds' };
+  | { name: 'funds' }
+  | { name: 'theme' };
 
 /**
  * Quick entry link: …/money-app/?add=expense&amount=45&cat=סופר&pay=מקס fills in what it gives.
@@ -290,6 +292,8 @@ export function App() {
             ? { name: 'data', from: 'settings' }
             : target === 'funds'
               ? { name: 'funds' }
+            : target === 'theme'
+              ? { name: 'theme' }
             : target === 'calendar'
               ? { name: 'calendar' }
               : { name: 'settingsPage', page: target },
@@ -383,6 +387,8 @@ export function App() {
     content = <SettingsPageScreen db={db} data={data} page={screen.page} onChange={afterChange} onBack={() => go({ name: 'settings' })} />;
   } else if (screen.name === 'funds') {
     content = <FundsScreen db={db} data={data} onBack={() => go({ name: 'home' })} onChange={afterChange} />;
+  } else if (screen.name === 'theme') {
+    content = <ThemeScreen onBack={() => go({ name: 'settings' })} />;
   } else if (screen.name === 'data') {
     const from = screen.from;
     content = (

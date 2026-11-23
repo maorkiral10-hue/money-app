@@ -1,19 +1,45 @@
+/*
+ * Fonts (both under the SIL Open Font License, kept inside the app so they work offline). One family, "App":
+ * Karantina for the letters, drawn larger than its size (it's narrow), and Space Grotesk for digits and the
+ * signs around them, so every amount reads the same wherever it is. The digits' faces come last, so they win; each weight range is the same for both fonts (a browser picks one range).
+ */
+@font-face { font-family: App; src: url('./fonts/karantina-latin-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 160%; }
+@font-face { font-family: App; src: url('./fonts/karantina-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 160%; }
+@font-face { font-family: App; src: url('./fonts/karantina-hebrew-400-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; size-adjust: 160%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: App; src: url('./fonts/karantina-hebrew-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; size-adjust: 160%; unicode-range: U+0590-05FF, U+200C-2010, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: App; src: url('./fonts/space-grotesk-latin-500-normal.woff2') format('woff2'); font-weight: 1 549; font-display: swap; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+@font-face { font-family: App; src: url('./fonts/space-grotesk-latin-700-normal.woff2') format('woff2'); font-weight: 550 1000; font-display: swap; unicode-range: U+0025, U+002B-002E, U+0030-003A, U+2212; }
+
+/*
+ * The theme (chosen in "ערכת נושא", src/theme.ts): dark or light, and a main color. Dark with mint is the
+ * default. The main color paints buttons, links, the chosen day and charts' titles; money in is always green,
+ * money out red and savings orange, whatever the theme.
+ */
 :root {
-  --bg: #f6f7f5; --card: #ffffff; --text: #1c2321; --muted: #5f6b67;
-  --accent: #0f766e; --on-accent: #ffffff; --soft: #e6f2f0; --line: #e3e7e4;
+  --bg: #0a0e1a; --card: #141a2b; --text: #e9edf7; --muted: #8890ae; --line: #232b42;
+  --acc-d: #7df2c3; --acc-l: #0e8f65;
+  --accent: var(--acc-d); --on-accent: #0a0e1a;
+  --soft: color-mix(in srgb, var(--accent) 14%, var(--card));
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111615; --card: #1b2220; --text: #e8eeec; --muted: #9aa8a3;
-    --accent: #2dd4bf; --on-accent: #06201d; --soft: #16302c; --line: #2a3431;
-  }
+:root[data-mode="light"] {
+  --bg: #f3f5fa; --card: #ffffff; --text: #0b1020; --muted: #6b7390; --line: #e2e6f0;
+  --accent: var(--acc-l); --on-accent: #ffffff;
+  --soft: color-mix(in srgb, var(--accent) 11%, var(--card));
+  color-scheme: light;
 }
+:root[data-accent="purple"] { --acc-d: #b9a6ff; --acc-l: #6c4ce0; }
+:root[data-accent="coral"] { --acc-d: #ff9c85; --acc-l: #d9502c; }
+:root[data-accent="sky"] { --acc-d: #7cc8ff; --acc-l: #1f74cc; }
+:root[data-accent="pink"] { --acc-d: #ff8fc7; --acc-l: #c93682; }
+:root[data-accent="gold"] { --acc-d: #ffd166; --acc-l: #a87400; }
 * { box-sizing: border-box; }
 /* Behave like an app: no double-tap or pinch zoom of the whole page (the calendar has its own pinch) */
 html { touch-action: manipulation; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font: 16px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+  font: 16px/1.5 App, -apple-system, "Segoe UI", system-ui, sans-serif;
+  transition: background-color .4s ease, color .4s ease;
   padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);
   -webkit-tap-highlight-color: transparent;
 }
@@ -45,8 +71,8 @@ li { padding: 8px 0; border-top: 1px solid var(--line); }
 li:first-child { border-top: 0; }
 li.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 
-:root { --pos: #15803d; --neg: #b42318; }
-@media (prefers-color-scheme: dark) { :root { --pos: #4ade80; --neg: #f87171; } }
+:root { --pos: #15803d; --neg: #c0262d; }
+:root:not([data-mode="light"]) { --pos: #4ade80; --neg: #f87171; }
 button:disabled { opacity: .45; }
 button.danger { background: none; color: var(--neg); }
 input[type=text], input[type=date], select {
@@ -218,13 +244,11 @@ button.continue { margin-top: 22px; }
   --pos-bar: #2a78d6; --neg-bar: #e34948; --grid: #e1e0d9;
   --series-1-soft: #b5d4f4; --series-3-soft: #9fe1cb; --series-other-strong: #5f5e5a;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
-    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-other: #5f5e5a;
-    --pos-bar: #3987e5; --neg-bar: #e66767; --grid: #2c2c2a;
-    --series-1-soft: #1d3d63; --series-3-soft: #13473a; --series-other-strong: #b4b2a9;
-  }
+:root:not([data-mode="light"]) {
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-other: #5f5e5a;
+  --pos-bar: #3987e5; --neg-bar: #e66767; --grid: #232b42;
+  --series-1-soft: #1d3d63; --series-3-soft: #13473a; --series-other-strong: #b4b2a9;
 }
 .stat-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0; }
 .chart { width: 100%; height: auto; direction: ltr; overflow: visible; }
@@ -250,7 +274,7 @@ button.continue { margin-top: 22px; }
 
 /* income is green, spending is red, everywhere */
 :root { --inc-bar: #22a06b; --exp-bar: #e34948; }
-@media (prefers-color-scheme: dark) { :root { --inc-bar: #2fbf7f; --exp-bar: #e66767; } }
+:root:not([data-mode="light"]) { --inc-bar: #2fbf7f; --exp-bar: #e66767; }
 .inc { color: var(--pos); }
 .exp { color: var(--neg); }
 .amount.expense { color: var(--neg); }
@@ -336,7 +360,7 @@ button.continue { margin-top: 22px; }
 button.stat { margin: 0; width: auto; font: inherit; color: var(--text); font-weight: 400; cursor: pointer; }
 .stat.tappable { transition: background .15s, border-color .15s; }
 :root { --inc-soft: #eaf6ef; --exp-soft: #fcecea; }
-@media (prefers-color-scheme: dark) { :root { --inc-soft: #15291f; --exp-soft: #2f1a19; } }
+:root:not([data-mode="light"]) { --inc-soft: color-mix(in srgb, var(--pos) 14%, var(--card)); --exp-soft: color-mix(in srgb, var(--neg) 14%, var(--card)); }
 .stat.on.inc-bg { background: var(--inc-soft); border-color: var(--pos); }
 .stat.on.exp-bg { background: var(--exp-soft); border-color: var(--neg); }
 .breakdown-panel { margin-top: 8px; animation: panel-in .18s ease-out; }
@@ -364,7 +388,7 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
 .check-due {
   display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; margin: 0 0 14px;
   padding: 14px; border-radius: 16px; background: var(--accent); color: var(--on-accent);
-  box-shadow: 0 6px 18px rgba(15,118,110,.3); animation: nudge 2.4s ease-in-out infinite;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent); animation: nudge 2.4s ease-in-out infinite;
 }
 .check-due-title { font-size: 17px; font-weight: 700; }
 @keyframes nudge {
@@ -427,13 +451,13 @@ button.quiet.due { color: var(--accent); font-weight: 600; }
 }
 .cal-grid.week .cal-day { min-height: 76px; font-size: 18px; }
 .cal-day.today span:first-child { color: var(--accent); font-weight: 800; }
-.cal-day.on { background: var(--accent); color: #fff; }
-.cal-day.on.today span:first-child { color: #fff; }
+.cal-day.on { background: var(--accent); color: var(--on-accent); }
+.cal-day.on.today span:first-child { color: var(--on-accent); }
 .cal-dots { display: flex; gap: 3px; min-height: 6px; }
 .cal-dot { display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: var(--muted); vertical-align: middle; }
 .cal-dot.inc { background: var(--inc-bar); }
 .cal-dot.exp { background: var(--exp-bar); }
-.cal-day.on .cal-dot { box-shadow: 0 0 0 1.5px #fff; }
+.cal-day.on .cal-dot { box-shadow: 0 0 0 1.5px var(--on-accent); }
 .tx .cal-dot { width: 8px; height: 8px; border-radius: 4px; }
 .cal-year { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
 .cal-mini { display: block; width: 100%; margin: 0; padding: 6px; background: none; color: var(--text); border-radius: 10px; font-weight: 400; }
@@ -498,13 +522,13 @@ button.cal-add { margin: 0 0 10px; }
 
 .cal-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
 .cal-weekday { margin: 0; padding: 10px 0; border-radius: 10px; background: var(--soft); color: var(--text); font-weight: 600; }
-.cal-weekday.on { background: var(--accent); color: #fff; }
+.cal-weekday.on { background: var(--accent); color: var(--on-accent); }
 
 /* calendar: money recorded on a day */
 .cal-tx { display: inline-block; width: 10px; height: 4px; border-radius: 2px; background: var(--muted); }
 .cal-tx.inc { background: var(--inc-bar); }
 .cal-tx.exp { background: var(--exp-bar); }
-.cal-day.on .cal-tx { box-shadow: 0 0 0 1.5px #fff; }
+.cal-day.on .cal-tx { box-shadow: 0 0 0 1.5px var(--on-accent); }
 .cal-dots { align-items: center; }
 .cal-day-txs { margin-bottom: 10px; }
 .cal-day-txs .tx { padding: 8px 0; }
@@ -545,16 +569,16 @@ button.cal-title { font-weight: 600; font-size: 16px; color: var(--text); paddin
 
 /* a gap within the user's own limit: minor, not a failed check */
 :root { --minor: #b7791f; }
-@media (prefers-color-scheme: dark) { :root { --minor: #e0a33a; } }
+:root:not([data-mode="light"]) { --minor: #e0a33a; }
 .minor { color: var(--minor); font-weight: 700; }
 .minor-panel { border-color: var(--minor); }
 
 /* Jewish and Israeli days: on the grid and at the top of the day */
 :root { --holiday: #6b46c1; }
-@media (prefers-color-scheme: dark) { :root { --holiday: #b794f4; } }
+:root:not([data-mode="light"]) { --holiday: #b794f4; }
 .cal-day.holiday > span:first-child { color: var(--holiday); font-weight: 700; }
 .cal-day.rest > span:first-child { box-shadow: 0 -2px 0 var(--holiday); border-radius: 1px; }
-.cal-day.on.holiday > span:first-child { color: #fff; }
+.cal-day.on.holiday > span:first-child { color: var(--on-accent); }
 .holiday-lines { margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
 .holiday-line { color: var(--holiday); font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
 .rest-note { color: var(--holiday); }
@@ -593,7 +617,7 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 
 /* "part of an event?": its own step, events as big tiles */
 .event-step .tiles { margin-top: 8px; }
-.tile.event-tile.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tile.event-tile.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .tile.event-tile .small { opacity: .85; }
 
 /* A card's charge checked against what was really charged */
@@ -620,7 +644,7 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 
 /* Savings: neither spending (red) nor income (green) */
 :root { --sav: #c2660a; --sav-soft: #fdf1e3; }
-@media (prefers-color-scheme: dark) { :root { --sav: #f5a14a; --sav-soft: #2e2214; } }
+:root:not([data-mode="light"]) { --sav: #f5a14a; --sav-soft: #2e2214; }
 .sav { color: var(--sav); }
 .stat.on.sav-bg { background: var(--sav-soft); border-color: var(--sav); }
 .sav-panel { background: var(--sav-soft); border-color: var(--sav); }
@@ -756,7 +780,8 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .dash-rail button { width: 28px; height: 28px; margin: 0; padding: 0; border-radius: 14px; background: var(--card); border: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; }
 .dash-rail button.on { background: var(--text); border-color: var(--text); color: var(--bg); }
 .dash-section { margin: 0; padding: 16px 0 10px; border-top: 1px solid var(--line); scroll-margin-top: calc(env(safe-area-inset-top) + 64px); }
-.dash-section h2 { margin: 0; }
+.dash-section h2 { margin: 0; color: var(--accent); }
+:root { --inc-soft-strong: color-mix(in srgb, var(--pos) 35%, var(--card)); --exp-soft-strong: color-mix(in srgb, var(--neg) 35%, var(--card)); }
 .dash-sub { margin: 2px 0 10px; }
 .pie { display: flex; flex-direction: column; align-items: center; }
 .pie-box { position: relative; width: 220px; height: 220px; }
@@ -783,9 +808,9 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .chart .gridline.strong { stroke: var(--muted); stroke-dasharray: 3 3; }
 .liquid-now strong { font-size: 24px; }
 .money-line-box { touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; }
-.money-line-path { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.money-line-area { fill: var(--series-1); opacity: .1; }
-.money-line-dot { fill: var(--series-1); stroke: var(--card); stroke-width: 2; }
+.money-line-path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.money-line-area { fill: var(--accent); opacity: .12; }
+.money-line-dot { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
 .zoom-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
 .zoom-chips .chip { padding: 5px 12px; font-size: 13px; }
 .dash-cmp { font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -798,3 +823,18 @@ button.hours-toggle { display: block; margin: 8px 0 0; }
 .chart .bar-value { font-size: 10px; fill: var(--muted); }
 .chart .bar-value.on { fill: var(--text); font-weight: 700; }
 .period-pick .segmented button { padding: 8px 2px; font-size: 14px; }
+
+/* theme screen */
+.theme-seg { position: relative; display: flex; background: var(--line); border-radius: 14px; padding: 4px; margin: 6px 0 18px; }
+.theme-seg button { flex: 1; margin: 0; padding: 8px; background: none; color: var(--text); font-weight: 400; font-size: 18px; z-index: 1; }
+.theme-seg .theme-seg-ind { position: absolute; top: 4px; bottom: 4px; width: calc(50% - 4px); border-radius: 10px; background: var(--card); right: 4px; transition: right .35s cubic-bezier(.34, 1.56, .64, 1); }
+.theme-seg .theme-seg-ind.light { right: 50%; }
+.swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 0; justify-items: center; margin: 8px 0 18px; }
+.swatch-pick { display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; margin: 0; padding: 0; background: none; color: var(--muted); font-weight: 400; font-size: 16px; }
+.swatch-pick .dot { width: 46px; height: 46px; border-radius: 50%; position: relative; transition: transform .3s cubic-bezier(.34, 1.56, .64, 1); }
+.swatch-pick:active .dot { transform: scale(.9); }
+.swatch-pick.on .dot { transform: scale(1.08); }
+.swatch-pick.on .dot::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--text); }
+.swatch-pick.on { color: var(--text); }
+.money-key { display: flex; gap: 14px; margin-top: 6px; }
+.home-date { display: block; color: var(--muted); font-size: 14px; line-height: 1.1; }

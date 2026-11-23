@@ -14,7 +14,7 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/apple-touch-icon.png'],
-      injectManifest: { globPatterns: ['**/*.{js,css,html,png,webmanifest}'] },
+      injectManifest: { globPatterns: ['**/*.{js,css,html,png,webmanifest,woff2}'] },
       manifest: {
         name: 'הכסף שלי',
         short_name: 'הכסף שלי',
@@ -23,8 +23,8 @@ export default defineConfig({
         start_url: './',
         scope: './',
         display: 'standalone',
-        background_color: '#f6f7f5',
-        theme_color: '#0f766e',
+        background_color: '#0a0e1a',
+        theme_color: '#0a0e1a',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },

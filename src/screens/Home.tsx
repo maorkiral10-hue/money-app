@@ -44,7 +44,11 @@ export function Home(props: {
   return (
     <>
       <header class="top">
-        <h1>הכסף שלי</h1>
+        <h1>
+          {/* Today, above the title: "יום שני, 23 בנובמבר" */}
+          <span class="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+          הכסף שלי
+        </h1>
       </header>
 
       {checkState.due.length > 0 && (

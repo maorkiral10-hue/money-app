@@ -11,7 +11,7 @@ import { deleteSetting, type AppData } from '../data/store';
 import { APP_VERSION } from '../version';
 
 export type SettingsPage = 'accounts' | 'methods' | 'categories' | 'preferences';
-export type MenuTarget = SettingsPage | 'recurring' | 'check' | 'data' | 'calendar' | 'funds';
+export type MenuTarget = SettingsPage | 'recurring' | 'check' | 'data' | 'calendar' | 'funds' | 'theme';
 
 /** Everything about how the money is set up, gathered under one heading of the side menu. */
 const MONEY_SETTINGS: [MenuTarget, string][] = [
@@ -62,6 +62,9 @@ export function SideMenu(props: {
             ))}
           </div>
         </div>
+        <button class="side-menu-item" onClick={() => props.onOpen('theme')}>
+          ערכת נושא
+        </button>
         <button class="side-menu-item" onClick={() => props.onOpen('data')}>
           גיבוי ונתונים
         </button>

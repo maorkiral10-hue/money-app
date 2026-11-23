@@ -272,7 +272,7 @@ export function Dashboard(props: { data: AppData }) {
           </Section>
 
           <Section id="spending" title="הוצאות לאורך זמן" sub={barsSub}>
-            <PeriodBars bars={bars(s => s.expenses)} current={chosen} color="var(--series-1)" soft={all ? 'var(--series-1)' : 'var(--series-1-soft)'} />
+            <PeriodBars bars={bars(s => s.expenses)} current={chosen} color="var(--neg)" soft={all ? 'var(--neg)' : 'var(--exp-soft-strong)'} />
           </Section>
 
           <Section id="income" title="הכנסות" sub={`מאיפה הגיע הכסף בתקופה שבחרת. למטה: ${barsSub}`}>
@@ -281,7 +281,7 @@ export function Dashboard(props: { data: AppData }) {
             ) : (
               <p class="muted small">לא נרשמו הכנסות בתקופה הזו</p>
             )}
-            <PeriodBars bars={bars(s => s.income)} current={chosen} color="var(--series-3)" soft={all ? 'var(--series-3)' : 'var(--series-3-soft)'} />
+            <PeriodBars bars={bars(s => s.income)} current={chosen} color="var(--pos)" soft={all ? 'var(--pos)' : 'var(--inc-soft-strong)'} />
           </Section>
 
           <Section id="versus" title="הכנסות מול הוצאות" sub={`מה נכנס, ומה יצא מהכסף הנזיל: ההוצאות, ומעליהן החיסכון בכתום. ${barsSub}`}>
