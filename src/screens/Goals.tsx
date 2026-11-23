@@ -86,7 +86,7 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
                 <div class="line">
                   <span class="goal-name">{g.name}</span>
                   <span class="sav">
-                    {formatMoney(balance)}
+                    <AnimatedMoney value={balance} />
                     {g.goalTarget ? <span class="muted small"> מתוך {formatMoney(g.goalTarget)}</span> : null}
                   </span>
                 </div>

@@ -25,6 +25,8 @@ export function CardLine(props: {
   /** Left open by the weekly check: how much, and a tap to check again. */
   openGap?: number;
   onOpenGap?: () => void;
+  /** No limit set: a link to set one. */
+  onAddLimit?: () => void;
 }) {
   const { usage, today } = props;
   const [open, setOpen] = useState(false);
@@ -34,34 +36,46 @@ export function CardLine(props: {
   const later = props.statements?.filter(s => next && s.date > next.date) ?? [];
   const canOpen = !!(props.statements && props.data && props.onEdit);
 
+  // What the next charge is now (a refund when more came back than was bought)
+  const charge = usage.nextCharge;
   const head = (
     <>
       <div class="line">
         <span>
           {usage.card.name}
+          {charge && (
+            <span class="muted small">
+              {' '}
+              · {charge.amount < 0 ? 'זיכוי' : 'חיוב'} ב־{Number(charge.date.slice(8))}.{Number(charge.date.slice(5, 7))}
+            </span>
+          )}
           {canOpen && <span class={`chevron small-chevron ${open ? 'open' : ''}`}> ‹</span>}
         </span>
-        <span>{limit ? `פנוי ${formatMoney(usage.available!)}` : `נוצל ${formatMoney(usage.used)}`}</span>
+        <span class="card-used">{formatMoney(usage.used)}</span>
       </div>
       {limit ? (
         <>
-          <div class={`bar ${share >= 0.9 ? 'high' : ''}`}>
+          <div class={`bar ${share >= 0.8 ? 'high' : ''}`}>
             <span style={{ width: `${share * 100}%` }} />
           </div>
           <div class="muted small">
-            נוצל {formatMoney(usage.used)} מתוך {formatMoney(limit)}
-            {usage.nextCharge && ` · ${chargeText(usage.nextCharge, today)}`}
+            נותר {formatMoney(Math.max(0, usage.available ?? 0))} מתוך {formatMoney(limit)}
           </div>
         </>
       ) : (
-        <div class="muted small">
-          {usage.nextCharge ? `${chargeText(usage.nextCharge, today)} · ` : ''}
-          לא הוגדרה מסגרת
-        </div>
+        props.onAddLimit && (
+          <span
+            class="link small add-limit"
+            role="button"
+            onClick={e => {
+              e.stopPropagation();
+              props.onAddLimit!();
+            }}
+          >
+            + הוספת מסגרת
+          </span>
+        )
       )}
-      <div class="muted small last-entry">
-        {usage.lastEntry ? `רכישה אחרונה שנרשמה: ${dayLabel(usage.lastEntry, today)}` : 'עוד לא נרשמו רכישות בכרטיס'}
-      </div>
     </>
   );
 
@@ -76,7 +90,7 @@ export function CardLine(props: {
       )}
       {props.openGap !== undefined && (
         <button class="card-gap-mark" onClick={props.onOpenGap}>
-          ⚠ פער פתוח: {formatMoney(Math.abs(props.openGap))} · לחץ לבדיקה
+          פער פתוח: {formatMoney(Math.abs(props.openGap))} ‹
         </button>
       )}
       {open && props.data && props.onEdit && (

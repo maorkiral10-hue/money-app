@@ -67,6 +67,8 @@ export function SideMenu(props: {
         </button>
         <button class="side-menu-item" onClick={() => props.onOpen('data')}>
           גיבוי ונתונים
+          {/* the backup reminder lives here now (not on the home screen) */}
+          <span class={`side-menu-note ${props.data.lastBackupAt ? '' : 'warn'}`}>{backupNote(props.data.lastBackupAt)}</span>
         </button>
         <p class="muted small side-menu-foot">
           תחילת המעקב: {props.data.startDate.split('-').reverse().join('.')} · גרסה {APP_VERSION}
@@ -74,6 +76,13 @@ export function SideMenu(props: {
       </nav>
     </div>
   );
+}
+
+/** When the last backup was, in words; or that there wasn't one yet. */
+function backupNote(at?: string) {
+  if (!at) return 'עוד לא גיבית';
+  const days = Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000);
+  return `גיבוי אחרון: ${days === 0 ? 'היום' : days === 1 ? 'אתמול' : `לפני ${days} ימים`}`;
 }
 
 /** The three-line button at the top of every main screen, opening the side menu. */

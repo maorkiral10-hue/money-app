@@ -46,6 +46,8 @@ export function MonthSummary(props: {
   onEdit: (tx: Transaction) => void;
   /** A card's gap left open by the weekly check: check it again. */
   onRecheckCard?: (cardId: string) => void;
+  /** A card without a limit: set one. */
+  onAddLimit?: () => void;
   /** The financial month to show, set from outside (the home screen's calendar); then there are no arrows of its own. */
   monthKey?: string;
   /**
@@ -63,7 +65,6 @@ export function MonthSummary(props: {
   const key = props.monthKey ?? ownKey;
   const [open, setOpen] = useState<Open>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
-  const [cardsOpen, setCardsOpen] = useState(() => openCardGaps(data, todayStr()).length > 0);
 
   const index = months.indexOf(key);
   const start = periodStart(key, startDay);
@@ -172,14 +173,11 @@ export function MonthSummary(props: {
     );
   };
 
-  // Credit cards together: how much of all the limits is used
+  // Credit cards: each one's next charge, and all of them together
   const asOf = props.asOf ?? today;
   const cards = useMemo(() => cardUsage(data, asOf, today), [data, asOf, today]);
   const cardGaps = useMemo(() => openCardGaps(data, today), [data, today]);
   const used = cards.reduce((a, c) => a + c.used, 0);
-  const limits = cards.reduce((a, c) => a + (c.card.creditLimit ?? 0), 0);
-  const withLimit = cards.filter(c => c.card.creditLimit);
-  const usedOfLimited = withLimit.reduce((a, c) => a + c.used, 0);
 
   const toggle = (o: Open) => {
     setOpen(open === o ? null : o);
@@ -189,8 +187,11 @@ export function MonthSummary(props: {
   return (
     <>
       {props.monthKey ? (
-        <div class="month-switch single">
+        <div class="sec-label">
           <span>{periodTitle(key, startDay)}</span>
+          <span class="sec-range">
+            {shortDate(start)}–{shortDate(end < today ? end : today)}
+          </span>
         </div>
       ) : (
       <div class="month-switch">
@@ -206,26 +207,23 @@ export function MonthSummary(props: {
 
       <div class={`stat-row ${hasSavings ? '' : 'two'}`}>
         <button class={`stat tappable ${open === 'income' ? 'on inc-bg' : ''}`} onClick={() => toggle('income')} aria-expanded={open === 'income'}>
-          <div class="small inc">הכנסות</div>
+          <div class="small inc">הכנסות <span class={`chevron ${open === 'income' ? 'open' : ''}`}>‹</span></div>
           <div class="stat-value inc">
             <AnimatedMoney value={stats.income} />
           </div>
-          <div class="tap-hint">{open === 'income' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
         </button>
         <button class={`stat tappable ${open === 'expenses' ? 'on exp-bg' : ''}`} onClick={() => toggle('expenses')} aria-expanded={open === 'expenses'}>
-          <div class="small exp">הוצאות</div>
+          <div class="small exp">הוצאות <span class={`chevron ${open === 'expenses' ? 'open' : ''}`}>‹</span></div>
           <div class="stat-value exp">
             <AnimatedMoney value={-stats.expenses} />
           </div>
-          <div class="tap-hint">{open === 'expenses' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
         </button>
         {hasSavings && (
           <button class={`stat tappable ${open === 'savings' ? 'on sav-bg' : ''}`} onClick={() => toggle('savings')} aria-expanded={open === 'savings'}>
-            <div class="small sav">חיסכון</div>
+            <div class="small sav">חיסכון <span class={`chevron ${open === 'savings' ? 'open' : ''}`}>‹</span></div>
             <div class="stat-value sav">
               <AnimatedMoney value={savedTile} />
             </div>
-            <div class="tap-hint">{open === 'savings' ? 'סגור ‹' : 'לחץ לפירוט ‹'}</div>
           </button>
         )}
       </div>
@@ -387,47 +385,31 @@ export function MonthSummary(props: {
       )}
 
       {cards.length > 0 && (
-        <div class="card section">
-          <button class="section-head cards-head" onClick={() => setCardsOpen(!cardsOpen)} aria-expanded={cardsOpen}>
-            <span class="cards-head-text">
-              <span class="section-title">כרטיסי אשראי</span>
-              <span class="cards-used exp">
-                <AnimatedMoney value={used} />
-                <span class="muted small"> נוצל</span>
-              </span>
-              {limits > 0 && (
-                <>
-                  <span class={`bar meter ${usedOfLimited / limits >= 0.9 ? 'high' : ''}`}>
-                    <span style={{ width: `${Math.min(1, usedOfLimited / limits) * 100}%` }} />
-                  </span>
-                  <span class="muted small block">
-                    סך המסגרות {formatMoney(limits)} · נותר לניצול {formatMoney(Math.max(0, limits - usedOfLimited))}
-                  </span>
-                </>
-              )}
-              {limits === 0 && <span class="muted small block">לא הוגדרו מסגרות. אפשר להוסיף בהגדרות</span>}
-              {asOf !== today && <span class="muted small block">נכון ל{dayLabel(asOf, today)} (לפי הקניות שנרשמו עד אז)</span>}
-            </span>
-            <span class={`chevron ${cardsOpen ? 'open' : ''}`}>‹</span>
-          </button>
-          {cardsOpen && (
-            <div class="section-body">
-              {cards.map(u => (
-                <CardLine
-                  key={u.card.id}
-                  usage={u}
-                  today={today}
-                  asOf={asOf}
-                  statements={cardStatements(data, u.card.id)}
-                  data={data}
-                  onEdit={props.onEdit}
-                  openGap={cardGaps.find(g => g.card.id === u.card.id)?.left}
-                  onOpenGap={() => props.onRecheckCard?.(u.card.id)}
-                />
-              ))}
-            </div>
-          )}
+        <>
+        <div class="sec-label">
+          <span>כרטיסי אשראי</span>
+          <span class="sec-range">
+            <AnimatedMoney value={used} /> לחיובים הקרובים
+          </span>
         </div>
+        <div class="card cards-list">
+          {asOf !== today && <div class="muted small">נכון ל{dayLabel(asOf, today)} (לפי הקניות שנרשמו עד אז)</div>}
+          {cards.map(u => (
+            <CardLine
+              key={u.card.id}
+              usage={u}
+              today={today}
+              asOf={asOf}
+              statements={cardStatements(data, u.card.id)}
+              data={data}
+              onEdit={props.onEdit}
+              openGap={cardGaps.find(g => g.card.id === u.card.id)?.left}
+              onOpenGap={() => props.onRecheckCard?.(u.card.id)}
+              onAddLimit={props.onAddLimit}
+            />
+          ))}
+        </div>
+        </>
       )}
     </>
   );

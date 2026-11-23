@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { Chips, MoneyInput } from '../components/inputs';
 import { dayLabel, todayStr } from '../data/dates';
 import { putRecords } from '../data/db';
@@ -51,7 +52,9 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
       {funds.length > 0 && (
         <div class="card fund-total">
           <div class="muted small">סך הכל{total !== totalSaved(funds) ? ' (משוער)' : ''}</div>
-          <div class="big-number sav">{formatMoney(total)}</div>
+          <div class="big-number sav">
+            <AnimatedMoney value={total} />
+          </div>
           {lastUpdate && <div class="muted small">עדכון אחרון מהדוחות: {dayLabel(lastUpdate, today)}</div>}
           <button class="link small" onClick={() => setShowHistory(!showHistory)} aria-expanded={showHistory}>
             {showHistory ? 'להסתיר את היסטוריית העדכונים' : 'היסטוריית עדכונים ‹'}
@@ -74,7 +77,7 @@ export function FundsScreen(props: { db: IDBDatabase; data: AppData; onBack: () 
                   {kindName(f.kind) !== f.name && <span class="muted small"> · {kindName(f.kind)}</span>}
                 </span>
                 <span>
-                  <span class="sav">{last ? formatMoney(last.balance + since) : '—'}</span>
+                  <span class="sav">{last ? <AnimatedMoney value={last.balance + since} /> : '—'}</span>
                   <span class={`chevron small-chevron ${open ? 'open' : ''}`}> ‹</span>
                 </span>
               </div>

@@ -1015,3 +1015,37 @@ button:active:not(:disabled), .tile:active { transform: scale(.96); }
 @keyframes fade-out { to { opacity: 0; } }
 @keyframes pop-out { to { opacity: 0; transform: translateY(14px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .presence-leaving .event-popup-backdrop, .presence-leaving .event-popup-card { animation: none; opacity: 0; } }
+
+/* home, redesigned (v115) */
+.hero-main { text-align: start; padding: 16px; background: color-mix(in srgb, var(--accent) 9%, var(--card)); border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); }
+.hero-main .big-number { font-size: 48px; margin: 0; line-height: 1.1; unicode-bidi: normal; direction: rtl; text-align: start; }
+.since-month { margin-top: 2px; }
+.hero-spark { display: block; width: 100%; height: auto; margin: 6px 0 2px; overflow: visible; }
+.hero-spark path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; animation: line-draw 1.4s var(--ease-out) .2s backwards; }
+.source-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.source-tag { width: auto; margin: 0; padding: 4px 10px; border-radius: 12px; background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 400; font-size: 14px; display: inline-flex; gap: 6px; align-items: baseline; }
+.source-tag.on { border-color: var(--accent); }
+.hero-main .reserved-line, .hero-main .link.small { text-align: start; }
+.sec-label { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 4px 6px; color: var(--muted); font-size: 15px; font-weight: 600; }
+.sec-range { font-weight: 400; font-size: 13px; }
+.card.home-cal { padding: 8px 14px 4px; }
+.card.home-cal .cal-area { padding: 0; }
+.card.home-cal .home-day { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+.cat-mark { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: var(--c); background: color-mix(in srgb, var(--c) 18%, var(--card)); }
+.tx > .cat-mark + .tx-text { flex: 1; min-width: 0; }
+.cal-day-txs .cat-mark { width: 24px; height: 24px; font-size: 12px; margin-inline-end: 8px; vertical-align: middle; }
+.stat .chevron { font-size: 12px; }
+.cards-list { padding: 4px 14px; }
+.cards-list .card-line { padding: 10px 0; border-top: 1px solid var(--line); }
+.cards-list .card-line:first-of-type { border-top: 0; }
+.card-used { font-weight: 700; }
+.bar.high span { background: var(--sav); }
+.add-limit { display: inline-block; margin-top: 2px; cursor: pointer; }
+.card-gap-mark { width: auto; display: inline-block; }
+.odo-col { user-select: none; -webkit-user-select: none; }
+.side-menu-note { display: block; font-size: 13px; font-weight: 400; color: var(--muted); }
+.side-menu-note.warn { color: var(--sav); }
+@media (prefers-reduced-motion: reduce) { .hero-spark path { animation: none; } }
+/* an amount arriving (also a 0, that has nowhere to roll) */
+.odo { display: inline-block; animation: swap-in .5s var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) { .odo { animation: none; } }

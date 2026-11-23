@@ -9,7 +9,7 @@ import { MoneyLines, moneyRows, onCardStandingOrder, plannedMoney, type MoneyRow
 import { statsTransactions } from '../data/budget';
 import { holidaysOn, type Holiday } from '../data/holidays';
 import { periodEnd, periodKey, periodStart } from '../data/dashboard';
-import { categoryColor } from '../data/colors';
+import { CategoryMark } from '../components/CategoryMark';
 import type { AppData } from '../data/store';
 import type { CalendarEvent, Transaction } from '../data/types';
 
@@ -332,11 +332,11 @@ export function CalendarScreen(props: {
 
   if (compact) {
     return (
-      <div class="home-cal">
-        <div class="card cal-area" ref={area}>
+      <div class="card home-cal">
+        <div class="cal-area" ref={area}>
           {calendarGrid}
         </div>
-        <DayAgenda data={props.data} date={selected} today={today} events={dayEvents} onEdit={props.onEdit} onEditTx={props.onEditTx} />
+        <DayAgenda embedded data={props.data} date={selected} today={today} events={dayEvents} onEdit={props.onEdit} onEditTx={props.onEditTx} />
       </div>
     );
   }
@@ -447,6 +447,8 @@ const plusHour = (t: string) => {
  * money), or the whole financial month's money, day by day, like a bank statement ("עובר ושב").
  */
 function DayAgenda(props: {
+  /** Inside the calendar's card on the home screen, not a card of its own. */
+  embedded?: boolean;
   data: AppData;
   date: string;
   today: string;
@@ -504,7 +506,7 @@ function DayAgenda(props: {
     [...new Set([...rows.map(r => r.date), ...monthEvents.filter(e => (after ? e.date > props.today : e.date <= props.today)).map(e => e.date)])];
 
   return (
-    <div class="card list home-day">
+    <div class={`${props.embedded ? '' : 'card list '}home-day`}>
       <div class="home-day-head">
         <div class="day-switch">
           <button class={view === 'day' ? 'on' : ''} onClick={() => setView('day')}>
@@ -657,7 +659,7 @@ function DayView(props: {
             <button key={t.id} class="tx" onClick={() => props.onEditTx(t)}>
               <div>
                 <div>
-                  <span class="cat-dot" style={{ background: categoryColor(t.categoryId, props.data.categories) }} />
+                  <CategoryMark id={t.categoryId} categories={props.data.categories} />
                   {name(t.categoryId)}
                 </div>
                 {t.note && <div class="muted small">{t.note}</div>}

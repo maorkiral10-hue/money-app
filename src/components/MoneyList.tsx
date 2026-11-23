@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { cardStatements, chargeOf, edgeCharges, type Statement } from '../data/balance';
-import { categoryColor } from '../data/colors';
+import { CategoryMark } from './CategoryMark';
 import { dayLabel, parseDate } from '../data/dates';
 import { expectedTransactions } from '../data/recurring';
 import { formatMoney } from '../data/money';
@@ -121,9 +121,9 @@ export function MoneyLines(props: { data: AppData; rows: MoneyRow[]; today: stri
         // A standing order still to come opens "came already?" (it's recorded on its day otherwise)
         return (
           <button key={tx.id} class="tx" onClick={() => (expected ? askRecordEarly(tx) : props.onEdit(tx))}>
-            <div>
+            <CategoryMark id={tx.categoryId} categories={data.categories} transfer={tx.type === 'transfer'} />
+            <div class="tx-text">
               <div>
-                {tx.type !== 'transfer' && <span class="cat-dot" style={{ background: categoryColor(tx.categoryId, data.categories) }} />}
                 {tx.type === 'transfer' ? `${name.get(tx.accountId!)} ← ${name.get(tx.toAccountId!)}` : tx.recurringId ? tx.note : name.get(tx.categoryId!)}
               </div>
               <div class="muted small">

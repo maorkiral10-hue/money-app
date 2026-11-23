@@ -4,7 +4,9 @@ import { whenRecorded } from '../components/OpenGapCard';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { MonthSummary } from '../components/MonthSummary';
 import { summarize } from '../data/balance';
-import { periodKey } from '../data/dashboard';
+import { periodKey, periodStart } from '../data/dashboard';
+import { liquidByDay } from '../data/dash';
+import { addDays } from '../data/dates';
 import { todayStr } from '../data/dates';
 import { checkMark, checkStatus } from '../data/reconcile';
 import { formatMoney } from '../data/money';
@@ -29,6 +31,8 @@ export function Home(props: {
   onOpenGap?: (accountId: string) => void;
   onRecheckCard?: (cardId: string) => void;
   onOpenGoals: () => void;
+  /** A card without a limit: set one (the payment methods settings). */
+  onAddLimit?: () => void;
   onEditEvent: (event?: CalendarEvent, date?: string, time?: string) => void;
   /** The calendar's chosen day: kept by the app, so "+" records on it and coming back keeps it. */
   day: string;
@@ -38,6 +42,12 @@ export function Home(props: {
   const today = todayStr();
   const summary = useMemo(() => summarize(data, today), [data, today]);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // The liquid money day by day: the last 30 days drawn under the number, and how it moved since the month began
+  const days = useMemo(() => liquidByDay(data, today), [data, today]);
+  const monthBegan = periodStart(periodKey(today, data.monthStartDay), data.monthStartDay);
+  const before = days.find(d => d.date === addDays(monthBegan, -1));
+  const sinceMonth = before ? summary.liquid - before.amount : undefined;
+  const spark = days.slice(-30);
   const [calendarDay, setCalendarDay] = useState(props.day);
   const checkState = useMemo(() => checkStatus(data, today), [data, today]);
 
@@ -79,10 +89,23 @@ export function Home(props: {
         </button>
       ))}
 
-      <div class="card hero">
+      <div class="card hero hero-main">
         <div class="muted small">כסף נזיל עכשיו</div>
         <div class="big-number">
           <AnimatedMoney value={summary.liquid} />
+        </div>
+        {sinceMonth !== undefined && sinceMonth !== 0 && (
+          <div class={`small since-month ${sinceMonth > 0 ? 'inc' : 'exp'}`}>
+            {formatMoney(sinceMonth, { sign: true })} מתחילת החודש
+          </div>
+        )}
+        {spark.length > 2 && <Spark values={spark.map(d => d.amount)} />}
+        <div class="source-tags">
+          {summary.byAccount.map(({ account, balance }) => (
+            <button key={account.id} class={`source-tag ${showBreakdown ? 'on' : ''}`} onClick={() => setShowBreakdown(!showBreakdown)} aria-expanded={showBreakdown}>
+              {account.name} <AnimatedMoney value={balance} />
+            </button>
+          ))}
         </div>
         {summary.reserved > 0 && (
           <button class="link small reserved-line" onClick={props.onOpenGoals}>
@@ -115,13 +138,11 @@ export function Home(props: {
             })}
           </div>
         )}
-        <div class="hero-buttons">
-          <button class="secondary" onClick={() => setShowBreakdown(!showBreakdown)}>
-            {showBreakdown ? 'הסתר פירוט' : 'פירוט'}
-          </button>
-        </div>
       </div>
 
+      <div class="sec-label">
+        <span>יומן</span>
+      </div>
       <CalendarScreen compact data={data} onBack={() => {}} onEdit={props.onEditEvent} onEditTx={props.onEdit}
         initialDay={props.day}
         onSelect={d => {
@@ -131,14 +152,22 @@ export function Home(props: {
       />
 
       {/* The month of the day chosen in the calendar above: moving the calendar moves this too */}
-      <MonthSummary data={data} onEdit={props.onEdit} onRecheckCard={props.onRecheckCard} monthKey={periodKey(calendarDay, data.monthStartDay)} asOf={calendarDay} />
-
-
-      <div class="quiet-lines">
-        <button class="quiet" onClick={props.onOpenData}>
-          {data.lastBackupAt ? `גיבוי אחרון: ${daysAgo(data.lastBackupAt)}` : 'עדיין לא בוצע גיבוי'}
-        </button>
-      </div>
+      <MonthSummary data={data} onEdit={props.onEdit} onRecheckCard={props.onRecheckCard} onAddLimit={props.onAddLimit} monthKey={periodKey(calendarDay, data.monthStartDay)} asOf={calendarDay} />
     </>
+  );
+}
+
+/** The last days of the liquid money as a small line under the number (it draws itself in). */
+function Spark(props: { values: number[] }) {
+  const v = props.values;
+  const hi = Math.max(...v);
+  const lo = Math.min(...v);
+  const span = hi - lo || 1;
+  const pts = v.map((x, i) => `${((i / (v.length - 1)) * 300).toFixed(1)},${(27 - ((x - lo) / span) * 24).toFixed(1)}`);
+  return (
+    <svg class="hero-spark" viewBox="0 0 300 30" aria-hidden="true">
+      {/* the newest day on the left, the way the text reads */}
+      <path d={`M${pts.join(' L')}`} pathLength={1} transform="translate(300 0) scale(-1 1)" />
+    </svg>
   );
 }

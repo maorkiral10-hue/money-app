@@ -504,6 +504,7 @@ export function App() {
         onOpenGap={accountId => setLaterIds(ids => ids.filter(id => !id.startsWith(`gap|${accountId}|`)))}
         onRecheckCard={cardId => go({ name: 'balanceCheck', from: 'home', accountId: cardId, recheck: true })}
         onOpenGoals={() => go({ name: 'goals' })}
+        onAddLimit={() => go({ name: 'settingsPage', page: 'methods' })}
         onEditEvent={(event, date, time) => go({ name: 'eventForm', event, date, time, from: 'home' })}
         day={homeDay.current}
         onDayChange={d => (homeDay.current = d)}
