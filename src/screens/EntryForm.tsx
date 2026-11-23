@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
+import { CategoryMark } from '../components/CategoryMark';
+import { Icon } from '../components/Icon';
 
 /** Cash expenses recorded from this day on need a few words on what they were for. */
 const CASH_NOTE_FROM = '2026-11-19';
@@ -17,12 +19,16 @@ import type { Transaction, TxType } from '../data/types';
 
 type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'goal' | 'review';
 
-// One question per screen, each confirmed with "המשך"; the last screen shows everything before saving.
+// One question per screen; the last screen shows everything before saving. Right after the amount comes
+// "how and when": the day stands out first (a day other than today in orange), so a purchase isn't recorded
+// on a day left chosen in the calendar by mistake; then how it was paid (or where it went / came from).
 const STEPS: Record<TxType, Step[]> = {
-  expense: ['type', 'amount', 'category', 'method', 'when', 'review'],
-  income: ['type', 'amount', 'category', 'account', 'when', 'review'],
-  transfer: ['type', 'amount', 'from', 'to', 'when', 'review'],
+  expense: ['type', 'amount', 'method', 'category', 'review'],
+  income: ['type', 'amount', 'account', 'category', 'review'],
+  transfer: ['type', 'amount', 'from', 'to', 'review'],
 };
+/** The step that also asks for the day. */
+const DATE_STEP: Record<TxType, Step> = { expense: 'method', income: 'account', transfer: 'from' };
 
 const TYPE_NAMES: Record<TxType, string> = { expense: 'הוצאה', income: 'הכנסה', transfer: 'העברה' };
 const INSTALLMENTS = Array.from({ length: 36 }, (_, i) => i + 1);
@@ -109,6 +115,12 @@ export function EntryForm(props: {
   const [pasteMessage, setPasteMessage] = useState('');
 
   const amount = parseMoney(amountText) ?? 0;
+  // The last few different amounts recorded of this kind, to fill in with a tap
+  const recentAmounts = useMemo(
+    () =>
+      [...new Set(data.transactions.filter(t => t.type === type && !t.recurringId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(t => t.amount))].slice(0, 3),
+    [data.transactions, type],
+  );
   const baseSteps = STEPS[type];
   const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === tx?.categoryId));
   const method = methods.find(m => m.id === methodId);
@@ -155,7 +167,8 @@ export function EntryForm(props: {
   // Chosen, then the date moved to a day without it
   const lostLink = typeof linkChoice === 'string' && !candidates.some(c => c.key === linkChoice);
   // With events that day, a question of its own right after the amount
-  const steps: Step[] = candidates.length && !baseSteps.includes('event') ? [...baseSteps.slice(0, 2), 'event', ...baseSteps.slice(2)] : baseSteps;
+  const dateStep = DATE_STEP[type];
+  const steps: Step[] = candidates.length ? [...baseSteps.slice(0, baseSteps.indexOf(dateStep) + 1), 'event', ...baseSteps.slice(baseSteps.indexOf(dateStep) + 1)] : baseSteps;
   // What's tied to an event starts in the event's category, until a category is picked by hand
   const [categoryByHand, setCategoryByHand] = useState(!!tx || !!presetCategory);
   const [autoCategory, setAutoCategory] = useState<string | undefined>();
@@ -168,7 +181,16 @@ export function EntryForm(props: {
   const pickCategory = (id: string) => {
     setCategoryId(id);
     setCategoryByHand(true);
+    // Picked: on to the next screen by itself (a moment later, so the pick is seen)
+    autoNext.current = true;
   };
+  const autoNext = useRef(false);
+  useEffect(() => {
+    if (!autoNext.current || step !== 'category' || !categoryId) return;
+    autoNext.current = false;
+    const t = setTimeout(next, 220);
+    return () => clearTimeout(t);
+  }, [categoryId, step]);
   const isCredit = type === 'expense' && method?.kind === 'credit';
   // What the card's limit will have left once this purchase is saved (a purchase dated later doesn't use it yet)
   const usage = isCredit && method?.creditLimit ? cardUsage(data, today).find(u => u.card.id === method.id) : undefined;
@@ -203,7 +225,7 @@ export function EntryForm(props: {
   }, [step]);
   const next = () => {
     // Moved to another day that has events: ask about them too, never link on its own
-    if (step === 'when' && candidates.length && askedOn !== date) {
+    if (step === dateStep && candidates.length && askedOn !== date) {
       setLinkChoice(undefined);
       setFromSummary(true);
       setStep('event');
@@ -238,9 +260,9 @@ export function EntryForm(props: {
     type: !future || !!tx,
     amount: amount > 0,
     category: !!categoryId,
-    method: !!methodId,
-    account: !!accountId,
-    from: !!accountId,
+    method: !!methodId && dateOk,
+    account: !!accountId && dateOk,
+    from: !!accountId && dateOk,
     to: !!toAccountId && toAccountId !== accountId,
     when: dateOk,
     event: true,
@@ -322,9 +344,9 @@ export function EntryForm(props: {
     type: 'מה רושמים?',
     amount: `כמה? (${TYPE_NAMES[type]})`,
     category: type === 'expense' ? 'על מה?' : 'מה נכנס?',
-    method: 'איך שילמת?',
-    account: 'לאן נכנס הכסף?',
-    from: 'מאיפה הכסף יצא?',
+    method: 'איך ומתי?',
+    account: 'לאן ומתי?',
+    from: 'מאיפה ומתי?',
     to: 'לאן הוא עבר?',
     when: 'מתי?',
     event: 'שייך לאירוע?',
@@ -345,11 +367,22 @@ export function EntryForm(props: {
           </button>
         )}
       </header>
-      <div class="dots">
-        {steps.map(s => (
-          <span key={s} class={s === step ? 'on' : ''} />
-        ))}
-      </div>
+      {step !== 'type' &&
+        (() => {
+          // Counted without the type (already chosen): amount 1 … the summary last
+          const of = steps.length - 1;
+          const at = Math.max(1, steps.indexOf(step));
+          return (
+            <div class="form-progress">
+              <span class="muted small">
+                {TYPE_NAMES[type]} · {at} מתוך {of}
+              </span>
+              <span class="form-progress-bar">
+                <span style={{ width: `${(at / of) * 100}%` }} />
+              </span>
+            </div>
+          );
+        })()}
       <h1 class="step-title" key={step}>
         {titles[step]}
       </h1>
@@ -387,6 +420,16 @@ export function EntryForm(props: {
             }}
           />
           {freshAmount && <p class="muted small center">הסכום של הפער מולא מראש. אפשר להקליד אחר.</p>}
+          {!tx && recentAmounts.length > 0 && (
+            <div class="recent-amounts">
+              <span class="muted small">אחרונים:</span>
+              {recentAmounts.map(a => (
+                <button key={a} type="button" class="chip" onClick={() => setAmountText(moneyInputText(a))}>
+                  {formatMoney(a)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -423,11 +466,29 @@ export function EntryForm(props: {
         </div>
       )}
 
-      {step === 'category' && <Chips items={categories} value={categoryId} onChange={pickCategory} />}
+      {step === 'category' && (
+        <div class="cat-grid">
+          {categories.map(c => (
+            <button key={c.id} type="button" class={`cat-pick ${categoryId === c.id ? 'on' : ''}`} onClick={() => pickCategory(c.id)}>
+              <CategoryMark id={c.id} categories={data.categories} />
+              <span>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {step === 'method' && (
         <>
-          <Chips items={methods} value={methodId} onChange={setMethodId} />
+          <DateBlock date={date} today={today} fromCalendar={!!preset?.date && preset.date !== today && !tx} onDate={setDate} startDate={data.startDate} dateOk={dateOk} />
+          <p class="field-label">איך שילמת</p>
+          <div class="method-grid">
+            {methods.map(m => (
+              <button key={m.id} type="button" class={`method-pick ${methodId === m.id ? 'on' : ''}`} onClick={() => setMethodId(m.id)}>
+                {m.name}
+                <span class="muted small">{m.kind === 'credit' && m.chargeDay ? `חיוב ב־${m.chargeDay} בחודש` : ' '}</span>
+              </button>
+            ))}
+          </div>
           {goalAccounts.length > 0 && (
             <>
               <p class="field-label">מתוך יעד חיסכון</p>
@@ -439,6 +500,8 @@ export function EntryForm(props: {
 
       {step === 'account' && (
         <>
+          <DateBlock date={date} today={today} fromCalendar={!!preset?.date && preset.date !== today && !tx} onDate={setDate} startDate={data.startDate} dateOk={dateOk} />
+          <p class="field-label">לאן נכנס הכסף</p>
           <Chips items={liquidAccounts} value={accountId} onChange={setAccountId} />
           {refundCards.length > 0 && (
             <>
@@ -452,6 +515,8 @@ export function EntryForm(props: {
 
       {step === 'from' && (
         <>
+          <DateBlock date={date} today={today} fromCalendar={!!preset?.date && preset.date !== today && !tx} onDate={setDate} startDate={data.startDate} dateOk={dateOk} />
+          <p class="field-label">מאיפה הכסף יצא</p>
           {transferChips(accountId, setAccountId)}
           <p class="muted small">כסף שעובר בין המקומות שלך. לא הוצאה.</p>
         </>
@@ -459,27 +524,6 @@ export function EntryForm(props: {
 
       {step === 'to' && transferChips(toAccountId, setToAccountId, accountId)}
 
-      {step === 'when' && (
-        <div class="when-step">
-          <div class="when-box">
-            <div class="when-label">{dayLabel(date, today)}</div>
-            <div class="muted small">{date.split('-').reverse().map(Number).join('.')}</div>
-          </div>
-          <div class="chips when-chips">
-            {[0, 1, 2].map(back => {
-              const d = addDays(today, -back);
-              return (
-                <button key={d} type="button" class={`chip ${date === d ? 'on' : ''}`} onClick={() => setDate(d)}>
-                  {dayLabel(d, today)}
-                </button>
-              );
-            })}
-            <input type="date" class="chip" max={today} value={date} onChange={e => e.currentTarget.value && setDate(e.currentTarget.value)} />
-          </div>
-          {!dateOk && <p class="small warn">לתאריך עתידי רושמים אירוע.</p>}
-          {date < data.startDate && <p class="muted small">לפני תחילת המעקב: לא ישנה את היתרה.</p>}
-        </div>
-      )}
 
       {step !== 'review' && !(step === 'type' && future && !tx) && (
         <button class="continue" disabled={!canContinue[step]} onClick={next}>
@@ -505,15 +549,19 @@ export function EntryForm(props: {
 
       {step === 'review' && (
         <>
-          <div class="card list">
+          <div class="card list receipt">
+            <button class="receipt-head" onClick={() => change('amount')}>
+              {type !== 'transfer' ? <CategoryMark id={categoryId} categories={data.categories} /> : <CategoryMark categories={data.categories} transfer />}
+              <span class="receipt-name">{type === 'transfer' ? `${name(accountId)} ← ${name(toAccountId)}` : name(categoryId)}</span>
+              <span class={`receipt-amount ${type}`}>{formatMoney(type === 'expense' ? -amount : amount, { sign: type === 'income' })}</span>
+            </button>
+            <ReviewRow label="מתי" value={dayLabel(date, today)} warn={date !== today} onClick={() => change(dateStep)} />
             <ReviewRow label="סוג" value={TYPE_NAMES[type]} onClick={() => change('type')} />
-            <ReviewRow label="סכום" value={formatMoney(amount)} onClick={() => change('amount')} />
             {type !== 'transfer' && <ReviewRow label={type === 'expense' ? 'על מה' : 'מה נכנס'} value={name(categoryId)} onClick={() => change('category')} />}
             {type === 'expense' && <ReviewRow label="איך שילמת" value={name(methodId)} onClick={() => change('method')} />}
             {type === 'income' && <ReviewRow label="לאן נכנס" value={refundCard ? `זיכוי ל${refundCard.name}` : name(accountId)} onClick={() => change('account')} />}
             {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => change('from')} />}
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
-            <ReviewRow label="מתי" value={dayLabel(date, today)} onClick={() => change('when')} />
             {candidates.length > 0 && <ReviewRow label="אירוע" value={linked ? linked.title : 'לא שייך'} onClick={() => change('event')} />}
             {type === 'expense' && !paidFromGoal && activeGoals.length > 0 && (
               <ReviewRow label="יעד" value={goalLink ? goalLink.name : 'לא על חשבון יעד'} onClick={() => change('goal')} />
@@ -576,8 +624,8 @@ export function EntryForm(props: {
           />
           {needsNote && !note.trim() && <p class="small warn">כתוב מה קנית, כדי להיזכר בבדיקת המזומן.</p>}
 
-          <button disabled={!valid || saving || (!!gap && partOfGap === undefined)} onClick={save}>
-            שמור
+          <button class="save-btn" disabled={!valid || saving || (!!gap && partOfGap === undefined)} onClick={save}>
+            שמור <Icon name="check" size={18} />
           </button>
           {tx && (
             <button class="danger" onClick={() => remove()}>
@@ -608,14 +656,57 @@ export function EntryForm(props: {
   );
 }
 
-function ReviewRow(props: { label: string; value: string; onClick: () => void }) {
+function ReviewRow(props: { label: string; value: string; onClick: () => void; warn?: boolean }) {
   return (
-    <button class="tx" onClick={props.onClick}>
+    <button class={`tx ${props.warn ? 'review-warn' : ''}`} onClick={props.onClick}>
       <span class="muted">{props.label}</span>
       <span>
-        {props.value} <span class="muted">‹</span>
+        {props.warn && <Icon name="alert" size={15} />} {props.value} <span class="muted">‹</span>
       </span>
     </button>
+  );
+}
+
+/**
+ * The day, standing out at the top of "how and when": today plainly; another day in orange with "not today",
+ * how long ago, and (when it came from the day chosen in the calendar) where it came from. Quick days and the
+ * calendar to change it.
+ */
+function DateBlock(props: { date: string; today: string; fromCalendar: boolean; onDate: (d: string) => void; startDate: string; dateOk: boolean }) {
+  const { date, today } = props;
+  const notToday = date !== today;
+  const ago = Math.round((Date.parse(`${today}T12:00:00`) - Date.parse(`${date}T12:00:00`)) / 86_400_000);
+  const picker = useRef<HTMLInputElement>(null);
+  return (
+    <div class={`date-block ${notToday ? 'not-today' : ''}`} key={notToday ? 'not-today' : 'today'}>
+      {notToday && (
+        <div class="date-warn small">
+          <Icon name="alert" size={15} /> שים לב: לא היום
+        </div>
+      )}
+      <div class="date-main">{date === today ? 'היום' : dayLabel(date, today)}</div>
+      <div class="muted small">
+        {notToday
+          ? [ago > 1 ? `לפני ${ago} ימים` : '', props.fromCalendar ? 'מהיום שבחרת בלוח' : ''].filter(Boolean).join(' · ') || date.split('-').reverse().map(Number).join('.')
+          : new Date(`${date}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+      </div>
+      <div class="date-quick">
+        {[2, 1, 0].map(back => {
+          const d = addDays(today, -back);
+          return (
+            <button key={d} type="button" class={`chip ${date === d ? 'on' : ''}`} onClick={() => props.onDate(d)}>
+              {back === 0 ? 'היום' : back === 1 ? 'אתמול' : 'שלשום'}
+            </button>
+          );
+        })}
+        <label class={`chip date-cal ${[0, 1, 2].every(b => addDays(today, -b) !== date) ? 'on' : ''}`} aria-label="בחירה מהלוח">
+          <Icon name="calendar" size={18} />
+          <input ref={picker} type="date" max={today} value={date} onChange={e => e.currentTarget.value && props.onDate(e.currentTarget.value)} />
+        </label>
+      </div>
+      {!props.dateOk && <p class="small warn">לתאריך עתידי רושמים אירוע.</p>}
+      {date < props.startDate && <p class="muted small">לפני תחילת המעקב: לא ישנה את היתרה.</p>}
+    </div>
   );
 }
 
@@ -636,7 +727,7 @@ function Keypad(props: { text: string; onChange: (update: (text: string) => stri
 
   return (
     <>
-      <div class={`amount-display ${props.text ? '' : 'empty'}`}>
+      <div class={`amount-display ${props.text ? '' : 'empty'}`} key={props.text}>
         <span class="currency">₪</span>
         {display}
       </div>

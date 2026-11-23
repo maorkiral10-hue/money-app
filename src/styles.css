@@ -1160,3 +1160,41 @@ button.card.unknown-line { margin: 0 0 14px; padding: 14px; }
 .check-timeline .tx.tl-exact::before { background: var(--pos); }
 .check-timeline .tx.tl-minor::before { background: var(--sav); }
 .check-timeline .tx::after { content: ''; position: absolute; right: 4px; top: 0; bottom: 0; width: 1.5px; background: var(--line); z-index: -1; }
+
+/* the entry form (v120): progress, recent amounts, a grid of categories, "how and when", a receipt */
+.form-progress { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.form-progress-bar { display: block; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.form-progress-bar span { display: block; height: 100%; background: var(--accent); border-radius: 2px; margin-inline-start: 0; transition: width .45s var(--ease-out); }
+.amount-display { animation: num-pop .22s var(--ease-spring); }
+.expense .amount-display { color: var(--neg); }
+.income .amount-display { color: var(--pos); }
+@keyframes num-pop { 40% { transform: scale(1.04); } }
+.recent-amounts { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin: -4px 0 10px; }
+.recent-amounts .chip { padding: 4px 12px; font-size: 14px; }
+.cat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 12px; }
+.cat-pick { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; padding: 12px 4px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; font-weight: 500; font-size: 15px; }
+.cat-pick.on { border: 2px solid var(--accent); padding: 11px 3px; animation: pick .35s var(--ease-spring); }
+.date-block { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; text-align: center; margin: 6px 0 14px; animation: rise-in .4s var(--ease-out) backwards; }
+.date-block.not-today { background: color-mix(in srgb, var(--sav) 12%, var(--card)); border: 2px solid var(--sav); padding: 13px; animation: rise-in .4s var(--ease-out) backwards, warn-pulse 2.2s ease-in-out .5s infinite; }
+@keyframes warn-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--sav) 20%, transparent); } }
+.date-warn { color: var(--sav); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 2px; }
+.date-main { font-size: 26px; font-weight: 700; line-height: 1.15; }
+.date-quick { display: flex; gap: 6px; margin-top: 10px; }
+.date-quick .chip { flex: 1; padding: 7px 4px; font-size: 14px; }
+.date-cal { position: relative; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.date-cal.on { color: var(--on-accent); }
+.date-cal input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; }
+.method-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.method-pick { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0; padding: 12px 4px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; font-weight: 600; }
+.method-pick.on { border: 2px solid var(--accent); padding: 11px 3px; animation: pick .35s var(--ease-spring); }
+.receipt { padding: 4px 14px; }
+.receipt-head { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; margin: 0; padding: 14px 0 12px; background: none; color: var(--text); font-weight: 400; border-radius: 0; }
+.receipt-head .cat-mark { width: 44px; height: 44px; font-size: 20px; }
+.receipt-name { font-size: 17px; }
+.receipt-amount { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.receipt-amount.expense { color: var(--neg); }
+.receipt-amount.income { color: var(--pos); }
+.receipt .tx { border-top: 1px dashed var(--line); }
+.review-warn > span:last-child { color: var(--sav); font-weight: 700; }
+.save-btn { display: flex; align-items: center; justify-content: center; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .date-block, .date-block.not-today, .amount-display, .cat-pick.on, .method-pick.on { animation: none; } }
