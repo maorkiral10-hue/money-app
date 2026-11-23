@@ -1,6 +1,14 @@
 import { dayInMonth, parseDate } from './dates';
 import type { Account, Transaction } from './types';
 
+/**
+ * Whether an expense was spent for a goal (counted on it as paid): tied to it (its category is the goal, or it
+ * was tied from the summary), or paid out of the goal's own money and not marked as for something else.
+ * Paid out of one goal for another counts only on the other.
+ */
+export const paidForGoal = (t: Transaction, goalId: string) =>
+  t.type === 'expense' && (t.goalId === goalId || (t.accountId === goalId && !t.goalId && !t.otherThanGoal));
+
 /** How a goal is going: what to put in each month to make it, and what went in this month. */
 export interface GoalPlan {
   saved: number;
@@ -30,7 +38,7 @@ export function goalPlan(goal: Account, saved: number, transactions: Transaction
   const thisMonth = transactions
     .filter(t => t.type === 'transfer' && !t.coverFor && t.date >= monthStart && t.date <= today)
     .reduce((a, t) => a + (t.toAccountId === goal.id ? t.amount : t.accountId === goal.id ? -t.amount : 0), 0);
-  const spent = transactions.filter(t => t.type === 'expense' && (t.accountId === goal.id || t.goalId === goal.id)).reduce((a, t) => a + t.amount, 0);
+  const spent = transactions.filter(t => paidForGoal(t, goal.id)).reduce((a, t) => a + t.amount, 0);
   // Paying for the goal out of it (a flight for the trip) is progress, not falling behind
   const done = saved + spent;
   const target = goal.goalTarget;
@@ -68,7 +76,7 @@ export function goalNumbers(goal: Account, balance: number, transactions: Transa
     if (t.type === 'transfer' && t.toAccountId === goal.id) deposited += t.amount;
     // Taken out to cover something paid on the goal: still deposited, now spent on it
     else if (t.type === 'transfer' && t.accountId === goal.id && !t.coverFor) deposited -= t.amount;
-    else if (t.type === 'expense' && (t.accountId === goal.id || t.goalId === goal.id)) paid += t.amount;
+    else if (paidForGoal(t, goal.id)) paid += t.amount;
   }
   const target = goal.goalTarget;
   return {

@@ -1,8 +1,10 @@
 import { useState } from 'preact/hooks';
+import type { Category } from '../data/types';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { Icon } from '../components/Icon';
 import { periodKey, periodStart } from '../data/dashboard';
 import { totalEstimated } from '../data/funds';
+import { paidForGoal } from '../data/goals';
 import { Chips, MoneyInput, Segmented } from '../components/inputs';
 import { summarize } from '../data/balance';
 import { addDays, dayLabel, todayStr } from '../data/dates';
@@ -40,7 +42,11 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
   const today = todayStr();
   const { goals } = summarize(data, today);
   const active = goals.filter(g => !g.account.archived);
-  const total = active.reduce((a, g) => a + g.balance, 0);
+  const paidOn = (id: string) => data.transactions.filter(t => paidForGoal(t, id)).reduce((a, t) => a + t.amount, 0);
+  const inGoals = active.reduce((a, g) => a + g.balance, 0);
+  const paidTotal = active.reduce((a, g) => a + paidOn(g.account.id), 0);
+  // Saved for the goals: what's in them and what was already paid for them
+  const total = inGoals + paidTotal;
   const reservedTotal = active.filter(g => g.account.goalPlace === 'inside').reduce((a, g) => a + g.balance, 0);
   // Moved into the goals this financial month (less what was taken back out, not to pay for them)
   const monthKey = periodKey(today, data.monthStartDay);
@@ -82,6 +88,22 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
                 <div class="big-number sav">
                   <AnimatedMoney value={total} />
                 </div>
+                {paidTotal > 0 && (
+                  <>
+                    <div class="saved-split">
+                      <span style={{ width: `${(inGoals / total) * 100}%` }} />
+                      <span class="paid" style={{ width: `${(paidTotal / total) * 100}%` }} />
+                    </div>
+                    <div class="saved-legend small">
+                      <span>
+                        <i /> ביעדים עכשיו {formatMoney(inGoals)}
+                      </span>
+                      <span>
+                        <i class="paid" /> שולם עליהם {formatMoney(paidTotal)}
+                      </span>
+                    </div>
+                  </>
+                )}
                 {movedThisMonth !== 0 && (
                   <div class={`small ${movedThisMonth > 0 ? 'inc' : 'exp'}`}>
                     {formatMoney(movedThisMonth, { sign: true })} {movedThisMonth > 0 ? 'הועברו החודש' : 'נלקחו החודש'}
@@ -91,8 +113,8 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
                   {reservedTotal > 0 && reservedTotal < total
                     ? `${formatMoney(reservedTotal)} בתוך הכסף הנזיל · ${formatMoney(total - reservedTotal)} בצד`
                     : reservedTotal > 0
-                      ? 'הכל בתוך הכסף הנזיל, רק מסומן כשמור'
-                      : 'בצד, ולא נספר בכסף הנזיל'}
+                      ? 'מה שביעדים: בתוך הכסף הנזיל, רק מסומן כשמור'
+                      : 'מה שביעדים: בצד, ולא נספר בכסף הנזיל'}
                 </div>
               </div>
               {active.map(({ account: goal, balance }) => {
@@ -101,9 +123,9 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
                   ? []
                   : [
                       goal.goalDate ? { text: `עד ${shortDate(goal.goalDate)}` } : undefined,
-                      plan.perMonth ? { text: `${formatMoney(plan.perMonth)} בחודש` } : undefined,
+                      plan.perMonth ? { text: `יעד חודשי: ${formatMoney(plan.perMonth)}` } : undefined,
                       plan.perMonth && plan.thisMonth > 0 && !plan.leftThisMonth ? { text: 'החודש', tone: 'ok' as const } : undefined,
-                      plan.perMonth && plan.leftThisMonth ? { text: `נשאר להעביר ${formatMoney(plan.leftThisMonth)}`, tone: 'due' as const } : undefined,
+                      plan.perMonth && plan.leftThisMonth ? { text: `להעביר החודש: ${formatMoney(plan.leftThisMonth)}`, tone: 'due' as const } : undefined,
                       { text: placeText(goal, data) },
                     ].filter((x): x is { text: string; tone?: 'ok' | 'due' } => !!x && !!x.text);
                 return (
@@ -115,17 +137,22 @@ export function GoalsTab(props: { db: IDBDatabase; data: AppData; onOpen: (goal:
                         <div class="muted small">
                           {plan.reached ? (
                             <span class="sav">
-                              הושג · <AnimatedMoney value={balance} />
+                              הושג · <AnimatedMoney value={balance + plan.spent} />
                             </span>
                           ) : (
                             <>
                               <span class="sav goal-amount">
-                                <AnimatedMoney value={balance} />
+                                <AnimatedMoney value={balance + plan.spent} />
                               </span>
                               {goal.goalTarget ? <> מתוך {formatMoney(goal.goalTarget)}</> : ' · בלי סכום יעד'}
                             </>
                           )}
                         </div>
+                        {plan.spent > 0 && !plan.reached && (
+                          <div class="muted small">
+                            {formatMoney(balance)} ביעד · {formatMoney(plan.spent)} שולמו
+                          </div>
+                        )}
                       </div>
                     </div>
                     {tags.length > 0 && (
@@ -196,7 +223,7 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
   const inside = goal.goalPlace === 'inside' && !!goal.goalSource;
   const [showPaid, setShowPaid] = useState(false);
   const paidList = data.transactions
-    .filter(t => t.type === 'expense' && (t.accountId === goal.id || t.goalId === goal.id))
+    .filter(t => paidForGoal(t, goal.id))
     .sort((a, b) => b.date.localeCompare(a.date));
   const howPaid = (t: Transaction) =>
     t.accountId === goal.id ? 'מתוך היעד' : `${data.methods.find(m => m.id === t.methodId)?.name ?? ''}${data.transactions.some(x => x.coverFor === t.id) ? ' · מהכסף שבצד' : ''}`;
@@ -204,13 +231,21 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
   const name = (id?: string) => data.accounts.find(a => a.id === id)?.name ?? '';
   const catName = (id?: string) => data.categories.find(c => c.id === id)?.name ?? '';
   const tooMuch = dir !== 'in' && amount > balance;
-  const categoryId = spendCategory ?? goal.goalCategoryId;
-  const ready = !!amount && !tooMuch && (dir === 'spend' ? !!categoryId : !!accountId);
+  // Paid from here for the goal: under the goal's own category (made the first time)
+  const goalCat = data.categories.find(c => c.forGoal === goal.id);
+  const categoryId = spendCategory ?? goalCat?.id ?? '';
+  const ready = !!amount && !tooMuch && (dir === 'spend' ? true : !!accountId);
 
   const move = async () => {
     if (!ready) return;
     const now = new Date().toISOString();
-    const tx: Transaction = dir === 'spend' ? { id: crypto.randomUUID(), type: 'expense', amount, date: today, categoryId, accountId: goal.id, note: goal.name, createdAt: now, updatedAt: now } : {
+    let catId = categoryId;
+    if (dir === 'spend' && !catId) {
+      const made: Category = { id: crypto.randomUUID(), name: goal.name, kind: 'expense', order: Math.max(0, ...data.categories.map(c => c.order)) + 1, color: 'var(--sav)', forGoal: goal.id };
+      await putRecords(props.db, 'categories', [made]);
+      catId = made.id;
+    }
+    const tx: Transaction = dir === 'spend' ? { id: crypto.randomUUID(), type: 'expense', amount, date: today, categoryId: catId, accountId: goal.id, goalId: goal.id, note: goal.name, createdAt: now, updatedAt: now } : {
       id: crypto.randomUUID(),
       type: 'transfer',
       amount,
@@ -308,7 +343,6 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
             {plan.thisMonth ? ` (הוכנסו ${formatMoney(plan.thisMonth)})` : ''}
           </div>
         ) : null}
-        {goal.goalCategoryId && <div class="muted small">קטגוריה: {catName(goal.goalCategoryId)}</div>}
       </div>
 
       <div class="card">
@@ -339,9 +373,7 @@ export function GoalDetail(props: { db: IDBDatabase; data: AppData; goalId: stri
         )}
         {dir === 'spend' ? (
           <>
-            <p class="field-label">על מה</p>
-            <Chips items={expenseCategories} value={categoryId} onChange={setSpendCategory} />
-            <p class="muted small">הכסף יורד מהיעד, לא מהכסף הנזיל.</p>
+            <p class="muted small">נרשם כהוצאה על היעד, והכסף יורד מהיעד (לא מהכסף הנזיל).</p>
           </>
         ) : (
           inside ? (
@@ -459,6 +491,9 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
     };
     if (placeChanged && !confirm(placeChangeText)) return;
     await putRecords(props.db, 'accounts', [goal]);
+    // The goal's own category carries its name
+    const ownCat = props.data.categories.find(c => c.forGoal === goal.id);
+    if (ownCat && ownCat.name !== goal.name) await putRecords(props.db, 'categories', [{ ...ownCat, name: goal.name } as Category]);
     props.onDone(goal);
   };
 
@@ -477,11 +512,6 @@ export function GoalForm(props: { db: IDBDatabase; data: AppData; goal?: Account
         <input type="text" value={name} placeholder="למשל: חופשה ביוון, רכב, כרית ביטחון" onInput={e => setName(e.currentTarget.value)} />
       </section>
 
-      <section>
-        <h2>לאיזו קטגוריה</h2>
-        <Chips items={categories} value={categoryId} onChange={setCategoryId} />
-        <p class="muted small">כשתשלם מהיעד, ההוצאה תיכנס לקטגוריה הזאת.</p>
-      </section>
 
       <section>
         <h2>איזה יעד</h2>

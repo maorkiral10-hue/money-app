@@ -352,7 +352,8 @@ export function App() {
             await putRecords(db, 'events', [withAnswer(event, entry.eventDate ?? event.date, { at: new Date().toISOString(), txId: saved.id })]);
           }
           const gapsBefore = openGaps(data, todayStr());
-          if (saved && saved.goalId && !entry.tx?.goalId) setGoalPay(saved);
+          // Tied to a goal but paid with other money: offer to cover it from the goal (not when paid out of a goal)
+          if (saved && saved.goalId && !entry.tx?.goalId && !data.accounts.some(a => a.kind === 'goal' && a.id === saved.accountId)) setGoalPay(saved);
           const loaded = await refresh();
           if (saved) setToast({ text: entry.tx ? 'השינוי נשמר' : savedText(saved, loaded) });
           // It made a gap left open smaller: say so, with how much is still missing

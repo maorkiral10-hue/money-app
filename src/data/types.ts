@@ -81,6 +81,11 @@ export interface Category {
    * account like any expense, but isn't spending: the month shows it apart, as savings.
    */
   savings?: boolean;
+  /**
+   * Expense categories: this category is a goal itself (the goal's id). Picking it in "על מה?" is spending for
+   * that goal: it counts on it as paid. Made the first time a goal is picked; not listed among the categories.
+   */
+  forGoal?: string;
 }
 
 export type TxType = 'expense' | 'income' | 'transfer';
@@ -120,6 +125,8 @@ export interface Transaction {
   coverFor?: string;
   /** Paid with other money for what a savings goal is for (a flight for the trip): counts as paid on that goal. */
   goalId?: string;
+  /** Paid out of a goal's money but for something else (its category isn't the goal): not counted on the goal. */
+  otherThanGoal?: boolean;
   /** Set when the transaction was created from a recurring item, for that item's occurrence on `occurrence`. */
   recurringId?: string;
   occurrence?: string;

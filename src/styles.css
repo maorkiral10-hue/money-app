@@ -1198,3 +1198,17 @@ button.card.unknown-line { margin: 0 0 14px; padding: 14px; }
 .review-warn > span:last-child { color: var(--sav); font-weight: 700; }
 .save-btn { display: flex; align-items: center; justify-content: center; gap: 6px; }
 @media (prefers-reduced-motion: reduce) { .date-block, .date-block.not-today, .amount-display, .cat-pick.on, .method-pick.on { animation: none; } }
+
+/* goals as categories (v121) */
+.cat-group { grid-column: 1 / -1; margin: 6px 2px 0; }
+.goal-mark { --c: var(--sav); color: var(--sav); background: color-mix(in srgb, var(--sav) 18%, var(--card)); }
+.goal-pick { border-color: color-mix(in srgb, var(--sav) 35%, var(--line)); }
+.goal-pick.on { border-color: var(--sav); }
+.receipt-note { text-align: center; padding: 8px 0 4px; border-top: 1px dashed var(--line); }
+.saved-split { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); margin: 8px 0 4px; }
+.saved-split span { display: block; height: 100%; background: var(--sav); transform-origin: 100% 50%; animation: grow-x .9s var(--ease-out) backwards; }
+.saved-split span.paid { background: color-mix(in srgb, var(--sav) 50%, var(--card)); }
+.saved-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); }
+.saved-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.saved-legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--sav); display: inline-block; }
+.saved-legend i.paid { background: color-mix(in srgb, var(--sav) 50%, var(--card)); }

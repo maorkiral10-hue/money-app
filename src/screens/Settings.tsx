@@ -151,7 +151,7 @@ export function SettingsPageScreen(props: { db: IDBDatabase; data: AppData; page
         <>
           <div class="card">
             <h2 class="exp">הוצאות</h2>
-            <CategoriesEditor items={data.categories} kind="expense" onChange={save('categories')} onDelete={remove('categories')} />
+            <CategoriesEditor items={data.categories.filter(c => !c.forGoal)} kind="expense" onChange={save('categories')} onDelete={remove('categories')} />
           </div>
           <div class="card">
             <h2 class="inc">הכנסות</h2>

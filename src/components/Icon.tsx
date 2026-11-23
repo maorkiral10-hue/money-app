@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact';
 // The app's own icons: one line, the same weight as the tab bar's, rounded, in the color around them.
 // Used instead of emoji everywhere (they don't match the look).
 
-export type IconName = 'calendar' | 'clock' | 'alert' | 'info' | 'check' | 'sparkle' | 'plus';
+export type IconName = 'calendar' | 'clock' | 'alert' | 'info' | 'check' | 'sparkle' | 'plus' | 'target';
 
 const PATHS: Record<IconName, ComponentChildren> = {
   calendar: (
@@ -41,6 +41,13 @@ const PATHS: Record<IconName, ComponentChildren> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  target: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 export function Icon(props: { name: IconName; size?: number; class?: string; label?: string }) {

@@ -15,7 +15,8 @@ import { summarize } from '../data/balance';
 import { resolvePreset, type QuickPreset } from '../data/quick';
 import type { AppData } from '../data/store';
 import { explainGap, gapForChange } from '../data/reconcile';
-import type { Transaction, TxType } from '../data/types';
+import type { Account, Category, Transaction, TxType } from '../data/types';
+import { goalPlan } from '../data/goals';
 
 type Step = 'type' | 'amount' | 'event' | 'category' | 'method' | 'account' | 'from' | 'to' | 'when' | 'goal' | 'review';
 
@@ -122,7 +123,8 @@ export function EntryForm(props: {
     [data.transactions, type],
   );
   const baseSteps = STEPS[type];
-  const categories = data.categories.filter(c => c.kind === type && c.name.trim() && (!c.archived || c.id === tx?.categoryId));
+  // The goal-categories aren't listed with the others: the goals have a group of their own in "על מה?"
+  const categories = data.categories.filter(c => c.kind === type && c.name.trim() && !c.forGoal && (!c.archived || c.id === tx?.categoryId));
   const method = methods.find(m => m.id === methodId);
   const paidFromGoal = goalAccounts.some(g => g.id === methodId);
   // Events going on that day with an expected amount of this kind: what's recorded can go into one's pot
@@ -181,6 +183,9 @@ export function EntryForm(props: {
   const pickCategory = (id: string) => {
     setCategoryId(id);
     setCategoryByHand(true);
+    // A plain category: not for a goal (one picked from the goals before is let go)
+    setGoalCategory(undefined);
+    if (goalId && !tx?.goalId) setGoalId(undefined);
     // Picked: on to the next screen by itself (a moment later, so the pick is seen)
     autoNext.current = true;
   };
@@ -203,7 +208,8 @@ export function EntryForm(props: {
   };
   const alreadyCounted = tx && tx.methodId === methodId && tx.type === 'expense' && tx.date <= today ? unpaid(tx.date, tx.amount, tx.installments, tx.chargeDate) : 0;
   const limitLeft = usage?.available !== undefined && date <= today ? usage.available + alreadyCounted - unpaid(date, amount, isCredit ? installments : 1) : undefined;
-  const name = (id?: string) => [...accounts, ...methods, ...categories].find(x => x.id === id)?.name ?? '';
+  const name = (id?: string) =>
+    goalCategory?.id === id ? goalCategory!.name : [...accounts, ...methods, ...categories, ...data.categories].find(x => x.id === id)?.name ?? '';
   // Cards a refund can go back to (they need a charge day: that's when it comes off)
   const refundCards = methods.filter(m => m.kind === 'credit' && m.chargeDay);
   const refundCard = type === 'income' ? refundCards.find(m => m.id === accountId) : undefined;
@@ -279,6 +285,23 @@ export function EntryForm(props: {
     if (g?.goalCategoryId && g.goalCategoryId !== categoryId) setCategoryId(g.goalCategoryId);
   };
 
+  // Goals to spend for: active ones not reached yet (and the one this was tied to)
+  const goalBalances = useMemo(() => new Map(summarize(data, today).goals.map(g => [g.account.id, g.balance])), [data, today]);
+  const spendGoals = activeGoals.filter(g => g.id === tx?.goalId || !goalPlan(g, goalBalances.get(g.id) ?? 0, data.transactions, today).reached);
+  const [goalCategory, setGoalCategory] = useState<Category | undefined>(() => (tx?.goalId ? data.categories.find(c => c.forGoal === tx.goalId && c.id === tx.categoryId) : undefined));
+  const pickGoalCategory = (g: Account) => {
+    const existing = data.categories.find(c => c.forGoal === g.id);
+    const cat: Category = existing
+      ? { ...existing, name: g.name, archived: false }
+      : { id: crypto.randomUUID(), name: g.name, kind: 'expense', order: Math.max(0, ...data.categories.map(c => c.order)) + 1, color: 'var(--sav)', forGoal: g.id };
+    setGoalCategory(cat);
+    setGoalId(g.id);
+    setCategoryId(cat.id);
+    setCategoryByHand(true);
+    autoNext.current = true;
+  };
+  const isGoalCategory = !!goalCategory && goalCategory.id === categoryId;
+
   const [newId] = useState(() => crypto.randomUUID());
   const build = (now: string): Transaction => ({
       id: tx?.id ?? newId,
@@ -298,7 +321,8 @@ export function EntryForm(props: {
       ...(type === 'transfer' && { accountId, toAccountId }),
       // Added to an event's pot (an edited transaction keeps the event it was part of)
       ...(linked ? { eventId: linked.id, eventDate: linked.round } : {}),
-      ...(goalLink ? { goalId: goalLink.id } : {}),
+      ...(type === 'expense' && isGoalCategory ? { goalId: goalCategory!.forGoal } : goalLink ? { goalId: goalLink.id } : {}),
+      ...(type === 'expense' && paidFromGoal && !isGoalCategory && !goalLink ? { otherThanGoal: true } : {}),
       // Which card charge it went into, as said at the charge's check: kept while it's the same purchase on the same card
       ...(tx?.chargeDate && tx.date === date && tx.methodId === (type === 'expense' ? methodId : refundCard?.id) && { chargeDate: tx.chargeDate }),
   });
@@ -316,6 +340,8 @@ export function EntryForm(props: {
     const record = build(now);
     // Never leave the screen stuck on "saving": if anything fails, say what, and let it be tried again
     try {
+      // A goal picked as the category for the first time: its category is made with it
+      if (isGoalCategory) await putRecords(props.db, 'categories', [goalCategory!]);
       if (gapMatch && partOfGap) await explainGap(props.db, gapMatch.gap, gapMatch.by, { put: record });
       else await putRecords(props.db, 'transactions', [record]);
       if (type === 'expense' && methodId && !paidFromGoal) await setMeta(props.db, 'lastMethodId', methodId);
@@ -474,6 +500,19 @@ export function EntryForm(props: {
               <span>{c.name}</span>
             </button>
           ))}
+          {type === 'expense' && spendGoals.length > 0 && (
+            <>
+              <p class="field-label cat-group">בשביל יעד</p>
+              {spendGoals.map(g => (
+                <button key={g.id} type="button" class={`cat-pick goal-pick ${isGoalCategory && goalCategory!.forGoal === g.id ? 'on' : ''}`} onClick={() => pickGoalCategory(g)}>
+                  <span class="cat-mark goal-mark" aria-hidden="true">
+                    <Icon name="target" size={16} />
+                  </span>
+                  <span>{g.name}</span>
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -551,7 +590,15 @@ export function EntryForm(props: {
         <>
           <div class="card list receipt">
             <button class="receipt-head" onClick={() => change('amount')}>
-              {type !== 'transfer' ? <CategoryMark id={categoryId} categories={data.categories} /> : <CategoryMark categories={data.categories} transfer />}
+              {isGoalCategory ? (
+                <span class="cat-mark goal-mark" aria-hidden="true">
+                  <Icon name="target" size={20} />
+                </span>
+              ) : type !== 'transfer' ? (
+                <CategoryMark id={categoryId} categories={data.categories} />
+              ) : (
+                <CategoryMark categories={data.categories} transfer />
+              )}
               <span class="receipt-name">{type === 'transfer' ? `${name(accountId)} ← ${name(toAccountId)}` : name(categoryId)}</span>
               <span class={`receipt-amount ${type}`}>{formatMoney(type === 'expense' ? -amount : amount, { sign: type === 'income' })}</span>
             </button>
@@ -563,8 +610,12 @@ export function EntryForm(props: {
             {type === 'transfer' && <ReviewRow label="מאיפה" value={name(accountId)} onClick={() => change('from')} />}
             {type === 'transfer' && <ReviewRow label="לאן" value={name(toAccountId)} onClick={() => change('to')} />}
             {candidates.length > 0 && <ReviewRow label="אירוע" value={linked ? linked.title : 'לא שייך'} onClick={() => change('event')} />}
-            {type === 'expense' && !paidFromGoal && activeGoals.length > 0 && (
+            {type === 'expense' && !isGoalCategory && !paidFromGoal && !!tx?.goalId && (
               <ReviewRow label="יעד" value={goalLink ? goalLink.name : 'לא על חשבון יעד'} onClick={() => change('goal')} />
+            )}
+            {isGoalCategory && <div class="muted small receipt-note">נספר ביעד כ"שולם על היעד"</div>}
+            {type === 'expense' && paidFromGoal && !isGoalCategory && !goalLink && (
+              <div class="muted small receipt-note">מכספי היעד, למשהו אחר: לא נספר כחיסכון של היעד</div>
             )}
           </div>
           {lostLink && <p class="small warn">ביום שנבחר אין את האירוע, אז השיוך הוסר.</p>}
